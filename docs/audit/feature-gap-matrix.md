@@ -9,7 +9,7 @@
 | 自托管登录与书库 | 已有 | `docker/README.md`；`books` RLS；Supabase GoTrue | 官方 MinIO/mc 镜像当前拉取返回 401；本机已用固定摘要兼容镜像完成跨端 PDF 测试，仍需可复现的正式镜像来源。不换认证系统 |
 | 书籍文件上云 | 已有 | `pages/api/storage/*`，`cloudService.ts`，`files` 表 | 译文做成新对象，不覆盖 `file_key` |
 | 阅读进度同步 | 已有 | `book_configs`；replica 类别 `progress`；KOSync | 继续用现有类别 |
-| 高亮/备注/书签数据 | 已有 | `book_notes` 含 `type`、`cfi`、`text`、`note`、`color`、`page`、`deleted_at`；本机 Web 第 2 页书签写入该表并在刷新后保留 | V1 高亮与备注复用该行；跨设备书签和高亮/备注仍需实测 |
+| 高亮/备注/书签数据 | 已有 | `book_notes` 含 `type`、`cfi`、`text`、`note`、`color`、`page`、`deleted_at`；合成 PDF 的第 1/2 页书签在 Web 与隔离桌面端双向显示，服务端有两行未删除记录 | V1 高亮与备注复用该行；高亮/备注、离线与冲突仍需实测 |
 | 跨设备增量同步 | 已有 | replica cursor、加密、类别开关 | 新实体优先加 replica 类别，不平行再做一套 op-log |
 | 离线 Web | 已有 | `src/sw.ts` Serwist，架构文档第 3.4 节 | 实测仍未做 |
 | 书库搜索 | 已有 | `librarySearchService.ts`、`librarySearchIndex.ts` | 检索字段以后加入 DOI/年份 |

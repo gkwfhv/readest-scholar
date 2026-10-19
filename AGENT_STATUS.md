@@ -19,7 +19,7 @@
 - 按上游 `pnpm worktree:new` 流程建立 `feat/scholar-foundation` 工作树；将方案、审计、演练文档和基础设施脚本整理进同一源码树，修正脚本的仓库根路径。新增 Scholar CI 的备份逻辑、Compose 回环端口检查与源码依赖清单作业；本地脚本检查已通过。
 - 将基础提交 `b556652` 推送至公开仓库 `gkwfhv/readest-scholar` 的 `main`，并同步到 `/Users/admin/github/readest-scholar`。GitHub Actions 已启用；Scholar baseline 的许可证清单与 SBOM 作业通过，基础设施作业暴露出 Linux `stat` 兼容问题并已在本地容器复现和修复。Scorecard 和 Nix build 已通过。上游 Vercel 部署因缺少目标凭据失败；上游 Docker 镜像发布在验收前已请求取消。本次移除上游自动发布、部署及高成本定时作业的触发器，保留手动运行入口。
 - 创建并核验活跃的 `Protect main - Scholar CI` 规则：匹配默认分支 `main`，阻止删除和强推，要求 PR 与 `local-infrastructure`、`source-inventory` 两项 GitHub Actions 检查；单人仓库审批数为 0。CI 许可证工件含 946 个生产 npm 包、21 种标签；SBOM 校验输出 6187 个源码树组件。异常许可证声明和原始工件摘要已记入 `LICENSES.md`。
-- 在本机自托管 Web 阅读器给合成 PDF 第 2 页添加书签。刷新后条目仍在，`public.book_notes` 出现 `bookmark` 类型、第 2 页且未删除的记录；截图和只读查询事实已记入 Phase 0 证据。尚未验证第二设备的书签或高亮/备注同步。
+- 在本机自托管 Web 阅读器给合成 PDF 第 2 页添加书签，隔离 macOS 桌面客户端重新打开同书后显示该条；再在桌面端给第 1 页添加书签，`public.book_notes` 出现第 1/2 页两行未删除记录，Web 刷新后显示两条。双向截图与只读查询事实已记入 Phase 0 证据。
 - 核对锁定安装包的许可证文件：`khroma@2.1.0` 包内为 MIT，`jszip@3.10.1` 明确可选 MIT，`robust-predicates@3.0.3` 附 Unlicense 文本；保留原始机器标签，发布清单仍需核对打包范围与 Linux libvips。
 
 ## 当前事实
@@ -44,6 +44,6 @@
 ## 阻塞
 
 - Node 24 的 3 个 Turso 向量距离断言失败，原因待定位。
-- 桌面与 Web 已完成合成 PDF 的文件同步实测；备份恢复后 Web 阅读器显示“阅读进度已同步”及第 2/2 页。服务端书签写入和本机刷新保留已验证；进度双向更新、书签跨设备、其他批注和离线冲突尚未端到端验收。
+- 桌面与 Web 已完成合成 PDF 的文件和书签双向同步实测；备份恢复后 Web 阅读器显示“阅读进度已同步”及第 2/2 页。进度双向更新、高亮/备注和离线冲突尚未端到端验收。
 - 官方 MinIO/mc 镜像拉取 401，原版镜像的 Compose 验收仍阻塞。固定摘要替代镜像的本机测试已通过；官方 `compose.yaml` 默认广域发布端口，本工作区覆盖文件限制为回环地址。
 - Scholar 远端 CI 的源码清单已通过，本地基础设施 Linux 权限测试的修复待重新运行；`main` 保护规则已建立。自动部署需要 staging 目标与受保护环境，正式发布另需授权。
