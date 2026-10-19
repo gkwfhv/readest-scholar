@@ -1,0 +1,62 @@
+$ dotenv -e .env.tauri -- next build
+▲ Next.js 16.3.8 (Turbopack)
+- Environments: .env
+⚠ Specified "rewrites" will not automatically work with "output: export". See more info here: https://nextjs.org/docs/messages/export-no-custom-routes
+⚠ Specified "headers" will not automatically work with "output: export". See more info here: https://nextjs.org/docs/messages/export-no-custom-routes
+✓ Running next.config.mjs took 128ms
+Warning: Custom Cache-Control headers detected for the following routes:
+  - /_next/static/:path*
+
+Setting a custom Cache-Control header can break Next.js development behavior.
+- Experiments (use with caution):
+  · proxyClientMaxBodySize: 33554432
+
+  Creating an optimized production build ...
+⚠ Specified "rewrites" will not automatically work with "output: export". See more info here: https://nextjs.org/docs/messages/export-no-custom-routes
+⚠ Specified "headers" will not automatically work with "output: export". See more info here: https://nextjs.org/docs/messages/export-no-custom-routes
+✓ Compiled successfully in 4.4s
+  Running TypeScript ...
+  Finished TypeScript in 2.2s ...
+  Collecting page data using 9 workers ...
+  Generating static pages using 9 workers (0/25) ...
+  Generating static pages using 9 workers (6/25)
+  Generating static pages using 9 workers (12/25)
+  Generating static pages using 9 workers (18/25)
+✓ Generating static pages using 9 workers (25/25) in 1267ms
+  Finalizing page optimization ...
+⚠ rewrites, redirects, and headers are not applied when exporting your application, detected (rewrites, headers). See more info here: https://nextjs.org/docs/messages/export-no-custom-routes
+  Exporting using 9 workers (0/4) ...
+  Exporting using 9 workers (1/4)
+  Exporting using 9 workers (2/4)
+  Exporting using 9 workers (3/4)
+✓ Exporting using 9 workers (4/4) in 508ms
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ○ /auth
+├ ○ /auth/callback
+├ ○ /auth/error
+├ ○ /auth/recovery
+├ ○ /auth/update
+├ ○ /gdrive-callback
+├ ○ /hardcover/connect
+├ ○ /library
+├ ○ /link
+├ ○ /o
+├ ○ /offline
+├ ○ /onedrive-callback
+├ ○ /opds
+├ ○ /player
+├ ○ /reader
+├ ○ /s
+├ ○ /send
+├ ○ /updater
+├ ○ /user
+└ ○ /user/subscription/success
+
+Route (pages)
+┌   /_app
+└ ○ /reader/[ids] (863 ms)
+
+○  (Static)  prerendered as static content

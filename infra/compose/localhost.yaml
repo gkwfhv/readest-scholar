@@ -1,0 +1,13 @@
+# Phase 0 test overlay. Keep every published port on the loopback interface.
+# Run with the official docker/compose.yaml as the first -f argument.
+services:
+  client:
+    ports: !override
+      - "127.0.0.1:3000:3000"
+  kong:
+    ports: !override
+      - "127.0.0.1:8000:8000"
+  minio:
+    ports: !override
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"

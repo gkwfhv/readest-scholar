@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "ERR_PNPM_MISSING_PACKAGE_INDEX_FILE",
+    "message": "Failed to find package index file for @ai-sdk/openai-compatible@2.0.81 (at sha512-L14Jd0lAFKNM42l9TxlpwkNiyMlSvSvGySLc9GN4FB0qOo4/WmYOeLyn/CPhghIr0K4O6vH1y0nChxGljq2ccg==\t@ai-sdk/openai-compatible@2.0.81), please consider running 'pnpm install'"
+  }
+}

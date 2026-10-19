@@ -1,0 +1,30 @@
+# Phase 0 执行证据（2026-10-19）
+
+基线：Readest `2d37bbfc2e94725e1343ab2a825573545aa59f5f`，macOS arm64，工作区 Node `24.11.1`，pnpm `11.1.1`。命令均在本机实际执行；失败项不计作通过。
+
+| 检查 | 实际命令 / 结果 |
+|---|---|
+| 子模块 | 7 个源码子模块均已检出到上游锁定提交，包括 `foliate-js`、`simplecc-wasm`、`js-mdict`、`tauri-plugin-turso`、`tauri-plugin-webview-upgrade`、`qcms`、`packages/tauri`。仅供 Agent 使用的 `gstack` 未初始化。 |
+| PDF vendor | 依次运行 `npm run prepare-vendor`、`copy-pdfjs-worker`、`copy-pdfjs-wasm`、`copy-pdfjs-fonts`、两个 CSS 展平脚本；均退出 0。 |
+| 定向单测 | `NODE_OPTIONS=--no-experimental-webstorage npm run test -- --run src/__tests__/utils/style-dom.test.ts src/__tests__/document/pdf-cfi.test.ts`：2 文件、77 项通过。Node 26 的此开关仅用于识别首轮 `localStorage` 环境干扰，不是最终 CI 基线。 |
+| TypeScript + Biome | `npm run lint`（Node 26）与 `PATH=/Users/admin/personal/redest/.tools/node_modules/.bin:$PATH pnpm lint`（Node 24）均退出 0；后者提示 `Checked 2806 files in 1746ms. No fixes applied`。 |
+| 全量单测 | `PATH=/Users/admin/personal/redest/.tools/node_modules/.bin:$PATH pnpm test --run`：退出 1；1161 文件通过、1 文件失败、4 跳过；13752 项通过、3 失败、16 跳过。原始输出：[unit-node24.txt](unit-node24.txt)。失败均在 `src/__tests__/database/turso-node.test.ts` 的向量 L2 距离断言：`4.99704122543335` 对 `5.0`，以及 `1.414939284324646` 对 `sqrt(2)`。测试未修改或跳过。 |
+| Turso 浏览器对照 | `pnpm exec vitest run --config vitest.browser.config.mts src/__tests__/database/turso-wasm.browser.test.ts`（Node 24，沙箱外 Chromium）：退出 0，54 项通过、1 跳过。原始输出：[turso-wasm-browser.txt](turso-wasm-browser.txt)。这是相同测试套件的 WASM 适配；本机原生 Node 适配的 3 个距离断言仍需定位。 |
+| Turso Node 26 对照 | `NODE_OPTIONS=--no-experimental-webstorage /opt/homebrew/bin/node node_modules/vitest/vitest.mjs run src/__tests__/database/turso-node.test.ts`：退出 1，51 项通过、3 项失败、1 跳过。3 个失败及返回值与 Node 24 完全一致，故不是 Node 24 独有的行为。原始输出：[turso-node-node26.txt](turso-node-node26.txt)。 |
+| Web 生产构建 | `pnpm build-web` 在沙箱内停滞后中止（退出 130）；同一 Node 24 命令在沙箱外重跑退出 0，Next.js 16.3.8 报 `Compiled successfully in 29.5s`，静态页面 56/56。原始输出：[build-web-node24.txt](build-web-node24.txt)。 |
+| Tauri 前端构建 | `pnpm build`（Node 24，沙箱外）退出 0，静态页面 25/25、导出 4/4；原始输出：[build-tauri-frontend-node24.txt](build-tauri-frontend-node24.txt)。这只是 WebView 前端，不等于 macOS Rust/Tauri 安装包已构建。 |
+| macOS Tauri 构建 | Rust `1.99.1` 下 `pnpm tauri build --debug --no-bundle --no-sign --ci`（覆盖 `beforeBuildCommand` 为空，以跳过非验证所需的 sourcemap 上传）退出 0，生成 `target/debug/readest`；再以独立标识 `com.readest.scholar.phase0` 构建未签名 `.app` 退出 0。原始输出：[调试编译](tauri-debug-build.txt)、[隔离标识编译](tauri-isolated-build.txt)、[App 打包](tauri-isolated-app.txt)。该包不是正式签名发布物。 |
+| macOS 桌面实际阅读 | 用独立标识的 `Readest Phase 0.app` 启动空书库；通过“从本地文件导入”选择与 Web 验证相同的 `src/__tests__/fixtures/data/sample-paper.pdf`。界面报告“成功导入 1 本书”，打开后 URL 为 `tauri://localhost/reader?ids=008e936204282cfdef42acdd3e527740`，页面显示 `1 / 2`，正文含 `TITLE OF THE PAPER`、`ABSTRACT`。经可访问性树与窗口截图目视确认。后续登录本机测试账户并手动触发文件上传。 |
+| Web 实际阅读 | `pnpm start-web --hostname 127.0.0.1` 启动；宿主机请求 `/library` 返回 200。无头 Chromium 打开空书库，用仓库 fixture `src/__tests__/fixtures/data/sample-paper.pdf` 经“Import Books → From Local File”导入，随后打开 `/reader/008e936204282cfdef42acdd3e527740`；页面显示 `1 / 2`、`Page 1` 且有 2 个 canvas。截图：[空书库](web-library.png)、[导入后书库](web-pdf-import.png)、[PDF 阅读器](web-pdf-reader.png)。此测试没有登录，也未验证同步。 |
+| Compose 端口 | `docker compose ... config --format json` 解析后，client/kong/minio 的所有映射均为 `127.0.0.1`。覆盖文件：[localhost.yaml](../../../infra/compose/localhost.yaml)。 |
+| Compose 启动 | 原版 `docker compose ... up -d` 因 `quay.io/minio/mc:latest` 返回 401 失败。加上 `infra/compose/silo-local-test.yaml` 后，`client/auth/db/kong/rest/minio` 六个持续服务运行，`db/kong/minio` 健康，四个宿主机端口只绑定 `127.0.0.1`。这使用固定摘要的 Pigsty MinIO 兼容镜像，不能记为原版镜像通过。 |
+| 自托管跨端同步 | 本机合成账户在 Web 和隔离桌面端登录，桌面导入仓库测试 PDF 后手动执行“上传书籍”。本机数据库 `auth.users/public.books/public.files` 数量为 `1/1/2`，`uploaded_at` 非空。Web 刷新后显示该 PDF，点击下载并打开 `/reader/008e936204282cfdef42acdd3e527740`，可访问性树显示第 1/2 页和 `TITLE OF THE PAPER`。Web 的动态文件输入无法由当前浏览器自动化文件选择器设置，未宣称该自托管 Web 路径的直接导入已通过。 |
+| 本机真实备份与完整恢复 | `SCHOLAR_BACKUP_CONFIRM=yes ... bash infra/backup/backup-compose.sh .../backup-test` 已执行。原始 `postgres.sql` 恢复因缺失 GraphQL 包装函数在授权处失败，后续脚本补存包装函数并生成 `postgres-restorable.sql`。最终快照 `backup-test/20261019T110219Z` 一次导入新建的 `scholar_phase0_restore3` 空数据库，`psql -v ON_ERROR_STOP=1` 退出 0；账户/书籍/文件数量 `1/1/2`，8 个事件触发器，包装函数存在。另从零启动 `scholar-restore-rehearsal` 第二套完整服务栈，导入同份 SQL 和对象副本：`3100/8100/9100` 的 Web/Auth/S3 返回 200，合成账户登录，下载并打开恢复 PDF，第 2/2 页及“阅读进度已同步”可见。备份中含合成账户的哈希及对象数据，目录权限 `0700`，不要公开。 |
+| 备份脚本逻辑 | `bash -n` 与 `bash infra/backup/test-backup-compose.sh` 通过：未确认拒绝、成功备份完成标记和权限、对象复制失败不写完成标记。此测试使用假 Docker，不是恢复演练。 |
+| 生产依赖许可证清单 | `pnpm licenses list --json --prod` 退出 1，提示缺失 `@ai-sdk/openai-compatible@2.0.81` 的 package index；尝试指定本机 pnpm 存储目录仍失败。原始错误：[licenses-production-error.json](licenses-production-error.json)。未生成清单或 SBOM。 |
+
+Rust `1.99.1`、rustfmt 和 Clippy 已在工作区安装；`cargo fmt -p Readest --check` 已通过。Web 与桌面均实测打开同一测试 PDF；替代对象镜像下跨端文件同步与第二套完整栈的数据恢复已验证。全量单测 3 个失败、原版 MinIO 镜像和受保护 CI 仍待解决。
+
+Turso 精度问题的复现与源码线索见 [专项记录](../../audit/turso-l2-precision.md)。
+
+自托管同步和第二套完整栈恢复的步骤与结果见 [演练记录](selfhost-restore-rehearsal.md)。

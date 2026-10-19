@@ -1,0 +1,51 @@
+
+ RUN  v4.1.11 /Users/admin/personal/redest/readest/apps/readest-app
+
+ ❯ src/__tests__/database/turso-node.test.ts (55 tests | 3 failed | 1 skipped) 162ms
+       × vector_distance_l2() computes correct Euclidean distance 3ms
+       × finds nearest neighbors by L2 distance 2ms
+       × vector_distance_l2() works with vector64 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/database/turso-node.test.ts > NodeDatabaseService (real in-memory SQLite) > Vector Search > vector_distance_l2() computes correct Euclidean distance
+AssertionError: expected 4.99704122543335 to be close to 5, received difference is 0.0029587745666503906, but expected 0.00005
+ ❯ src/__tests__/database/suites/vector-tests.ts:100:24
+     98|       "SELECT vector_distance_l2(vector32('[0,0]'), vector32('[3,4]'))…
+     99|     );
+    100|     expect(rows[0]!.d).toBeCloseTo(5.0, 4);
+       |                        ^
+    101|   });
+    102|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/__tests__/database/turso-node.test.ts > NodeDatabaseService (real in-memory SQLite) > Vector Search > finds nearest neighbors by L2 distance
+AssertionError: expected 1.414939284324646 to be close to 1.4142135623730951, received difference is 0.0007257219515508506, but expected 0.00005
+ ❯ src/__tests__/database/suites/vector-tests.ts:160:27
+    158|     // Origin first, then [1,1] (dist ~1.41), then [3,4] (dist 5)
+    159|     expect(rows[0]!.dist).toBeCloseTo(0, 4);
+    160|     expect(rows[1]!.dist).toBeCloseTo(Math.sqrt(2), 4);
+       |                           ^
+    161|     expect(rows[2]!.dist).toBeCloseTo(5, 4);
+    162|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/__tests__/database/turso-node.test.ts > NodeDatabaseService (real in-memory SQLite) > Vector Search > vector_distance_l2() works with vector64
+AssertionError: expected 4.99704122543335 to be close to 5, received difference is 0.0029587745666503906, but expected 0.00005
+ ❯ src/__tests__/database/suites/vector-tests.ts:234:24
+    232|       "SELECT vector_distance_l2(vector64('[0,0]'), vector64('[3,4]'))…
+    233|     );
+    234|     expect(rows[0]!.d).toBeCloseTo(5.0, 4);
+       |                        ^
+    235|   });
+    236|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 51 passed | 1 skipped (55)
+   Start at  17:41:20
+   Duration  956ms (transform 83ms, setup 31ms, import 72ms, tests 162ms, environment 548ms)

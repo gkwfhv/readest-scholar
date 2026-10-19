@@ -1,0 +1,74 @@
+name: Scholar baseline
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  local-infrastructure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+        with:
+          node-version: 24
+      - name: Check shell and Node syntax
+        run: |
+          bash -n infra/backup/backup-compose.sh infra/backup/test-backup-compose.sh
+          node --check infra/compose/prepare-local-env.mjs
+          node --check infra/compose/build-local-tauri.mjs
+          node --check infra/compose/assert-loopback-ports.mjs
+      - name: Exercise backup failure and success paths
+        run: bash infra/backup/test-backup-compose.sh
+      - name: Validate local Compose configuration and port bindings
+        run: |
+          node infra/compose/prepare-local-env.mjs
+          docker compose --env-file docker/.env \
+            -f docker/compose.yaml \
+            -f infra/compose/localhost.yaml \
+            -f infra/compose/silo-local-test.yaml \
+            config --format json | node infra/compose/assert-loopback-ports.mjs
+
+  source-inventory:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: List declared production npm licenses
+        run: pnpm --filter @readest/readest-app licenses list --json --prod > scholar-licenses.json
+      - name: Upload npm license report
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: scholar-npm-licenses
+          path: scholar-licenses.json
+          retention-days: 30
+      - name: Install pinned Syft
+        id: syft
+        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0
+      - name: Generate source-tree CycloneDX inventory
+        env:
+          SYFT: ${{ steps.syft.outputs.cmd }}
+        run: '"$SYFT" scan dir:. -o cyclonedx-json=scholar-source-sbom.cdx.json'
+      - name: Check inventory contains locked dependencies
+        run: |
+          node -e 'const b=require("./scholar-source-sbom.cdx.json"); if (!Array.isArray(b.components) || b.components.length < 100) process.exit(1); console.log(`${b.components.length} components cataloged`);'
+      - name: Upload source-tree inventory
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: scholar-source-sbom
+          path: scholar-source-sbom.cdx.json
+          retention-days: 30

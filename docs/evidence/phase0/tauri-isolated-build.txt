@@ -1,0 +1,326 @@
+$ node scripts/tauri.mjs build --debug --no-bundle --no-sign --ci --config '{"identifier":"com.readest.scholar.phase0","productName":"Readest Phase 0","build":{"beforeBuildCommand":""}}'
+        Warn --no-sign flag detected: Signing will be skipped.
+        Info Looking up installed tauri packages to check mismatched versions...
+warning: unused import: `autorelease::*`
+  --> packages/swift-rs/src-rs/lib.rs:10:9
+   |
+10 | pub use autorelease::*;
+   |         ^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+  --> packages/swift-rs/src-rs/swift.rs:34:25
+   |
+34 |     unsafe fn swift_ref(&self) -> SwiftRef<Self>
+   |                         ^^^^^     ^^^^^^^^^^^^^^ the same lifetime is hidden here
+   |                         |
+   |                         the lifetime is elided here
+   |
+   = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+   = note: `#[warn(mismatched_lifetime_syntaxes)]` on by default
+help: use `'_` for type paths
+   |
+34 |     unsafe fn swift_ref(&self) -> SwiftRef<'_, Self>
+   |                                            +++
+
+warning: `swift-rs` (lib) generated 2 warnings (run `cargo fix --lib -p swift-rs` to apply 2 suggestions)
+warning: `swift-rs` (lib) generated 2 warnings (2 duplicates)
+   Compiling tauri-plugin-native-bridge v0.1.0 (/Users/admin/personal/redest/readest/apps/readest-app/src-tauri/plugins/tauri-plugin-native-bridge)
+   Compiling tauri-plugin-native-tts v0.1.0 (/Users/admin/personal/redest/readest/apps/readest-app/src-tauri/plugins/tauri-plugin-native-tts)
+   Compiling tauri-plugin-webview-upgrade v0.1.0 (/Users/admin/personal/redest/readest/apps/readest-app/src-tauri/plugins/tauri-plugin-webview-upgrade)
+   Compiling Readest v0.2.2 (/Users/admin/personal/redest/readest/apps/readest-app/src-tauri)
+warning: unexpected `cfg` condition value: `cargo-clippy`
+  --> apps/readest-app/src-tauri/plugins/tauri-plugin-native-bridge/src/platform/macos.rs:60:22
+   |
+60 |     let config: id = msg_send![class!(WKSnapshotConfiguration), new];
+   |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `cef`
+   = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: `#[warn(unexpected_cfgs)]` on by default
+   = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+  --> apps/readest-app/src-tauri/plugins/tauri-plugin-native-bridge/src/platform/macos.rs:60:32
+   |
+60 |     let config: id = msg_send![class!(WKSnapshotConfiguration), new];
+   |                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `cef`
+   = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `class` crate for guidance on how handle this unexpected cfg
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the macro `class` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+  --> apps/readest-app/src-tauri/plugins/tauri-plugin-native-bridge/src/platform/macos.rs:65:17
+   |
+65 |     let _: () = msg_send![config, setRect: rect];
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `cef`
+   = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+  --> apps/readest-app/src-tauri/plugins/tauri-plugin-native-bridge/src/platform/macos.rs:80:9
+   |
+80 |         msg_send![webview, takeSnapshotWithConfiguration: config completionHandler: &*block];
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `cef`
+   = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+  --> apps/readest-app/src-tauri/plugins/tauri-plugin-native-bridge/src/platform/macos.rs:81:17
+   |
+81 |     let _: () = msg_send![config, release];
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `cef`
+   = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+  --> apps/readest-app/src-tauri/plugins/tauri-plugin-native-bridge/src/platform/macos.rs:91:20
+   |
+91 |     let tiff: id = msg_send![image, TIFFRepresentation];
+   |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `cef`
+   = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+  --> apps/readest-app/src-tauri/plugins/tauri-plugin-native-bridge/src/platform/macos.rs:95:19
+   |
+95 |     let rep: id = msg_send![class!(NSBitmapImageRep), imageRepWithData: tiff];
+   |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `cef`
+   = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+  --> apps/readest-app/src-tauri/plugins/tauri-plugin-native-bridge/src/platform/macos.rs:95:29
+   |
+95 |     let rep: id = msg_send![class!(NSBitmapImageRep), imageRepWithData: tiff];
+   |                             ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `cef`
+   = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `class` crate for guidance on how handle this unexpected cfg
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the macro `class` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+  --> apps/readest-app/src-tauri/plugins/tauri-plugin-native-bridge/src/platform/macos.rs:99:21
+   |
+99 |     let props: id = msg_send![class!(NSDictionary), dictionary];
+   |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `cef`
+   = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+  --> apps/readest-app/src-tauri/plugins/tauri-plugin-native-bridge/src/platform/macos.rs:99:31
+   |
+99 |     let props: id = msg_send![class!(NSDictionary), dictionary];
+   |                               ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `cef`
+   = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+   = help: try referring to `class` crate for guidance on how handle this unexpected cfg
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: this warning originates in the macro `class` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> apps/readest-app/src-tauri/plugins/tauri-plugin-native-bridge/src/platform/macos.rs:101:9
+    |
+101 |         msg_send![rep, representationUsingType: NS_BITMAP_IMAGE_FILE_TYPE_PNG properties: props];
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `cef`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> apps/readest-app/src-tauri/plugins/tauri-plugin-native-bridge/src/platform/macos.rs:105:22
+    |
+105 |     let len: usize = msg_send![png, length];
+    |                      ^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `cef`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> apps/readest-app/src-tauri/plugins/tauri-plugin-native-bridge/src/platform/macos.rs:106:28
+    |
+106 |     let bytes: *const u8 = msg_send![png, bytes];
+    |                            ^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `cef`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> apps/readest-app/src-tauri/plugins/tauri-plugin-native-bridge/src/platform/macos.rs:118:20
+    |
+118 |     let desc: id = msg_send![error, localizedDescription];
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `cef`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> apps/readest-app/src-tauri/plugins/tauri-plugin-native-bridge/src/platform/macos.rs:122:45
+    |
+122 |     let utf8: *const std::os::raw::c_char = msg_send![desc, UTF8String];
+    |                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `cef`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> apps/readest-app/src-tauri/plugins/tauri-plugin-native-bridge/src/platform/macos.rs:143:22
+    |
+143 |         let fm: id = msg_send![class!(NSFileManager), defaultManager];
+    |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `cef`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> apps/readest-app/src-tauri/plugins/tauri-plugin-native-bridge/src/platform/macos.rs:143:32
+    |
+143 |         let fm: id = msg_send![class!(NSFileManager), defaultManager];
+    |                                ^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `cef`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `class` crate for guidance on how handle this unexpected cfg
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `class` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> apps/readest-app/src-tauri/plugins/tauri-plugin-native-bridge/src/platform/macos.rs:144:23
+    |
+144 |         let url: id = msg_send![fm, URLForUbiquityContainerIdentifier: nil];
+    |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `cef`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> apps/readest-app/src-tauri/plugins/tauri-plugin-native-bridge/src/platform/macos.rs:151:27
+    |
+151 |         let ns_path: id = msg_send![url, path];
+    |                           ^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `cef`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> apps/readest-app/src-tauri/plugins/tauri-plugin-native-bridge/src/platform/macos.rs:206:22
+    |
+206 |         let fm: id = msg_send![class!(NSFileManager), defaultManager];
+    |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `cef`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> apps/readest-app/src-tauri/plugins/tauri-plugin-native-bridge/src/platform/macos.rs:206:32
+    |
+206 |         let fm: id = msg_send![class!(NSFileManager), defaultManager];
+    |                                ^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `cef`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `class` crate for guidance on how handle this unexpected cfg
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `class` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> apps/readest-app/src-tauri/plugins/tauri-plugin-native-bridge/src/platform/macos.rs:208:23
+    |
+208 |         let url: id = msg_send![class!(NSURL), fileURLWithPath: ns_path];
+    |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `cef`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> apps/readest-app/src-tauri/plugins/tauri-plugin-native-bridge/src/platform/macos.rs:208:33
+    |
+208 |         let url: id = msg_send![class!(NSURL), fileURLWithPath: ns_path];
+    |                                 ^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `cef`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `class` crate for guidance on how handle this unexpected cfg
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `class` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unexpected `cfg` condition value: `cargo-clippy`
+   --> apps/readest-app/src-tauri/plugins/tauri-plugin-native-bridge/src/platform/macos.rs:210:13
+    |
+210 |             msg_send![fm, startDownloadingUbiquitousItemAtURL: url error: nil];
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `cef`
+    = note: using a cfg inside a macro will use the cfgs from the destination crate and not the ones from the defining crate
+    = help: try referring to `sel_impl` crate for guidance on how handle this unexpected cfg
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: this warning originates in the macro `sel_impl` which comes from the expansion of the macro `msg_send` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: `tauri-plugin-native-bridge` (lib) generated 24 warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 23.89s
+warning: the following packages contain code that will be rejected by a future version of Rust: block v0.1.6
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+       Built application at: /Users/admin/personal/redest/readest/target/debug/readest

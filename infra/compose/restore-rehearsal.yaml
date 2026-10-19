@@ -1,0 +1,35 @@
+# Disposable restore rehearsal, layered after compose.yaml and
+# silo-local-test.yaml. Never attach to a production Compose project.
+name: scholar-restore-rehearsal
+
+services:
+  db:
+    container_name: scholar-restore-db
+  kong:
+    container_name: scholar-restore-kong
+    ports: !override
+      - "127.0.0.1:8100:8000"
+  auth:
+    container_name: scholar-restore-auth
+    environment:
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/scholar_phase0_restored
+      GOTRUE_SITE_URL: http://127.0.0.1:3100
+  rest:
+    container_name: scholar-restore-rest
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/scholar_phase0_restored
+  minio:
+    container_name: scholar-restore-minio
+    volumes: !override
+      - ${SCHOLAR_RESTORE_MINIO_DATA:?Set SCHOLAR_RESTORE_MINIO_DATA to a copy of backup minio-data}:/data
+    ports: !override
+      - "127.0.0.1:9100:9000"
+      - "127.0.0.1:9101:9001"
+  client:
+    container_name: scholar-restore-client
+    ports: !override
+      - "127.0.0.1:3100:3000"
+    environment:
+      SUPABASE_PUBLIC_URL: http://127.0.0.1:8100
+      S3_PUBLIC_ENDPOINT: http://127.0.0.1:9100
+      API_BASE_URL: http://127.0.0.1:3100

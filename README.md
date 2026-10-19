@@ -1,3 +1,5 @@
+> **Readest Scholar 工程状态：Phase 0 / Phase 1 验证中。** 本仓库基于 [Readest 上游](https://github.com/readest/readest) 开发，尚无 Scholar 正式发行版。当前验收、已知失败和下一步见 [AGENT_STATUS.md](AGENT_STATUS.md) 与 [ROADMAP.md](ROADMAP.md)；完整设计见 [工程方案](Readest_Scholar_Agent_Engineering_Plan.md)。下文保留上游 Readest 的原始介绍和链接，不代表 Scholar 的发行渠道。
+
 <div align="center">
   <a href="https://readest.com?utm_source=github&utm_medium=referral&utm_campaign=readme" target="_blank">
     <img src="https://github.com/readest/readest/blob/main/apps/readest-app/src-tauri/icons/icon.png?raw=true" alt="Readest Logo" width="20%" />
