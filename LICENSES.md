@@ -1,6 +1,6 @@
-# 许可证审计（未完成，不能用于发布）
+# 许可证审计（待人工复核，不能用于发布）
 
-核对日期：2026-10-19。这是源码许可证标识核对，不是 SBOM，也不是法律意见。
+核对日期：2026-10-19。这是源码与包管理器声明标识核对；CI 另产出 SBOM。最终分发条件仍需人工法律复核。
 
 ## 已核对
 
@@ -11,15 +11,28 @@
 
 两者都是网络服务 copyleft。若 Scholar 把它们作为对外提供的修改版服务，发布前必须提供对应源码，并由人工做法律复核。本阶段不发布二进制、镜像或应用商店包。
 
-## 已知但未逐份读取的第三方
+## 锁定依赖的机器清单
 
-子模块和依赖至少包括 foliate-js、pdfjs / qcms、Tauri、simplecc-wasm、js-mdict、Supabase、MinIO、Kong、PostgREST、Vercel AI SDK。它们的许可证以各自 `LICENSE` 和锁文件为准。尝试运行 `pnpm licenses list --json --prod`，但 pnpm 因本机安装存储缺少 `@ai-sdk/openai-compatible@2.0.81` 的 package index 退出 1；[原始错误](docs/evidence/phase0/licenses-production-error.json)。因此没有生成完整第三方清单或 SBOM。
+GitHub Actions 的 [首次源码清单作业](https://github.com/gkwfhv/readest-scholar/actions/runs/39246293900/job/118038919532) 已通过：使用锁文件安装依赖后，`pnpm licenses list --json --prod` 列出 946 个生产 npm 包、21 种许可证标签。按声明计，MIT 658、Apache-2.0 140、ISC 58、BSD-3-Clause 30、`MIT OR Apache-2.0` 20，其余 40。去掉 CI 机器路径的逐包快照见 [npm-license-inventory.json](docs/evidence/phase0/npm-license-inventory.json)，原始 ZIP 工件保留在该运行记录中，工件 SHA-256 为 `3642f673a7ae4a449e4f4cb26cc11077d89ad3cd385941bba929593ef96c7086`。
+
+同一作业用固定版本 Syft 生成 CycloneDX 源码树 SBOM，校验日志显示 **6187 个组件**，原始工件 SHA-256 为 `1509e6daedc9fca0de8ff51cf463e2958d7e048f28f42121d1aac30eb3793b79`。这一数量涵盖源码树扫描结果，不等于运行时依赖数，也不能替代逐份许可证审计。原始本机 pnpm store 缺失索引的失败记录仍见 [licenses-production-error.json](docs/evidence/phase0/licenses-production-error.json)。
+
+已核对本机按相同锁文件安装的 npm 包中实际附带的许可证文件；机器清单仍按原声明保留，不改写原始数据：
+
+| 依赖 | 清单声明 | 包内文本核对与剩余事项 |
+|---|---|---|
+| `@img/sharp-libvips-linux-x64` | LGPL-3.0-or-later | Linux 构建的动态库分发方式与相应义务 |
+| `jszip@3.10.1` | MIT OR GPL-3.0-or-later | 安装包的 `LICENSE.markdown` 明确允许择一使用 MIT 或 GPLv3，且附完整 MIT 文本；Scholar 的第三方通知拟选 MIT，发布清单仍需核对最终打包范围 |
+| `khroma@2.1.0` | Unknown | 安装包没有 `package.json` 的 `license` 字段，但附带 `license` 文件，首行 `The MIT License (MIT)`，SHA-256 `66b333b0f66759a0b710459e03f7029abe17f4358114a128d2c972e642961b49`；机器识别漏报，最终包内通知仍需收录 |
+| `robust-predicates@3.0.3` | Unlicense | 安装包附带 `LICENSE`，内容为 Unlicense 公共领域声明；最终包内通知仍需收录 |
+
+子模块和容器依赖另包括 foliate-js、pdfjs / qcms、Tauri、simplecc-wasm、js-mdict、Supabase、MinIO、Kong、PostgREST。上述 npm 清单不覆盖它们的全部许可证文本。
 
 ## 发布阻断
 
 在下列各项完成前，禁止把构建物称为可分发版本：
 
-- 对锁定 SHA 运行许可证扫描，并保存原始报告
+- 逐份核对异常 npm 标签、源码子模块和容器镜像许可证，并留存发布时的完整报告
 - 列出容器镜像 digest 与基础镜像许可证
 - 人工确认 AGPL 源码提供方式
 - 确认没有把上游商标或 `readest.com` 域名当成 Scholar 的品牌

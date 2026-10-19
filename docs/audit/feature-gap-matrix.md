@@ -6,10 +6,10 @@
 |---|---|---|---|
 | PDF/EPUB/MOBI/TXT 阅读 | 已有 | `packages/foliate-js`，PDF 走 pdfjs；`AGENTS.md` | 不重写阅读器 |
 | 平台适配 | 已有 | `appService.ts` 与 web/native/node 三个实现 | Scholar UI 只通过 `AppService` 触达文件系统 |
-| 自托管登录与书库 | 已有 | `docker/README.md`；`books` RLS；Supabase GoTrue | 用官方 Compose，不换认证系统 |
+| 自托管登录与书库 | 已有 | `docker/README.md`；`books` RLS；Supabase GoTrue | 官方 MinIO/mc 镜像当前拉取返回 401；本机已用固定摘要兼容镜像完成跨端 PDF 测试，仍需可复现的正式镜像来源。不换认证系统 |
 | 书籍文件上云 | 已有 | `pages/api/storage/*`，`cloudService.ts`，`files` 表 | 译文做成新对象，不覆盖 `file_key` |
 | 阅读进度同步 | 已有 | `book_configs`；replica 类别 `progress`；KOSync | 继续用现有类别 |
-| 高亮/备注/书签数据 | 已有 | `book_notes` 含 `type`、`cfi`、`text`、`note`、`color`、`page`、`deleted_at` | V1 高亮与备注复用该行 |
+| 高亮/备注/书签数据 | 已有 | `book_notes` 含 `type`、`cfi`、`text`、`note`、`color`、`page`、`deleted_at`；合成 PDF 第 1/2 页书签在 Web/桌面端双向显示；桌面高亮在 Web 显示，Web 备注在桌面显示，服务端对应记录未删除 | V1 高亮与备注复用该行；离线、并发冲突与几何锚点仍需实测 |
 | 跨设备增量同步 | 已有 | replica cursor、加密、类别开关 | 新实体优先加 replica 类别，不平行再做一套 op-log |
 | 离线 Web | 已有 | `src/sw.ts` Serwist，架构文档第 3.4 节 | 实测仍未做 |
 | 书库搜索 | 已有 | `librarySearchService.ts`、`librarySearchIndex.ts` | 检索字段以后加入 DOI/年份 |
@@ -33,6 +33,6 @@
 | BibTeX/RIS、Zotero 双向同步 | 不适用 | 方案将导入导出放 P1，双向同步放 P2 | 不在本阶段承诺 |
 | Web/桌面/移动安装包 | 已有 | `package.json` 脚本与 `release.yml` | 本机 Web 构建、无账户 PDF 阅读及独立标识的未签名 macOS `.app` 构建和阅读已验证；移动包未构建。没有签名凭据，不发布 |
 | 自动化测试框架 | 已有 | `docs/testing.md`；本机 Node 24 全量单测 13752 通过、3 失败，浏览器 WASM 对照 54 通过 | 修复或解释 Turso 原生断言，再把 Scholar 新用例纳入 CI |
-| Scholar 质量闸门、SBOM、备份演练 | 需新增 | 上游 CI 不覆盖 Scholar 任务和恢复演练 | `infra/backup` 脚本逻辑测试、真实合成数据备份及第二套完整服务栈恢复后阅读已通过。Scholar CI 工作流已编写但未远端运行；加密、升级回滚及已验证 SBOM 仍缺失 |
+| Scholar 质量闸门、SBOM、备份演练 | 可扩展 | 上游 CI 不覆盖 Scholar 任务和恢复演练；新增 Scholar baseline，`main` 已设必需检查 | `infra/backup` 脚本逻辑测试、真实合成数据备份及第二套完整服务栈恢复后阅读已通过。首次远端许可证清单与 6187 组件 SBOM 作业通过；Linux 脚本兼容修复在 PR #2 的 Scholar baseline 第 5 次运行通过。加密、升级回滚和发布级 SBOM/许可证复核仍缺失 |
 
 结论：不替换阅读器、账户、对象存储和 replica 同步。文献身份、PDF 页级引用、翻译任务是新增面。集合、标签、笔记在现有字段上扩展。
