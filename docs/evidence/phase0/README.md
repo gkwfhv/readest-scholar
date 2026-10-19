@@ -21,9 +21,9 @@
 | 自托管跨端同步 | 本机合成账户在 Web 和隔离桌面端登录，桌面导入仓库测试 PDF 后手动执行“上传书籍”。本机数据库 `auth.users/public.books/public.files` 数量为 `1/1/2`，`uploaded_at` 非空。Web 刷新后显示该 PDF，点击下载并打开 `/reader/008e936204282cfdef42acdd3e527740`，可访问性树显示第 1/2 页和 `TITLE OF THE PAPER`。Web 的动态文件输入无法由当前浏览器自动化文件选择器设置，未宣称该自托管 Web 路径的直接导入已通过。 |
 | 本机真实备份与完整恢复 | `SCHOLAR_BACKUP_CONFIRM=yes ... bash infra/backup/backup-compose.sh .../backup-test` 已执行。原始 `postgres.sql` 恢复因缺失 GraphQL 包装函数在授权处失败，后续脚本补存包装函数并生成 `postgres-restorable.sql`。最终快照 `backup-test/20261019T110219Z` 一次导入新建的 `scholar_phase0_restore3` 空数据库，`psql -v ON_ERROR_STOP=1` 退出 0；账户/书籍/文件数量 `1/1/2`，8 个事件触发器，包装函数存在。另从零启动 `scholar-restore-rehearsal` 第二套完整服务栈，导入同份 SQL 和对象副本：`3100/8100/9100` 的 Web/Auth/S3 返回 200，合成账户登录，下载并打开恢复 PDF，第 2/2 页及“阅读进度已同步”可见。备份中含合成账户的哈希及对象数据，目录权限 `0700`，不要公开。 |
 | 备份脚本逻辑 | `bash -n` 与 `bash infra/backup/test-backup-compose.sh` 通过：未确认拒绝、成功备份完成标记和权限、对象复制失败不写完成标记。此测试使用假 Docker，不是恢复演练。 |
-| 生产依赖许可证清单 | `pnpm licenses list --json --prod` 退出 1，提示缺失 `@ai-sdk/openai-compatible@2.0.81` 的 package index；尝试指定本机 pnpm 存储目录仍失败。原始错误：[licenses-production-error.json](licenses-production-error.json)。未生成清单或 SBOM。 |
+| 生产依赖许可证清单 | 本机 pnpm store 缺失 `@ai-sdk/openai-compatible@2.0.81` 的 package index，原始错误：[licenses-production-error.json](licenses-production-error.json)。GitHub [source-inventory 作业](https://github.com/gkwfhv/readest-scholar/actions/runs/39246293900/job/118038919532) 从锁文件重新安装后退出 0，产出 946 个生产 npm 包的声明清单；去除 runner 路径的逐包快照：[npm-license-inventory.json](npm-license-inventory.json)。同一作业的 CycloneDX 源码树 SBOM 含 6187 个组件；原始报告作为该次 CI 的工件保存。需要继续审核异常标签、子模块与容器许可证。 |
 
-Rust `1.99.1`、rustfmt 和 Clippy 已在工作区安装；`cargo fmt -p Readest --check` 已通过。Web 与桌面均实测打开同一测试 PDF；替代对象镜像下跨端文件同步与第二套完整栈的数据恢复已验证。全量单测 3 个失败、原版 MinIO 镜像和受保护 CI 仍待解决。
+Rust `1.99.1`、rustfmt 和 Clippy 已在工作区安装；`cargo fmt -p Readest --check` 已通过。Web 与桌面均实测打开同一测试 PDF；替代对象镜像下跨端文件同步与第二套完整栈的数据恢复已验证。GitHub `main` 已创建活跃保护规则，要求 PR 和两项 Scholar 状态检查；首次 `local-infrastructure` 因 Linux `stat` 兼容问题失败，修复已在本机 macOS 和 Linux 容器通过，远端第二次运行待确认。全量单测仍有 3 个失败，原版 MinIO 镜像仍无法拉取。
 
 Turso 精度问题的复现与源码线索见 [专项记录](../../audit/turso-l2-precision.md)。
 
