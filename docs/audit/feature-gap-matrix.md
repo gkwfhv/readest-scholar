@@ -33,6 +33,6 @@
 | BibTeX/RIS、Zotero 双向同步 | 不适用 | 方案将导入导出放 P1，双向同步放 P2 | 不在本阶段承诺 |
 | Web/桌面/移动安装包 | 已有 | `package.json` 脚本与 `release.yml` | 本机 Web 构建、无账户 PDF 阅读及独立标识的未签名 macOS `.app` 构建和阅读已验证；移动包未构建。没有签名凭据，不发布 |
 | 自动化测试框架 | 已有 | `docs/testing.md`；本机 Node 24 全量单测 13752 通过、3 失败，浏览器 WASM 对照 54 通过 | 修复或解释 Turso 原生断言，再把 Scholar 新用例纳入 CI |
-| Scholar 质量闸门、SBOM、备份演练 | 可扩展 | 上游 CI 不覆盖 Scholar 任务和恢复演练；新增 Scholar baseline，`main` 已设必需检查 | `infra/backup` 脚本逻辑测试、真实合成数据备份及第二套完整服务栈恢复后阅读已通过。首次远端许可证清单与 6187 组件 SBOM 作业通过；Linux 脚本兼容修复待第二次远端运行验证。加密、升级回滚和发布级 SBOM/许可证复核仍缺失 |
+| Scholar 质量闸门、SBOM、备份演练 | 可扩展 | 上游 CI 不覆盖 Scholar 任务和恢复演练；新增 Scholar baseline，`main` 已设必需检查 | `infra/backup` 脚本逻辑测试、真实合成数据备份及第二套完整服务栈恢复后阅读已通过。首次远端许可证清单与 6187 组件 SBOM 作业通过；Linux 脚本兼容修复在 PR #2 的 Scholar baseline 第 5 次运行通过。加密、升级回滚和发布级 SBOM/许可证复核仍缺失 |
 
 结论：不替换阅读器、账户、对象存储和 replica 同步。文献身份、PDF 页级引用、翻译任务是新增面。集合、标签、笔记在现有字段上扩展。

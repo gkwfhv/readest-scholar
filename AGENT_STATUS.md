@@ -21,6 +21,7 @@
 - 创建并核验活跃的 `Protect main - Scholar CI` 规则：匹配默认分支 `main`，阻止删除和强推，要求 PR 与 `local-infrastructure`、`source-inventory` 两项 GitHub Actions 检查；单人仓库审批数为 0。CI 许可证工件含 946 个生产 npm 包、21 种标签；SBOM 校验输出 6187 个源码树组件。异常许可证声明和原始工件摘要已记入 `LICENSES.md`。
 - 在本机自托管 Web 阅读器给合成 PDF 第 2 页添加书签，隔离 macOS 桌面客户端重新打开同书后显示该条；再在桌面端给第 1 页添加书签，`public.book_notes` 出现第 1/2 页两行未删除记录，Web 刷新后显示两条。双向截图与只读查询事实已记入 Phase 0 证据。
 - 核对锁定安装包的许可证文件：`khroma@2.1.0` 包内为 MIT，`jszip@3.10.1` 明确可选 MIT，`robust-predicates@3.0.3` 附 Unlicense 文本；保留原始机器标签，发布清单仍需核对打包范围与 Linux libvips。
+- PR #2 的 Scholar baseline 第 5 次运行已通过：Linux `local-infrastructure` 13 秒，`source-inventory` 1 分 3 秒；这验证了 `stat` 跨平台修复和远端源码清单作业。
 
 ## 当前事实
 
@@ -39,11 +40,11 @@
 
 1. 调查 `@tursodatabase/database` macOS arm64 原生 L2 距离实现；Node 24/26 结果相同，浏览器 WASM 对照通过。保留真实数值，不放宽断言。
 2. 比较官方 MinIO 的可用分发或可复现构建，不把替代镜像测试当成原版官方 Compose 通过；补充备份后的升级与回滚演练。
-3. 检查 Scholar 第二次 CI 和上游 PR 检查，修复实际失败。逐份审核许可证异常项、子模块与容器许可，继续 AI/批注基线和关键路径证据。Phase 0 全项通过前，不开始文献管理或翻译 Worker。
+3. 检查 PR #2 最新提交与上游 PR 检查，修复实际失败。逐份审核剩余子模块与容器许可，继续 AI/高亮/备注基线和关键路径证据。Phase 0 全项通过前，不开始文献管理或翻译 Worker。
 
 ## 阻塞
 
 - Node 24 的 3 个 Turso 向量距离断言失败，原因待定位。
 - 桌面与 Web 已完成合成 PDF 的文件和书签双向同步实测；备份恢复后 Web 阅读器显示“阅读进度已同步”及第 2/2 页。进度双向更新、高亮/备注和离线冲突尚未端到端验收。
 - 官方 MinIO/mc 镜像拉取 401，原版镜像的 Compose 验收仍阻塞。固定摘要替代镜像的本机测试已通过；官方 `compose.yaml` 默认广域发布端口，本工作区覆盖文件限制为回环地址。
-- Scholar 远端 CI 的源码清单已通过，本地基础设施 Linux 权限测试的修复待重新运行；`main` 保护规则已建立。自动部署需要 staging 目标与受保护环境，正式发布另需授权。
+- Scholar 远端 CI 的源码清单和 Linux 基础设施检查已在 PR #2 第 5 次运行通过；最新提交的必需检查仍须独立通过，`main` 保护规则已建立。自动部署需要 staging 目标与受保护环境，正式发布另需授权。

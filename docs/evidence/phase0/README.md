@@ -24,7 +24,7 @@
 | 备份脚本逻辑 | `bash -n` 与 `bash infra/backup/test-backup-compose.sh` 通过：未确认拒绝、成功备份完成标记和权限、对象复制失败不写完成标记。此测试使用假 Docker，不是恢复演练。 |
 | 生产依赖许可证清单 | 本机 pnpm store 缺失 `@ai-sdk/openai-compatible@2.0.81` 的 package index，原始错误：[licenses-production-error.json](licenses-production-error.json)。GitHub [source-inventory 作业](https://github.com/gkwfhv/readest-scholar/actions/runs/39246293900/job/118038919532) 从锁文件重新安装后退出 0，产出 946 个生产 npm 包的声明清单；去除 runner 路径的逐包快照：[npm-license-inventory.json](npm-license-inventory.json)。同一作业的 CycloneDX 源码树 SBOM 含 6187 个组件；原始报告作为该次 CI 的工件保存。需要继续审核异常标签、子模块与容器许可证。 |
 
-Rust `1.99.1`、rustfmt 和 Clippy 已在工作区安装；`cargo fmt -p Readest --check` 已通过。Web 与桌面均实测打开同一测试 PDF；替代对象镜像下跨端文件和 PDF 书签双向同步、第二套完整栈的数据恢复已验证。GitHub `main` 已创建活跃保护规则，要求 PR 和两项 Scholar 状态检查；首次 `local-infrastructure` 因 Linux `stat` 兼容问题失败，修复已在本机 macOS 和 Linux 容器通过，远端第二次运行待确认。全量单测仍有 3 个失败，原版 MinIO 镜像仍无法拉取。
+Rust `1.99.1`、rustfmt 和 Clippy 已在工作区安装；`cargo fmt -p Readest --check` 已通过。Web 与桌面均实测打开同一测试 PDF；替代对象镜像下跨端文件和 PDF 书签双向同步、第二套完整栈的数据恢复已验证。GitHub `main` 已创建活跃保护规则，要求 PR 和两项 Scholar 状态检查；首次 `local-infrastructure` 因 Linux `stat` 兼容问题失败，本机 macOS/Linux 修复后，[PR #2 的 Scholar baseline 第 5 次运行](https://github.com/gkwfhv/readest-scholar/actions/runs/39248218266)中 `local-infrastructure`（13 秒）与 `source-inventory`（1 分 3 秒）均通过。全量单测仍有 3 个失败，原版 MinIO 镜像仍无法拉取。
 
 Turso 精度问题的复现与源码线索见 [专项记录](../../audit/turso-l2-precision.md)。
 
