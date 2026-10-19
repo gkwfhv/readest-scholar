@@ -1,0 +1,30 @@
+Turso macOS arm64 native L2 isolated version comparison
+Date: 2026-10-19
+Host: macOS arm64; Node 24.11.1
+Project dependency remained @tursodatabase/database 0.6.0-pre.28.
+
+Commands run outside the repository:
+  npm view @tursodatabase/database version
+    -> 0.8.3
+  npm install --prefix /private/tmp/scholar-turso-probe --no-save @tursodatabase/database@0.8.3
+    -> added 3 packages
+  Checked installed package.json files:
+    @tursodatabase/database 0.8.3
+    @tursodatabase/database-darwin-arm64 0.8.3
+
+Using Node 24.11.1 from the work-area toolchain and the package's native
+connect(':memory:', { experimental: ['index_method'] }) API:
+  SELECT vector_distance_l2(vector32('[0,0]'), vector32('[3,4]')) AS d
+    -> 4.99704122543335 (expected 5)
+  SELECT vector_distance_l2(vector32('[0,0]'), vector32('[1,1]')) AS d
+    -> 1.414939284324646 (expected sqrt(2))
+  SELECT vector_distance_l2(vector64('[0,0]'), vector64('[3,4]')) AS d
+    -> 4.99704122543335 (expected 5)
+
+Registry integrity values (npm view PACKAGE@0.8.3 dist.integrity):
+  @tursodatabase/database
+    sha512-pYkADI524URbtreTz+JX7lKtNnfIZU5Pm0n8d6ENnLka3/l1sIexdDmPDWQea4M7CMURv7FxL44oJFYoMQLmOQ==
+  @tursodatabase/database-darwin-arm64
+    sha512-ZqXF8BUqED5mmSIRM5V13xiowc3CAekfpB26Opb4kbix5/9Q6AKgoxyZ1TkgMgjpih1FXAxD5UKdJ6b8D3IElw==
+
+No application code, test assertion, package manifest, or lockfile changed.

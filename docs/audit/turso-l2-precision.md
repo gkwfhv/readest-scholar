@@ -10,4 +10,6 @@ Node 24 全量运行与 Node 26 定向运行均重复这 3 项失败，其余 `t
 
 [Turso 官方变更记录](https://github.com/tursodatabase/turso/blob/main/CHANGELOG.md) 在 0.7.0 条目中明确记载过“提高向量 L2 测试容差，以匹配 SimSIMD 与 Rust 的精度差异”。这支持两种计算路径可有数值差异，但不证明本次锁定的 npm 原生二进制采用了哪一条路径，也不自动决定 Scholar 应接受的数值误差。
 
-下一步需在与锁定 npm 原生包对应的 Turso 源码或调试符号中核实实现，并在 macOS arm64 上复现底层 SIMD 调用。修复应来自正确的原生距离实现或上游版本升级，并继续保留现有精度断言。完成前不能把全量单测记为通过，也不能用 L2 绝对值作为 Scholar 的严格阈值。
+隔离升级对照：从 npm 官方 registry 安装 `@tursodatabase/database@0.8.3` 及对应 `@tursodatabase/database-darwin-arm64@0.8.3` 到 `/private/tmp/scholar-turso-probe`，不改工程依赖或锁文件。在同一 macOS arm64 和 Node `24.11.1` 上直接调用原生 `connect(':memory:')`，上述三个 SQL 样例仍依次返回 `4.99704122543335`、`1.414939284324646`、`4.99704122543335`。所以仅把锁定的 `0.6.0-pre.28` 升到 `0.8.3` 不能消除本机的精度失败；这不等于测试了 0.8.3 的全部 Readest 兼容性。命令、版本与 npm 包完整性摘要见 [隔离对照证据](../evidence/phase0/turso-native-0.8.3.txt)。
+
+[Turso 官方讨论](https://github.com/tursodatabase/turso/issues/7660) 已记录 `simsimd` 在 Rust 核心的依赖与功能开关变动；这仍不证明当前两个 npm 预编译原生包实际选择的计算内核。下一步需在与锁定 npm 原生包对应的 Turso 源码或调试符号中核实实现，并在 macOS arm64 上复现底层 SIMD 调用。修复应来自正确的原生距离实现或经实测有效的上游版本，而非直接扩大断言容差。完成前不能把全量单测记为通过，也不能用 L2 绝对值作为 Scholar 的严格阈值。
