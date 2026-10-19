@@ -26,7 +26,7 @@
 - 本机合成 PDF 的桌面划线写入 `book_notes` 并在 Web 第 2 页显示黄色高亮；Web 为同一批注添加合成备注后，桌面笔记侧栏显示备注。两方向截图和数据库记录已写入 Phase 0 证据；离线、冲突及旋转锚点未测。
 - PR [#2](https://github.com/gkwfhv/readest-scholar/pull/2) 的全部必需检查通过并已合并，`main` 为 `bbdbdee6a`；用户本地 `/Users/admin/github/readest-scholar` 已快进同步且干净。
 - 阅读位置修复已在 [PR #3](https://github.com/gkwfhv/readest-scholar/pull/3) 合并到 `main`（`12a93c9c2`），14 项检查成功、1 项按条件跳过；用户本地 `/Users/admin/github/readest-scholar` 已快进且干净。新桌面构建又发现全新客户端下载后首次打开会将云端第 2 页覆盖为第 1 页；补充的 3 条回归测试先失败后通过，修复未初始化配置的时间戳与自动首屏保存。独立标识 `com.readest.scholar.progress-test` 的新 macOS 包重新构建后，从零下载合成 PDF 恢复云端第 2 页，采用较新的远端第 1 页回退，并保留较新的本地第 1 页；服务端最终恢复为第 2 页。
-- 新增宿主机 `infra/compose/check-readiness.mjs` 就绪探针：Web、Kong/Auth、Kong/PostgREST/数据库、对象存储四个回环 HTTP 路由在合成测试栈均返回 200；错误 Web 端口注入导致退出码 1，未输出凭据。
+- 新增宿主机 `infra/compose/check-readiness.mjs` 就绪探针：Web、Kong/Auth、Kong/PostgREST/数据库、对象存储四个回环 HTTP 路由在合成测试栈均返回 200；错误 Web 端口注入导致退出码 1，未输出凭据。变更已提交至 [PR #4](https://github.com/gkwfhv/readest-scholar/pull/4)，远端检查待完成。
 
 ## 当前事实
 
@@ -47,7 +47,7 @@
 
 1. 调查 `@tursodatabase/database` macOS arm64 原生 L2 距离实现；Node 24/26 结果相同，浏览器 WASM 对照通过。保留真实数值，不放宽断言。
 2. 比较官方 MinIO 的可用分发或可复现构建，不把替代镜像测试当成原版官方 Compose 通过；补充备份后的升级与回滚演练。
-3. 将就绪探针与证据通过独立 PR 提交；继续真实显式阅读会话、旧客户端混用与离线冲突复验。继续审核剩余子模块与容器许可、AI 基线和 Phase 0 关键路径证据。Phase 0 全项通过前，不开始文献管理或翻译 Worker。
+3. 核对 PR #4 的远端检查并合并；继续真实显式阅读会话、旧客户端混用与离线冲突复验。继续审核剩余子模块与容器许可、AI 基线和 Phase 0 关键路径证据。Phase 0 全项通过前，不开始文献管理或翻译 Worker。
 
 ## 阻塞
 
