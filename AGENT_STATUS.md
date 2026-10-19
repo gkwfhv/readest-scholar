@@ -25,7 +25,8 @@
 - 给 Scholar baseline、上游 PR checks 与 CodeQL 三个工作流加入按工作流和 ref 分组的并发设置：新 PR 提交取消同组旧运行，主分支运行不在进行中取消。YAML 解析与 `git diff --check` 已通过；需由新一轮远端 Actions 验证配置实际生效。
 - 本机合成 PDF 的桌面划线写入 `book_notes` 并在 Web 第 2 页显示黄色高亮；Web 为同一批注添加合成备注后，桌面笔记侧栏显示备注。两方向截图和数据库记录已写入 Phase 0 证据；离线、冲突及旋转锚点未测。
 - PR [#2](https://github.com/gkwfhv/readest-scholar/pull/2) 的全部必需检查通过并已合并，`main` 为 `bbdbdee6a`；用户本地 `/Users/admin/github/readest-scholar` 已快进同步且干净。
-- 阅读位置修复已在 [PR #3](https://github.com/gkwfhv/readest-scholar/pull/3) 提交，首轮 14 项检查通过。新桌面构建又发现全新客户端下载后首次打开会将云端第 2 页覆盖为第 1 页；补充的 3 条回归测试先失败后通过，修复未初始化配置的时间戳与自动首屏保存。独立标识 `com.readest.scholar.progress-test` 的新 macOS 包重新构建后，从零下载合成 PDF 恢复云端第 2 页，采用较新的远端第 1 页回退，并保留较新的本地第 1 页；服务端最终恢复为第 2 页。新提交与 CI 仍待更新。
+- 阅读位置修复已在 [PR #3](https://github.com/gkwfhv/readest-scholar/pull/3) 合并到 `main`（`12a93c9c2`），14 项检查成功、1 项按条件跳过；用户本地 `/Users/admin/github/readest-scholar` 已快进且干净。新桌面构建又发现全新客户端下载后首次打开会将云端第 2 页覆盖为第 1 页；补充的 3 条回归测试先失败后通过，修复未初始化配置的时间戳与自动首屏保存。独立标识 `com.readest.scholar.progress-test` 的新 macOS 包重新构建后，从零下载合成 PDF 恢复云端第 2 页，采用较新的远端第 1 页回退，并保留较新的本地第 1 页；服务端最终恢复为第 2 页。
+- 新增宿主机 `infra/compose/check-readiness.mjs` 就绪探针：Web、Kong/Auth、Kong/PostgREST/数据库、对象存储四个回环 HTTP 路由在合成测试栈均返回 200；错误 Web 端口注入导致退出码 1，未输出凭据。变更已提交至 [PR #4](https://github.com/gkwfhv/readest-scholar/pull/4)，远端检查待完成。
 
 ## 当前事实
 
@@ -46,7 +47,7 @@
 
 1. 调查 `@tursodatabase/database` macOS arm64 原生 L2 距离实现；Node 24/26 结果相同，浏览器 WASM 对照通过。保留真实数值，不放宽断言。
 2. 比较官方 MinIO 的可用分发或可复现构建，不把替代镜像测试当成原版官方 Compose 通过；补充备份后的升级与回滚演练。
-3. 将首次打开边界修复及新桌面证据补入 PR #3，重新通过必需检查；继续真实显式阅读会话、旧客户端混用与离线冲突复验。继续审核剩余子模块与容器许可、AI 基线和 Phase 0 关键路径证据。Phase 0 全项通过前，不开始文献管理或翻译 Worker。
+3. 核对 PR #4 的远端检查并合并；继续真实显式阅读会话、旧客户端混用与离线冲突复验。继续审核剩余子模块与容器许可、AI 基线和 Phase 0 关键路径证据。Phase 0 全项通过前，不开始文献管理或翻译 Worker。
 
 ## 阻塞
 
@@ -54,4 +55,4 @@
 - 桌面与 Web 已完成合成 PDF 的文件、书签及基础高亮/备注同步实测；备份恢复后 Web 阅读器显示“阅读进度已同步”及第 2/2 页。进度双向更新、离线冲突、PDF 几何锚点仍未端到端验收。
 - 修复前阅读位置回退与首次打开均暴露出旧位置覆盖云端位置：旧桌面端拒绝 Web 第 2→1 页回退；第一版新桌面端首次下载书籍又将云端第 2 页改为第 1 页。当前分支补齐两处后，单测、新 Web 及新桌面端受控测试通过；整份配置时间戳仍不能表达显式阅读会话或离线并发冲突，旧客户端混用未验收，见 Phase 0 截图与风险 R19。
 - 官方 MinIO/mc 镜像拉取 401，原版镜像的 Compose 验收仍阻塞。固定摘要替代镜像的本机测试已通过；官方 `compose.yaml` 默认广域发布端口，本工作区覆盖文件限制为回环地址。
-- PR #2 的 Scholar、上游与 CodeQL 检查已通过并合并；新分支仍须独立通过必需检查。`main` 保护规则已建立。自动部署需要 staging 目标与受保护环境，正式发布另需授权。
+- PR #2/#3 的 Scholar、上游与 CodeQL 检查已通过并合并；新就绪检查分支仍须独立通过必需检查。`main` 保护规则已建立。自动部署需要 staging 目标与受保护环境，正式发布另需授权。
