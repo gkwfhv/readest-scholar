@@ -313,6 +313,28 @@ describe('useProgressSync', () => {
     expect(h.view.goTo).toHaveBeenCalledWith('epubcfi(/6/24!/4/20/1:58)');
   });
 
+  test('resumes at a newer exact-file position even when it is earlier in the book', async () => {
+    h.cfiCompareMock.mockReturnValue(1);
+    h.state.syncedConfigs = [
+      { bookHash: 'h1', metaHash: 'm1', location: 'epubcfi(/6/2)', updatedAt: 3000 },
+    ];
+    renderHook(() => useProgressSync('h1-view1'));
+    await advance(0);
+
+    expect(h.view.goTo).toHaveBeenCalledWith('epubcfi(/6/2)');
+  });
+
+  test('keeps the newer local position when an older exact-file position is further ahead', async () => {
+    h.cfiCompareMock.mockReturnValue(-1);
+    h.state.syncedConfigs = [
+      { bookHash: 'h1', metaHash: 'm1', location: 'epubcfi(/6/24)', updatedAt: 500 },
+    ];
+    renderHook(() => useProgressSync('h1-view1'));
+    await advance(0);
+
+    expect(h.view.goTo).not.toHaveBeenCalled();
+  });
+
   test('navigates to the synced location when the local config has no location yet', async () => {
     // First open on this device: nothing has been read here, so the local
     // config carries no CFI. The remote position is trivially ahead and must
