@@ -17,14 +17,14 @@ GitHub Actions 的 [首次源码清单作业](https://github.com/gkwfhv/readest-
 
 同一作业用固定版本 Syft 生成 CycloneDX 源码树 SBOM，校验日志显示 **6187 个组件**，原始工件 SHA-256 为 `1509e6daedc9fca0de8ff51cf463e2958d7e048f28f42121d1aac30eb3793b79`。这一数量涵盖源码树扫描结果，不等于运行时依赖数，也不能替代逐份许可证审计。原始本机 pnpm store 缺失索引的失败记录仍见 [licenses-production-error.json](docs/evidence/phase0/licenses-production-error.json)。
 
-以下声明需要进一步核对上游许可证文本、实际打包范围和义务：
+已核对本机按相同锁文件安装的 npm 包中实际附带的许可证文件；机器清单仍按原声明保留，不改写原始数据：
 
-| 依赖 | 清单声明 | 待核事项 |
+| 依赖 | 清单声明 | 包内文本核对与剩余事项 |
 |---|---|---|
 | `@img/sharp-libvips-linux-x64` | LGPL-3.0-or-later | Linux 构建的动态库分发方式与相应义务 |
-| `jszip` | MIT OR GPL-3.0-or-later | 确认采用的许可证选项及其文本 |
-| `khroma` | Unknown | [上游仓库](https://github.com/fabiospampinato/khroma) 标注 MIT 且含 `license` 文件；仍需比对锁定的 npm 包内容，不能仅依赖当前仓库分支 |
-| `robust-predicates` | Unlicense | 确认最终分发时应保留的声明 |
+| `jszip@3.10.1` | MIT OR GPL-3.0-or-later | 安装包的 `LICENSE.markdown` 明确允许择一使用 MIT 或 GPLv3，且附完整 MIT 文本；Scholar 的第三方通知拟选 MIT，发布清单仍需核对最终打包范围 |
+| `khroma@2.1.0` | Unknown | 安装包没有 `package.json` 的 `license` 字段，但附带 `license` 文件，首行 `The MIT License (MIT)`，SHA-256 `66b333b0f66759a0b710459e03f7029abe17f4358114a128d2c972e642961b49`；机器识别漏报，最终包内通知仍需收录 |
+| `robust-predicates@3.0.3` | Unlicense | 安装包附带 `LICENSE`，内容为 Unlicense 公共领域声明；最终包内通知仍需收录 |
 
 子模块和容器依赖另包括 foliate-js、pdfjs / qcms、Tauri、simplecc-wasm、js-mdict、Supabase、MinIO、Kong、PostgREST。上述 npm 清单不覆盖它们的全部许可证文本。
 
