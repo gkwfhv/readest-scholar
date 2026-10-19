@@ -24,13 +24,17 @@
 - PR #2 的 Scholar baseline 第 5 次运行已通过：Linux `local-infrastructure` 13 秒，`source-inventory` 1 分 3 秒；这验证了 `stat` 跨平台修复和远端源码清单作业。
 - 给 Scholar baseline、上游 PR checks 与 CodeQL 三个工作流加入按工作流和 ref 分组的并发设置：新 PR 提交取消同组旧运行，主分支运行不在进行中取消。YAML 解析与 `git diff --check` 已通过；需由新一轮远端 Actions 验证配置实际生效。
 - 本机合成 PDF 的桌面划线写入 `book_notes` 并在 Web 第 2 页显示黄色高亮；Web 为同一批注添加合成备注后，桌面笔记侧栏显示备注。两方向截图和数据库记录已写入 Phase 0 证据；离线、冲突及旋转锚点未测。
+- PR [#2](https://github.com/gkwfhv/readest-scholar/pull/2) 的全部必需检查通过并已合并，`main` 为 `bbdbdee6a`；用户本地 `/Users/admin/github/readest-scholar` 已快进同步且干净。
+- 阅读位置修复已在 [PR #3](https://github.com/gkwfhv/readest-scholar/pull/3) 提交，首轮 14 项检查通过。新桌面构建又发现全新客户端下载后首次打开会将云端第 2 页覆盖为第 1 页；补充的 3 条回归测试先失败后通过，修复未初始化配置的时间戳与自动首屏保存。独立标识 `com.readest.scholar.progress-test` 的新 macOS 包重新构建后，从零下载合成 PDF 恢复云端第 2 页，采用较新的远端第 1 页回退，并保留较新的本地第 1 页；服务端最终恢复为第 2 页。新提交与 CI 仍待更新。
 
 ## 当前事实
 
-- 当前 Scholar 工作树的上游基点为 `2d37bbfc2e94725e1343ab2a825573545aa59f5f`，分支 `feat/scholar-foundation`。`origin` 仍指向官方 `readest/readest`；Scholar 改动使用显式 SSH 地址推送至 `gkwfhv/readest-scholar`。
-- 除仅供 Agent 使用的 `gstack` 外，7 个源码子模块均已初始化到锁定提交。
+- 当前 Scholar 工作树的上游基点为 `2d37bbfc2e94725e1343ab2a825573545aa59f5f`，分支 `feat/scholar-progress-baseline`。`origin` 仍指向官方 `readest/readest`；Scholar 改动使用显式 SSH 地址推送至 `gkwfhv/readest-scholar`。
+- 原始基线工作树除仅供 Agent 使用的 `gstack` 外，7 个源码子模块均已初始化到锁定提交；Scholar 新工作树尚未完成独立依赖与 vendor 初始化，本地单测借用了同一上游 SHA 的已安装依赖和生成资源。
 - 原始基线工作树的依赖安装已成功；新 Scholar 工作树的完整 `pnpm install` 两次遇到 npm 下载超时，因此尚未完成本地全量重建。
 - Node 24 全量单测退出码 1：13752 通过、3 失败、16 跳过。失败均为 Turso Node 向量 L2 距离精度断言；浏览器 WASM 对照 54 项通过、1 跳过。Node 26 加禁用实验性 Web Storage 开关后的同一原生测试仍出现完全相同的 3 个失败。详见 `docs/evidence/phase0/`。首次 Node 26 全量运行中的大量 `localStorage` 错误属于不匹配的环境，不能用它替代 Node 24 基线。
+- 进度分支第一轮 Node 24 全量单测为 13754 通过、同样 3 项 Turso 精度失败、16 跳过。新增首次打开边界后，3 组定向测试 86/86 通过，更新后全量单测 13757 通过、仍仅同样 3 项 Turso 原生 L2 精度失败、16 跳过；TypeScript `--noEmit` 与改动文件 Biome 通过。
+- 新 Web 生产构建以与本机自托管测试栈一致的公开构建参数通过，静态页面 56/56；首次默认 Turbopack 因跨工作树依赖软链接失败，webpack 首次默认堆内存不足，增加 `--max-old-space-size=4096` 后通过。修复后的 Web 以合成数据实测两个时间戳方向，截图和数据库证据见 `docs/evidence/phase0/README.md`。
 - Node 24 与 Node 26 下 lint 均退出 0；代表性 PDF/样式测试 77 项通过。
 - Rust `1.99.1`、rustfmt 和 Clippy 已装到工作区。Tauri 静态前端、Rust 调试编译及独立应用标识的未签名 `.app` 均构建通过。Docker daemon 已启动；官方 MinIO/mc 镜像拉取返回 401，固定摘要的替代镜像测试栈已启动并完成跨端文件验证。
 - Node 24 Web 生产构建在沙箱外通过；本机 `start-web` 只绑定 `127.0.0.1`，无头 Chromium 从文件导入并打开仓库测试 PDF，显示第 1/2 页。截图在 `docs/evidence/phase0/`。
@@ -42,11 +46,12 @@
 
 1. 调查 `@tursodatabase/database` macOS arm64 原生 L2 距离实现；Node 24/26 结果相同，浏览器 WASM 对照通过。保留真实数值，不放宽断言。
 2. 比较官方 MinIO 的可用分发或可复现构建，不把替代镜像测试当成原版官方 Compose 通过；补充备份后的升级与回滚演练。
-3. 检查 PR #2 最新提交与上游 PR 检查，修复实际失败。逐份审核剩余子模块与容器许可，继续 AI/高亮/备注基线和关键路径证据。Phase 0 全项通过前，不开始文献管理或翻译 Worker。
+3. 将首次打开边界修复及新桌面证据补入 PR #3，重新通过必需检查；继续真实显式阅读会话、旧客户端混用与离线冲突复验。继续审核剩余子模块与容器许可、AI 基线和 Phase 0 关键路径证据。Phase 0 全项通过前，不开始文献管理或翻译 Worker。
 
 ## 阻塞
 
 - Node 24 的 3 个 Turso 向量距离断言失败，原因待定位。
 - 桌面与 Web 已完成合成 PDF 的文件、书签及基础高亮/备注同步实测；备份恢复后 Web 阅读器显示“阅读进度已同步”及第 2/2 页。进度双向更新、离线冲突、PDF 几何锚点仍未端到端验收。
+- 修复前阅读位置回退与首次打开均暴露出旧位置覆盖云端位置：旧桌面端拒绝 Web 第 2→1 页回退；第一版新桌面端首次下载书籍又将云端第 2 页改为第 1 页。当前分支补齐两处后，单测、新 Web 及新桌面端受控测试通过；整份配置时间戳仍不能表达显式阅读会话或离线并发冲突，旧客户端混用未验收，见 Phase 0 截图与风险 R19。
 - 官方 MinIO/mc 镜像拉取 401，原版镜像的 Compose 验收仍阻塞。固定摘要替代镜像的本机测试已通过；官方 `compose.yaml` 默认广域发布端口，本工作区覆盖文件限制为回环地址。
-- Scholar 远端 CI 的源码清单和 Linux 基础设施检查已在 PR #2 第 5 次运行通过；最新提交的必需检查仍须独立通过，`main` 保护规则已建立。自动部署需要 staging 目标与受保护环境，正式发布另需授权。
+- PR #2 的 Scholar、上游与 CodeQL 检查已通过并合并；新分支仍须独立通过必需检查。`main` 保护规则已建立。自动部署需要 staging 目标与受保护环境，正式发布另需授权。

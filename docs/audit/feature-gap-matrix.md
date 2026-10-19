@@ -8,7 +8,7 @@
 | 平台适配 | 已有 | `appService.ts` 与 web/native/node 三个实现 | Scholar UI 只通过 `AppService` 触达文件系统 |
 | 自托管登录与书库 | 已有 | `docker/README.md`；`books` RLS；Supabase GoTrue | 官方 MinIO/mc 镜像当前拉取返回 401；本机已用固定摘要兼容镜像完成跨端 PDF 测试，仍需可复现的正式镜像来源。不换认证系统 |
 | 书籍文件上云 | 已有 | `pages/api/storage/*`，`cloudService.ts`，`files` 表 | 译文做成新对象，不覆盖 `file_key` |
-| 阅读进度同步 | 已有 | `book_configs`；replica 类别 `progress`；KOSync | 继续用现有类别 |
+| 阅读进度同步 | 可扩展 | `book_configs`、replica 类别 `progress`、KOSync 已有；修复前 Web 第 2→1 页回退被旧桌面端覆盖，第一版新桌面端首次下载也把云端第 2 页覆盖成第 1 页。当前分支补齐同文件时间戳、无本地位置与自动首屏保存边界，单测以及新 Web/新桌面客户端对合成 PDF 的受控实测通过 | 将“最后阅读位置”与“最远进度”分开建模，验证新旧客户端混用、离线冲突和设备位置恢复，再扩展现有类别 |
 | 高亮/备注/书签数据 | 已有 | `book_notes` 含 `type`、`cfi`、`text`、`note`、`color`、`page`、`deleted_at`；合成 PDF 第 1/2 页书签在 Web/桌面端双向显示；桌面高亮在 Web 显示，Web 备注在桌面显示，服务端对应记录未删除 | V1 高亮与备注复用该行；离线、并发冲突与几何锚点仍需实测 |
 | 跨设备增量同步 | 已有 | replica cursor、加密、类别开关 | 新实体优先加 replica 类别，不平行再做一套 op-log |
 | 离线 Web | 已有 | `src/sw.ts` Serwist，架构文档第 3.4 节 | 实测仍未做 |

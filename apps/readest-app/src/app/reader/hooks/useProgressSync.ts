@@ -365,12 +365,22 @@ export const useProgressSync = (bookKey: string) => {
         // separately just after; other config fields remain device-local.
         // TODO: general config sync via a more robust profile-based solution.
         if (remoteCFILocation) {
-          const remoteIsAhead = !configCFI || CFI.compare(configCFI, remoteCFILocation) < 0;
+          const positionOrder = configCFI ? CFI.compare(configCFI, remoteCFILocation) : -1;
+          // For the same file, a newer saved position is the last read position
+          // even when the reader turned back to an earlier page. Keep the
+          // forward-only fallback for older peers without usable timestamps.
+          const hasComparableTimestamps =
+            Number.isFinite(config.updatedAt) && Number.isFinite(exactConfig.updatedAt);
+          const shouldResumeRemote =
+            !configCFI ||
+            (hasComparableTimestamps
+              ? exactConfig.updatedAt > config.updatedAt && positionOrder !== 0
+              : positionOrder < 0);
           // While previewing a deep-link target, do NOT yank the view to the
           // remote position — the user came here to look at a specific
           // annotation. The local config still gets updated; the next open
           // resolves to the synced position normally.
-          if (remoteIsAhead && view && !isPreviewing()) {
+          if (shouldResumeRemote && view && !isPreviewing()) {
             view.goTo(remoteCFILocation);
             announceSynced();
           }

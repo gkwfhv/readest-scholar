@@ -171,6 +171,8 @@ const flushAutoSync = async () => {
 
 beforeEach(() => {
   vi.useFakeTimers();
+  h.config.location = 'cfi-loc';
+  h.config.updatedAt = 1000;
   h.syncConfigsMock.mockClear();
   h.syncBooksMock.mockClear();
   h.saveConfigMock.mockClear();
@@ -311,6 +313,41 @@ describe('useProgressSync', () => {
     await advance(0);
 
     expect(h.view.goTo).toHaveBeenCalledWith('epubcfi(/6/24!/4/20/1:58)');
+  });
+
+  test('resumes at a newer exact-file position even when it is earlier in the book', async () => {
+    h.cfiCompareMock.mockReturnValue(1);
+    h.state.syncedConfigs = [
+      { bookHash: 'h1', metaHash: 'm1', location: 'epubcfi(/6/2)', updatedAt: 3000 },
+    ];
+    renderHook(() => useProgressSync('h1-view1'));
+    await advance(0);
+
+    expect(h.view.goTo).toHaveBeenCalledWith('epubcfi(/6/2)');
+  });
+
+  test('keeps the newer local position when an older exact-file position is further ahead', async () => {
+    h.cfiCompareMock.mockReturnValue(-1);
+    h.state.syncedConfigs = [
+      { bookHash: 'h1', metaHash: 'm1', location: 'epubcfi(/6/24)', updatedAt: 500 },
+    ];
+    renderHook(() => useProgressSync('h1-view1'));
+    await advance(0);
+
+    expect(h.view.goTo).not.toHaveBeenCalled();
+  });
+
+  test('resumes a cloud position when a fresh local config has no saved location', async () => {
+    const config = h.config as { location?: string };
+    config.location = undefined;
+    h.config.updatedAt = 3000;
+    h.state.syncedConfigs = [
+      { bookHash: 'h1', metaHash: 'm1', location: 'epubcfi(/6/4)', updatedAt: 1000 },
+    ];
+    renderHook(() => useProgressSync('h1-view1'));
+    await advance(0);
+
+    expect(h.view.goTo).toHaveBeenCalledWith('epubcfi(/6/4)');
   });
 
   test('navigates to the synced location when the local config has no location yet', async () => {
