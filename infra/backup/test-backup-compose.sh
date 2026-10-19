@@ -49,7 +49,7 @@ awk '
   END { exit !(wrapper > 0 && grant > wrapper) }
 ' "$out/postgres-restorable.sql"
 [[ "$(cat "$out/STATUS")" == complete ]]
-mode="$(stat -f %Lp "$out" 2>/dev/null || stat -c %a "$out")"
+mode="$(stat -c %a "$out" 2>/dev/null || stat -f %Lp "$out")"
 [[ "$mode" == 700 ]]
 
 if PATH="$tmp/bin:$PATH" MOCK_CP_FAIL=yes SCHOLAR_BACKUP_CONFIRM=yes \
