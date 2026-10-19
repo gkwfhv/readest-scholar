@@ -28,6 +28,7 @@ jobs:
           node --check infra/compose/prepare-local-env.mjs
           node --check infra/compose/build-local-tauri.mjs
           node --check infra/compose/assert-loopback-ports.mjs
+          node --check infra/compose/check-readiness.mjs
       - name: Exercise backup failure and success paths
         run: bash infra/backup/test-backup-compose.sh
       - name: Validate local Compose configuration and port bindings

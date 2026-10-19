@@ -39,6 +39,18 @@ docker compose --env-file docker/.env \
 
 这套覆盖文件已在合成账户上完成桌面 PDF 上传、Web 端下载及打开阅读；六个持续服务处于运行状态，数据库、Kong 和 MinIO 健康。此结论只适用于替代镜像。Web UI 的自动化文件选择器无法设置动态创建的 `<input type=file>`；已用独立桌面客户端完成上传与跨端验证，不把该自动化限制记为 Web 上传通过。
 
+## 就绪检查
+
+栈启动后，从宿主机运行 `node infra/compose/check-readiness.mjs`。脚本默认探测回环地址上的 Web 首页、Kong 转发的 Auth 健康路由、使用公开 anon key 的 PostgREST 根路由，以及对象存储健康路由；四项都收到 HTTP 200 才退出 0。REST 路由会访问数据库，因此同时检验网关到数据库 API 的关键路径。脚本仅从 `docker/.env` 读取 `ANON_KEY`，不使用或打印 service-role key。
+
+若 `.env` 位于另一检出目录，设置 `SCHOLAR_ENV_FILE=/绝对路径/docker/.env`。其他端口或受控 staging 可分别设置 `SCHOLAR_WEB_URL`、`SCHOLAR_API_URL`、`SCHOLAR_S3_URL` 为受信任的 HTTP(S) 起点。示例：
+
+```bash
+SCHOLAR_ENV_FILE=/绝对路径/docker/.env node infra/compose/check-readiness.mjs
+```
+
+在当前合成栈上四项均通过。将 Web 地址改为未监听的 `127.0.0.1:3999` 后，脚本为 Web 报连接拒绝并以退出码 1 结束，其他三项仍通过。该检查用于启动后的就绪判断；升级回滚、数据完整性与用户阅读场景仍需独立演练。
+
 ## 备份与隔离恢复
 
 在本机合成数据栈上运行 `SCHOLAR_BACKUP_CONFIRM=yes SCHOLAR_COMPOSE_DIR="$(pwd)/docker" bash infra/backup/backup-compose.sh /绝对路径/备份目录`。备份目录权限为 `0700`，内部包含原始 `postgres.sql`、`graphql-wrapper.sql`、可直接导入空数据库的 `postgres-restorable.sql`、`minio-data/` 和完成标记。不要把其中的数据或凭据提交到公开仓库。
