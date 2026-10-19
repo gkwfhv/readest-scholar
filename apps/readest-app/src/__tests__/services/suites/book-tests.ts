@@ -155,6 +155,15 @@ export function bookTests(
   });
 
   describe('Book config', () => {
+    it('keeps a missing config pristine until the reader saves a position', async () => {
+      const service = getService();
+      const settings = await service.loadSettings();
+      const config = await service.loadBookConfig(makeFakeBook(), settings);
+
+      expect(config.updatedAt).toBe(0);
+      expect(config.location).toBeUndefined();
+    });
+
     it('should load default config for newly imported book', async () => {
       const service = getService();
       const books: Book[] = [];

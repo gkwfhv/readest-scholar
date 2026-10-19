@@ -22,6 +22,7 @@ export const useProgressAutoSave = (bookKey: string) => {
   // overwrites the server's progress with the stale local one (issue #4222).
   const lastSavedLocationRef = useRef<string | null>(null);
   const initializedRef = useRef(false);
+  const skipInitialRelocateRef = useRef(false);
 
   // The actual disk write for this book's reading position. Guarded so the
   // initial relocate and no-op saves don't bump config.updatedAt (#4222).
@@ -70,12 +71,22 @@ export const useProgressAutoSave = (bookKey: string) => {
       if (config) {
         initializedRef.current = true;
         lastSavedLocationRef.current = config.location ?? null;
+        skipInitialRelocateRef.current = config.updatedAt === 0;
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookKey]);
 
   useEffect(() => {
+    // A pristine cloud download starts at page one before the first pull.
+    // Foliate reports that automatic initial relocate as progress, but it is
+    // not a user page turn and must not stamp the local config newer than the
+    // existing cloud position. A later, different relocation still saves.
+    if (skipInitialRelocateRef.current && progress?.location) {
+      skipInitialRelocateRef.current = false;
+      lastSavedLocationRef.current = progress.location;
+      return;
+    }
     saveBookConfig();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [progress, bookKey]);

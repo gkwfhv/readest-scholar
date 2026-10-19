@@ -17,7 +17,7 @@ const h = vi.hoisted(() => {
   };
 
   const state = {
-    config: { location: 'cfi-loc', updatedAt: 1000 } as { location: string; updatedAt: number },
+    config: { location: 'cfi-loc', updatedAt: 1000 } as { location?: string; updatedAt: number },
     progress: { location: 'cfi-loc' } as Progress,
     previewMode: false,
   };
@@ -109,6 +109,24 @@ afterEach(() => {
 });
 
 describe('useProgressAutoSave', () => {
+  test('does not stamp the automatic first page on a fresh cloud download', async () => {
+    h.state.config = { updatedAt: 0 };
+    h.state.progress = null;
+    const { rerender } = renderHook(() => useProgressAutoSave('h1-view1'));
+
+    h.state.config = { location: 'page-1', updatedAt: 0 };
+    h.state.progress = { location: 'page-1' };
+    rerender();
+    await flushDebouncedSave();
+    expect(h.saveConfigMock).not.toHaveBeenCalled();
+
+    h.state.config = { location: 'page-2', updatedAt: 0 };
+    h.state.progress = { location: 'page-2' };
+    rerender();
+    await flushDebouncedSave();
+    expect(h.saveConfigMock).toHaveBeenCalledTimes(1);
+  });
+
   test('skips save on book open when location matches the loaded config', async () => {
     // Bug from issue #4222: opening a book where the in-memory location still
     // matches what was loaded from disk should not call saveConfig — doing so

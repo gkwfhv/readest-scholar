@@ -1162,13 +1162,20 @@ export async function loadBookConfig(
     ...(FIXED_LAYOUT_FORMATS.has(book.format) ? DEFAULT_FIXED_LAYOUT_VIEW_SETTINGS : {}),
   };
   try {
-    let str = '{}';
+    // A cloud-downloaded book may have no local config.json yet. Keep its
+    // position timestamp at zero until an actual reading position is saved;
+    // otherwise the first open looks newer than the cloud position.
+    let str = JSON.stringify(INIT_BOOK_CONFIG);
     if (await fs.exists(getConfigFilename(book), 'Books')) {
       str = (await fs.readFile(getConfigFilename(book), 'Books', 'text')) as string;
     }
     return deserializeConfig(str, globalViewSettings, DEFAULT_BOOK_SEARCH_CONFIG);
   } catch {
-    return deserializeConfig('{}', globalViewSettings, DEFAULT_BOOK_SEARCH_CONFIG);
+    return deserializeConfig(
+      JSON.stringify(INIT_BOOK_CONFIG),
+      globalViewSettings,
+      DEFAULT_BOOK_SEARCH_CONFIG,
+    );
   }
 }
 

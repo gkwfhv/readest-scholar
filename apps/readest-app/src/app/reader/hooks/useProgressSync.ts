@@ -371,9 +371,11 @@ export const useProgressSync = (bookKey: string) => {
           // forward-only fallback for older peers without usable timestamps.
           const hasComparableTimestamps =
             Number.isFinite(config.updatedAt) && Number.isFinite(exactConfig.updatedAt);
-          const shouldResumeRemote = hasComparableTimestamps
-            ? exactConfig.updatedAt > config.updatedAt && positionOrder !== 0
-            : positionOrder < 0;
+          const shouldResumeRemote =
+            !configCFI ||
+            (hasComparableTimestamps
+              ? exactConfig.updatedAt > config.updatedAt && positionOrder !== 0
+              : positionOrder < 0);
           // While previewing a deep-link target, do NOT yank the view to the
           // remote position — the user came here to look at a specific
           // annotation. The local config still gets updated; the next open
