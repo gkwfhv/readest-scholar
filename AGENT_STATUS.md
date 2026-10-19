@@ -22,6 +22,7 @@
 - 在本机自托管 Web 阅读器给合成 PDF 第 2 页添加书签，隔离 macOS 桌面客户端重新打开同书后显示该条；再在桌面端给第 1 页添加书签，`public.book_notes` 出现第 1/2 页两行未删除记录，Web 刷新后显示两条。双向截图与只读查询事实已记入 Phase 0 证据。
 - 核对锁定安装包的许可证文件：`khroma@2.1.0` 包内为 MIT，`jszip@3.10.1` 明确可选 MIT，`robust-predicates@3.0.3` 附 Unlicense 文本；保留原始机器标签，发布清单仍需核对打包范围与 Linux libvips。
 - PR #2 的 Scholar baseline 第 5 次运行已通过：Linux `local-infrastructure` 13 秒，`source-inventory` 1 分 3 秒；这验证了 `stat` 跨平台修复和远端源码清单作业。
+- 给 Scholar baseline、上游 PR checks 与 CodeQL 三个工作流加入按工作流和 ref 分组的并发设置：新 PR 提交取消同组旧运行，主分支运行不在进行中取消。YAML 解析与 `git diff --check` 已通过；需由新一轮远端 Actions 验证配置实际生效。
 
 ## 当前事实
 
