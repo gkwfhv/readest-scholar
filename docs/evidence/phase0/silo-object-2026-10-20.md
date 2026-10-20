@@ -18,6 +18,14 @@
 6. 停止隔离恢复栈，保留隔离卷供复查；再次检查原 staging 四个健康端点仍为 HTTP 200。正式 staging 的运行容器尚未切换到 Silo。
 7. 再用第三个独立项目 `scholar-fresh-silo`、新数据库卷和新对象卷启动全套六服务。配置预检确认新容器名、卷、固定 Silo/mc 摘要及仅绑定 `127.0.0.1:3150/8150/9150/9151`；启动前这些卷、容器和端口均不存在。四个就绪路由均为 200，合成账户注册成功，预签名 PDF 上传、列表与下载 SHA256 检查再次通过。停止这个测试栈并保留其卷后，原 staging 四路仍为 200。
 
+## 正式合成 staging 切换
+
+在上述演练后，对原项目 `scholar-staging` 的完整合成快照 `20261020T081632Z` 再次确认 `STATUS=complete`，数据库转储和对象目录存在；原对象容器仍使用历史 `pgsty/minio` 镜像和 `scholar-staging_minio-data`。先从快照复制单独的 `scholar-silo-rollback-20261020-minio-data` 卷，并校验回退覆盖配置将旧镜像接到这个卷，避免在升级后的原卷上直接降级。
+
+使用临时 Compose 覆盖文件只更换 `minio` 和 `minio-setup` 镜像，不改变项目、卷或四个回环端口。`docker compose up -d --pull never --no-deps minio` 后，容器镜像为固定摘要 Silo，健康状态为 `healthy`，挂载仍为原 `scholar-staging_minio-data`；新的 mc 桶初始化进程启动。`check-readiness.py` 的 Web、Auth、REST、S3 四项全部通过；原合成账户在 Web API 完成预签名 PDF 上传、列表、下载，源文件与取回文件 SHA256 一致。测试过程中未触发回退，因此准备好的快照卷没有被用于替换正在运行的原卷。
+
+切换后运行 `sample-active-resource.py`，60 次 Web `/library`、合成登录与 200 次书籍元数据读取、一次 PDF 写入与 150 次逐次哈希验证均通过，窗口 7.1 秒。六个容器前/中/后采样中，对象存储由空闲 `87.18 MiB / 0.15% CPU`，到观测最高 `10.36% CPU`，窗口末 `98.73 MiB / 0.09% CPU`；客户端约 `125.6→126.6 MiB`，Postgres `84.71→85.04 MiB`，Kong `1.166 GiB`。这是同机共享负载下的瞬时样点，不是容量或性能上限；HTTP 和 REST 操作在第一秒完成，采样未捕捉其峰值。
+
 镜像由 Docker Hub 标签与固定摘要拉取到本机，经 `docker image save --platform linux/amd64` 得到 54 MiB 的传输包，传输前后 SHA256 都为 `a16f174a1f0e2aa2e7e94701519d72db5f56d6166fcd7229fa3af687047c8277`。远端导入后的 `docker image inspect` 报告 amd64、镜像 ID `sha256:706e0d419d23bdab663486044165fb4de1ee6b82885a8637b2935216fb2286ec`；归档内镜像配置摘要为 `sha256:c676f34789e6598af571b590a782499df279d0d1cca41600752826634420d0bb`，发行修订标签为 `0cd388c666f8211f552604ae73448a066e9c25ce`。两处元数据的 ID 表示不同对象，不以两者相等作为校验条件。
 
 ## 安全扫描
