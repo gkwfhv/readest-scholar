@@ -24,7 +24,7 @@ jobs:
           node-version: 24
       - name: Check shell and Node syntax
         run: |
-          bash -n infra/backup/backup-compose.sh infra/backup/test-backup-compose.sh infra/staging/export-images.sh
+          bash -n infra/backup/backup-compose.sh infra/backup/test-backup-compose.sh infra/staging/export-images.sh infra/staging/rehearse-web-rollback.sh
           node --check infra/compose/prepare-local-env.mjs
           node --check infra/compose/build-local-tauri.mjs
           node --check infra/compose/assert-loopback-ports.mjs
