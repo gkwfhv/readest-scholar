@@ -1,0 +1,17 @@
+# Add after restore-rehearsal.yaml to restore a later snapshot without
+# overwriting the preserved Phase 0 rehearsal containers or volumes.
+name: scholar-phase1-restore
+
+services:
+  db:
+    container_name: scholar-phase1-db
+  kong:
+    container_name: scholar-phase1-kong
+  auth:
+    container_name: scholar-phase1-auth
+  rest:
+    container_name: scholar-phase1-rest
+  minio:
+    container_name: scholar-phase1-minio
+  client:
+    container_name: scholar-phase1-client

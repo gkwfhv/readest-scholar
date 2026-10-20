@@ -33,24 +33,17 @@
 - 非生产主机已核对为 Linux x86_64，Docker/Compose/Python 可用；测试端口未占用，SSH 通过用户给出的 FRP 地址与本地密钥访问。七个镜像均固定 Linux amd64 平台摘要并已在主机导入；Docker Hub 的五个镜像经固定摘要代理导入，PostgreSQL 的代理下载失败后改用本机已校验摘要的 amd64 镜像归档，Web 镜像亦经本机导出，两份档案都通过主机 SHA256 校验。首次启动因 `umask 077` 导致静态 bind mount 文件只有 `0600`、数据库初始化中断；只删除本次新建且标签确认的两个空数据测试数据库卷，修复静态文件读取权限后第二次启动退出码 `0`。四路就绪探针、SSH 隧道 Web 页面、合成数据备份和 Web 故障回滚均实测通过；三个 staging 卷创建时间未变，其他 12 个容器的 ID 指纹不变。详情见 `docs/evidence/staging/README.md`。主机只绑定回环端口，尚无测试域名。
 - 在远端 staging 建立随机合成账户及仓库样例 PDF 对象后，再次备份并在另一个 Compose 项目、网络、空数据库和对象卷中独立恢复。恢复栈四路就绪、原账户登录与用户 ID 核对、PDF 对象 SHA256 比对均通过。恢复栈已停止、三个卷保留；原 staging 和原有 12 个容器未变。恢复步骤及证据见 `infra/staging/README.md` 与 `docs/evidence/staging/README.md`。
 
-## 当前事实（2026-10-20 更新，替代此前的状态快照）
+## 当前事实（2026-10-20，替代此前的状态快照）
 
-- Phase 0 [验收记录](docs/evidence/phase0/acceptance-2026-10-20.md)结论为**暂不通过**；阅读、基础同步、staging 备份/恢复已有实测，不把准备工作记为 Phase 1 完成。
-- Turso 原生 L2 在本机 2400 组样本的最大相对误差约 0.0651%，8000 次近邻相邻比较未见顺序颠倒；这是实测而非跨平台上界。[PR #9](https://github.com/gkwfhv/readest-scholar/pull/9) 经检查、验证评论后合入受保护 `main`（`0cbe8f8f3`）。合并后源码树与受测分支相同；Node 24 全量 `pnpm test` 为 13760 通过、16 跳过，`pnpm lint` 和 CI 通过。
-- [PR #10](https://github.com/gkwfhv/readest-scholar/pull/10) 修复 `@assistant-ui/react@0.11.58` 初始化方法接收者丢失及空会话不显示输入框。合成 OpenAI 兼容服务的开发 Web 浏览器烟测完成 PDF 索引、问答、来源显示和刷新后的会话恢复；新回归测试先在旧代码失败，再与 AI store/chat 测试一起 33/33 通过。最终提交 `a93e22c67` 的工作流已通过，PR 仍为草稿。生产 Web AI 入口仍被锁定上游隐藏，旧 Web 来源无 CFI 且刷新后不保留来源。
-- [PR #8](https://github.com/gkwfhv/readest-scholar/pull/8) 更新了 Phase 0 验收、资源空闲快照和 [ADR 0002](docs/adr/0002-object-storage-staging-exception.md)。官方 MinIO 镜像拉取返回 401，固定摘要兼容镜像仅用于受限测试；生产对象存储选型未定。
-- Scholar `main` 已受保护并要求 `local-infrastructure`、`source-inventory`。当前工作树的 `origin` 指向官方 Readest；向用户仓库推送时必须显式使用 `git@github.com:gkwfhv/readest-scholar.git`。Linux staging 通过 SSH 隧道可用且端口仅绑回环，无测试域名；不得把个人 SSH 私钥放入 CI。
+- Phase 0 [验收记录](docs/evidence/phase0/acceptance-2026-10-20.md)已通过计划第 9 节的**单机合成基线**，主分支包含 [PR #16](https://github.com/gkwfhv/readest-scholar/pull/16)。Web、独立 macOS 测试客户端和自托管 Silo 后端均实测阅读及同步；原版官方 MinIO 镜像无法拉取，不把它记为通过。
+- [PR #9](https://github.com/gkwfhv/readest-scholar/pull/9) 给 Turso L2 采用小于 0.1% 的相对误差与近邻顺序契约，实测最大相对误差约 0.0651%，不外推跨平台上界。Phase 0 最新 Node 24 全量测试为 13,768 通过、16 跳过、0 失败。
+- [PR #10](https://github.com/gkwfhv/readest-scholar/pull/10)、[#13](https://github.com/gkwfhv/readest-scholar/pull/13)的 AI 入口、初始化、PDF 页码来源与来源持久化修复，以及 [PR #14](https://github.com/gkwfhv/readest-scholar/pull/14)的大脑图标和四入口侧栏布局均已合入。生产 Web 与独立 macOS 包在合成 PDF 上完成问答、点击来源、重开后来源恢复；固定模型回答不证明真实论文质量。
+- Phase 1 已启动。[PR #17](https://github.com/gkwfhv/readest-scholar/pull/17)让 `main` 自动发布 GHCR 双架构镜像与逐平台 CycloneDX SBOM；[PR #18](https://github.com/gkwfhv/readest-scholar/pull/18)加入固定摘要的 staging Web 升级和失败回退脚本。两者最终提交的 Scholar baseline、上游 PR checks、CodeQL 均通过并合入。
+- Linux staging 已切换到 Scholar `fe25bd8cf5b4b55bbfe20c9f85b09f77c516f097` 的 amd64 平台摘要 `sha256:141ac3b06f2df2240addeb94006a24c3e81631a2bc257c8d7850058ea38a4151`。升级前完整备份、四路健康、合成账户签名 PDF 上传/下载哈希、Web/桌面 PDF 阅读、Web 故障注入回退及新快照的第二套空项目冷恢复均通过；其余五个 staging 容器 ID 未变。详情见 [Phase 1 执行证据](docs/evidence/phase1/staging-web-rollout-2026-10-20.md)。主机 GHCR DNS 不可用，镜像经校验归档导入并按平台摘要固定。
+- `main` 受保护并要求 Scholar 检查。工作树 `origin` 指向上游 Readest；向用户 fork 推送须显式使用 `git@github.com:gkwfhv/readest-scholar.git`。测试栈端口仅绑回环并通过 SSH 隧道访问，尚无测试域名；个人 SSH 私钥不进入 CI。
 
 ## 下一动作
 
-1. PR #9 已合入；PR #10 的 CI 已通过、仍为草稿。完成项目规则要求的全部 UI 模式检查和评审后再考虑合入，并在主线复验 Web/桌面 AI 关键路径。
-2. 用合成 PDF 完成生产 Web AI 入口、真实可点击 PDF 引用和桌面 Reedy 运行时验证；把检索正确性与固定回答 mock 的传输烟测分开。
-3. 采集同一 staging 栈在打开 PDF 与同步期间的受控资源样本及独立桌面资源；审查对象存储正式候选的许可、SBOM、升级和回滚。
-4. 按 Phase 0 完成判据复核并签收；只有通过后才正式进入 Phase 1。
-
-## 阻塞
-
-- PR #9 已合入；PR #10 与验收文档尚未合入 `main`。PR #10 最终提交的完整 CI 已通过，但产品 AI 关键路径仍未签收。
-- 原版官方 MinIO 镜像不可用；staging 例外不等于生产选型。
-- 生产 Web AI 设置入口隐藏，旧 Web 来源无法点击定位 PDF，桌面 Reedy 和自托管 AI 未完成端到端复验。
-- 活动负载与独立桌面资源数据未采集；离线并发及旧客户端混用仍是后续同步风险。
+1. 验收 Phase 1 的秘密与构建产物管理、桌面自动更新分发测试，并补测新 Web 镜像后的已登录跨端进度写入与 Linux staging AI 模型交互。
+2. 正式品牌、包名和 Bundle ID 按方案只在用户明确授权后确定；当前独立测试包标识不是正式发布身份。
+3. Phase 1 签收后再按 [ROADMAP](ROADMAP.md)实施 Phase 2 文献管理。生产真实数据、外部 TLS、签名与正式发布仍需单独审批和验收。

@@ -53,13 +53,16 @@ CRANE_BIN="$HOME/.local/bin/crane" \
 ```
 
 默认代理主机为 `hub.1panel.dev`，可用 `SCHOLAR_DOCKERHUB_MIRROR` 覆盖。只在镜像摘要与仓库锁定值完全一致时导入。已下载的层保存在用户目录 `~/.cache/scholar-staging-crane`；重试前按清单大小和 SHA256 移除中断留下的无效分片，失败时最多重试三次。重试时使用 [Go 支持的 HTTP/1 客户端设置](https://pkg.go.dev/net/http#hdr-HTTP_2) 避开镜像代理的 HTTP/2 stream 错误。可以用 `SCHOLAR_CRANE_CACHE` 指定其他目录。Web 镜像来自 GHCR；如果目标主机无法访问 GHCR，在一台能访问原始 registry 的受信机器上运行以下传输。`export-images.sh` 从 Compose 配置读取七个镜像，但此模式只拉取并导出 Web 镜像，先与固定平台摘要比对；它只把镜像归档写入标准输出，不传输 `.env`。
+默认代理主机为 `hub.1panel.dev`，可用 `SCHOLAR_DOCKERHUB_MIRROR` 覆盖。只在镜像摘要与仓库锁定值完全一致时导入。已下载的层保存在用户目录 `~/.cache/scholar-staging-crane`；重试前按清单大小和 SHA256 移除中断留下的无效分片，失败时最多重试三次。重试时使用 [Go 支持的 HTTP/1 客户端设置](https://pkg.go.dev/net/http#hdr-HTTP_2) 避开镜像代理的 HTTP/2 stream 错误。可以用 `SCHOLAR_CRANE_CACHE` 指定其他目录。Web 镜像来自 GHCR；如果目标主机无法访问 GHCR，先在能访问 registry 的受信机器上从工作流清单选取 **Linux amd64 平台摘要**，不要使用多架构 index 摘要。下列导出命令先拉取该平台摘要，再核对本地镜像 ID；只把镜像写到标准输出，不包含 `.env`：
 
 ```bash
-SCHOLAR_STAGING_EXPORT_WEB_ONLY=1 bash infra/staging/export-images.sh | gzip -1 | \
-  ssh -p <SSH_PORT> <SSH_USER>@<SSH_HOST> 'gunzip | docker image load'
+SCHOLAR_STAGING_EXPORT_WEB_ONLY=1 \
+SCHOLAR_STAGING_EXPORT_WEB_IMAGE='ghcr.io/gkwfhv/readest@sha256:<amd64平台摘要>' \
+  bash infra/staging/export-images.sh | gzip -1 > scholar-web-amd64.tar.gz
+shasum -a 256 scholar-web-amd64.tar.gz  # macOS；Linux 使用 sha256sum
 ```
 
-FRP/SSH 若在长传输中断开，可先把上述管道的 gzip 输出保存为本地档案，记录其 SHA256，再用 `rsync --partial --append -e 'ssh -p <SSH_PORT>'` 续传到主机。主机端用 `sha256sum` 比对**完整**档案与本地摘要，随后 `gunzip -c <档案> | docker image load`；不要加载未校验的分片。
+用 `rsync --partial --append -e 'ssh -p <SSH_PORT>'` 把归档续传到主机私有目录；macOS 自带 rsync 不支持 `--append-verify`。主机端用 `sha256sum` 比对**完整**档案与导出机摘要，运行 `gzip -t`，再执行 `gunzip -c <档案> | docker image load`。按导出的平台摘要给载入的镜像设置仓库提交标签，例如 `docker image tag sha256:<amd64平台摘要> ghcr.io/gkwfhv/readest:sha-<提交前缀>`；最后必须让 `docker image inspect ghcr.io/gkwfhv/readest@sha256:<amd64平台摘要>` 成功，并确认其 `.Id` 恰为该摘要。之后运行上文的 `deploy-web.sh`；它发现本地已存在完整摘要时跳过 GHCR 拉取。不要加载未校验的分片或依赖浮动标签。
 
 如果 Docker Hub 和 GHCR 都无法从目标主机或代理访问，也可在受信机器传输全部七个镜像：
 
@@ -154,5 +157,48 @@ SCHOLAR_ENV_FILE="$PWD/docker/.env.restore" \
 ```
 
 四路 HTTP 200 只说明服务已启动。若备份前已在原 staging 通过 Auth 注册合成账户、把仓库 `sample-paper.pdf` 上传到 `readest-files/scholar-restore-probe/sample-paper.pdf`，且将 `email`、`password`、`user_id` 保存在主机私有 `0600` 的 `~/scholar-staging-backups/restore-probe-auth.json`，则可运行 `python3 infra/staging/verify-restore-probe.py`。它登录恢复栈并比对用户 ID，再用已固定摘要的 `mc` 读取 PDF，比对源文件 SHA256，不输出凭据。MinIO 数据卷内的对象路径是目录，不能直接对 `minio-data/.../sample-paper.pdf` 执行 `sha256sum`。验证后执行 `"${compose[@]}" stop` 释放内存，保留恢复卷供复核；不运行 `down -v`。最后重新运行原项目的 `check-readiness.py` 并比较其他业务容器 ID。
+
+### 保留首次恢复栈时重复演练
+
+若 `scholar-restore-rehearsal` 的旧容器和卷需保留，使用附加覆盖文件 `infra/staging/restore-phase1.yaml` 建立全新 `scholar-phase1-restore` 项目。首次创建私有环境文件：
+
+```bash
+SCHOLAR_RESTORE_ENV_FILE="$PWD/docker/.env.phase1" \
+  python3 infra/staging/prepare-restore-env.py
+compose=(docker compose --env-file docker/.env.phase1 \
+  -f docker/compose.yaml -f infra/staging/compose.yaml \
+  -f infra/staging/restore-rehearsal.yaml \
+  -f infra/staging/restore-phase1.yaml)
+"${compose[@]}" config --format json | python3 -c '
+import json,sys
+c=json.load(sys.stdin)
+assert c["name"]=="scholar-phase1-restore"
+expected={("client",3000,3140),("kong",8000,8140),
+          ("minio",9000,9140),("minio",9001,9141)}
+actual={(s,int(p["target"]),int(p["published"]))
+        for s,d in c["services"].items() for p in d.get("ports",[])}
+assert actual==expected
+assert all(p["host_ip"]=="127.0.0.1" for d in c["services"].values()
+           for p in d.get("ports",[]))
+assert all(v["name"]=="scholar-phase1-restore_"+n
+           for n,v in c["volumes"].items())
+'
+```
+
+确认新项目没有容器或卷、四个端口未被占用，选一份 `STATUS=complete` 且含 `postgres-restorable.sql` 和 `minio-data/` 的合成快照。按上一节相同步骤先 `"${compose[@]}" create --pull never minio`，核对卷标签为 `scholar-phase1-restore`，把快照对象复制到 `scholar-phase1-restore_minio-data`；再 `"${compose[@]}" up -d --pull never db`。待 `scholar-phase1-db` 中 `pg_isready` 和 `public.books` 检查通过，在**该容器**创建空库 `scholar_staging_restored`，用 `psql -v ON_ERROR_STOP=1` 从 `postgres-restorable.sql` 导入；然后 `"${compose[@]}" up -d --pull never`。
+
+```bash
+SCHOLAR_ENV_FILE="$PWD/docker/.env.phase1" python3 infra/staging/check-readiness.py
+SCHOLAR_ENV_FILE="$PWD/docker/.env.phase1" \
+SCHOLAR_RESTORE_PROJECT=scholar-phase1-restore \
+SCHOLAR_RESTORE_MINIO_HOST=scholar-phase1-minio \
+  python3 infra/staging/verify-restore-probe.py
+SCHOLAR_ENV_FILE="$PWD/docker/.env.phase1" \
+  python3 infra/staging/verify-silo-web-storage.py
+"${compose[@]}" stop
+python3 infra/staging/check-readiness.py  # 再核对原 staging
+```
+
+新项目使用相同的合成账户凭据，但容器、卷和回环端口独立。验证后保留卷供复核，不运行 `down -v`。这一流程的真实执行结果见 [Phase 1 升级与冷恢复证据](../../docs/evidence/phase1/staging-web-rollout-2026-10-20.md)。
 
 停止服务使用相同的两个 `-f` 文件执行 `down`，不带 `-v`。删除 staging 卷或备份应单独检查其项目名与路径。
