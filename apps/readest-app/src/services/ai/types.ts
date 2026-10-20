@@ -112,4 +112,6 @@ export interface AIMessage {
   role: 'user' | 'assistant';
   content: string;
   createdAt: number;
+  /** Retrieved passages belonging to this answer, saved with its history row. */
+  sources?: import('./adapters/reedySourceStore').SourceItem[];
 }

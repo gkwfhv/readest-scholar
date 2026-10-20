@@ -206,6 +206,34 @@ describe('aiChatStore', () => {
 
   // ── addMessage ─────────────────────────────────────────────────
   describe('addMessage', () => {
+    test('keeps the runtime message id and its own citations across reload', async () => {
+      const sources = [
+        {
+          id: 'source-page-2',
+          sectionIndex: 1,
+          chapterTitle: null,
+          text: 'Evidence from the second page',
+          cfi: '',
+        },
+      ];
+      mockSaveMessage.mockResolvedValue(undefined);
+      mockGetMessages.mockImplementation(async () => [mockSaveMessage.mock.calls[0]![0]]);
+
+      await useAIChatStore.getState().addMessage({
+        id: 'runtime-assistant-1',
+        conversationId: 'conversation-1',
+        role: 'assistant',
+        content: 'Answer with a citation',
+        sources,
+      });
+      await useAIChatStore.getState().setActiveConversation('conversation-1');
+
+      expect(useAIChatStore.getState().messages[0]).toMatchObject({
+        id: 'runtime-assistant-1',
+        sources,
+      });
+    });
+
     test('adds a message to current state', async () => {
       mockSaveMessage.mockResolvedValue(undefined);
       mockSaveConversation.mockResolvedValue(undefined);

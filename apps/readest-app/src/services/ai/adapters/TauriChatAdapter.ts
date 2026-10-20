@@ -212,7 +212,7 @@ function chunksToRetrieved(chunks: ScoredChunk[]): RetrievedChunk[] {
   return chunks.map((c) => ({
     id: c.id,
     bookHash: c.bookHash,
-    cfi: '', // legacy chunks have no CFI; UI in M1.10 hides the link when cfi is empty
+    cfi: '', // legacy chunks have no CFI; PDF navigation uses sectionIndex instead
     endCfi: '',
     sectionIndex: c.sectionIndex,
     chapterTitle: c.chapterTitle ?? null,
