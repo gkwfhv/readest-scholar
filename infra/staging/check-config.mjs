@@ -1,13 +1,18 @@
 import { readFileSync } from 'node:fs';
 
 const config = JSON.parse(readFileSync(0, 'utf8'));
-if (config.name !== 'scholar-staging') throw new Error(`Unexpected Compose project: ${config.name}`);
+if (process.env.SCHOLAR_COMPOSE_VARIANT && process.env.SCHOLAR_COMPOSE_VARIANT !== 'restore') {
+  throw new Error(`Unknown Compose variant: ${process.env.SCHOLAR_COMPOSE_VARIANT}`);
+}
+const restore = process.env.SCHOLAR_COMPOSE_VARIANT === 'restore';
+const project = restore ? 'scholar-restore-rehearsal' : 'scholar-staging';
+if (config.name !== project) throw new Error(`Unexpected Compose project: ${config.name}`);
 
 const expectedPorts = new Map([
-  ['client:3000', 3130],
-  ['kong:8000', 8130],
-  ['minio:9000', 9130],
-  ['minio:9001', 9131],
+  ['client:3000', restore ? 3140 : 3130],
+  ['kong:8000', restore ? 8140 : 8130],
+  ['minio:9000', restore ? 9140 : 9130],
+  ['minio:9001', restore ? 9141 : 9131],
 ]);
 for (const [service, definition] of Object.entries(config.services ?? {})) {
   for (const port of definition.ports ?? []) {
@@ -26,13 +31,13 @@ for (const service of ['db', 'kong', 'auth', 'rest', 'minio', 'minio-setup', 'cl
   }
 }
 for (const service of ['db', 'kong', 'auth', 'rest', 'minio', 'client']) {
-  if (config.services[service]?.container_name !== `scholar-staging-${service}`) {
+  if (config.services[service]?.container_name !== `${restore ? 'scholar-restore' : 'scholar-staging'}-${service}`) {
     throw new Error(`Unexpected container name: ${service}`);
   }
 }
 for (const [name, definition] of Object.entries(config.volumes ?? {})) {
-  if (definition.name !== `scholar-staging_${name}`) {
+  if (definition.name !== `${project}_${name}`) {
     throw new Error(`Unexpected volume name: ${name}`);
   }
 }
-console.log('Verified isolated, loopback-only staging Compose configuration.');
+console.log(`Verified isolated, loopback-only ${project} Compose configuration.`);

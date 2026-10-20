@@ -1,0 +1,21 @@
+# Apply after docker/compose.yaml and infra/staging/compose.yaml.
+# This project has its own containers, network and named volumes.
+name: scholar-restore-rehearsal
+
+services:
+  db:
+    container_name: scholar-restore-db
+  kong:
+    container_name: scholar-restore-kong
+  auth:
+    container_name: scholar-restore-auth
+    environment:
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/scholar_staging_restored
+  rest:
+    container_name: scholar-restore-rest
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/scholar_staging_restored
+  minio:
+    container_name: scholar-restore-minio
+  client:
+    container_name: scholar-restore-client

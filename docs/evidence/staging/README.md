@@ -29,4 +29,12 @@
 - 故障注入将 `client` 进程改为立即退出，就绪探针如预期失败；恢复原 Compose 后，四路全部重新返回 200，SSH 隧道的 Web/Auth/对象 HTTP 再次均为 200。
 - 回滚前后三个卷的创建时间不变：`db-data` 与 `db-config` 为 `2026-10-20T05:10:55Z`，`minio-data` 为 `2026-10-20T05:09:00Z`。原有 12 个非 staging 容器的 ID 排序指纹与启动前一致。主机可用内存从启动前约 `5.4 GiB` 降至演练后约 `4.1 GiB`，其余业务未被本次 Compose 项目替换。
 
+## 合并及独立恢复
+
+- [PR #6](https://github.com/gkwfhv/readest-scholar/pull/6) 在提交 `ba26d18ec` 的 Scholar baseline、上游 PR checks、CodeQL 检查全部完成后合并，`main` 合并提交为 `4d9e31e246c8afa2e137b850b24cf3a3d20cf7ff`。用户本地仓库已快进；测试主机原先是浅克隆，无法直接访问 GitHub，使用经本地校验的合并提交 Git bundle 和缺失的旧树对象离线同步。切换主机 `main` 后，静态挂载权限预检及四路就绪均通过，文件树与先前 `ba26d18ec` 完全相同。
+- 在原 staging 中通过 Auth API 创建一名随机 `example.invalid` 合成账户，凭据只保存在主机私有 `0600` 文件；用已固定摘要的 `mc` 将仓库 `sample-paper.pdf` 放入 `readest-files/scholar-restore-probe/`。新快照 `20261020T053020Z` 的 `STATUS=complete`，含该账户数据库行和样例 PDF 对象。
+- 独立 Compose 项目 `scholar-restore-rehearsal` 使用回环端口 `3140/8140/9140/9141`、独立网络、六个容器和三个新建卷。由快照复制对象目录，在新库 `scholar_staging_restored` 导入 `postgres-restorable.sql`，`psql -v ON_ERROR_STOP=1` 退出 `0`；`auth.users` 有 1 行。Web、Auth、REST + database、对象存储四路均返回 200。
+- 用备份前合成账户向恢复栈重新登录成功，返回的用户 ID 与原账户一致；从恢复 MinIO 用 `mc cat` 取回 PDF，SHA256 为 `efb98193fb0c5f24d95110391ec0e5f3bbf360ceb2720d8ad5616f819097ea0b`，与仓库源文件完全相同。恢复栈随后 `stop`，三个恢复卷保留供复核。原 staging 的四路仍通过；主机原有 12 个容器的短 ID 排序 SHA256 仍为 `fe2fd61934cf9a5e51e187971120cfb642075a7408f962a3caac689db52bd30b`。
+- 本次只验证合成账户登录与对象字节，尚未在**远端恢复栈**用阅读器打开该 PDF；Phase 0 本机独立栈已完成恢复后登录、下载和阅读。远端快照的数据库与对象复制仍不构成跨服务原子快照，也没有加密或保留期。
+
 本次 Web 容器为锁定的**上游 Readest 基线镜像**，仅验证部署基础设施。它不代表 Scholar 的 Web 改动已在 Linux 镜像中验证；Pigsty MinIO 兼容镜像也不等同于官方 MinIO 镜像验收。

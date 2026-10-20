@@ -88,4 +88,58 @@ bash infra/backup/backup-compose.sh "$HOME/scholar-staging-backups"
 
 `bash infra/staging/rehearse-web-rollback.sh` 会先备份并确认四路就绪，再只给 `client` 注入一个立即退出的进程，确认健康检查失败，然后按原配置重建 `client` 并重新确认四路就绪。脚本始终保留数据库和对象卷，遇到中途错误也会尝试恢复 Web。它仅证明 Web 容器故障回退；独立恢复、真实候选版本升级和数据库迁移仍需单独演练。
 
+## 在独立项目中恢复合成快照
+
+先确认快照的 `STATUS` 为 `complete`，并且恢复项目以前没有容器或卷。`prepare-restore-env.py` 仅复制 staging 的**合成测试凭据**，把四个回环端口改为 `3140/8140/9140/9141`，目标 `docker/.env.restore` 以 `0600` 创建且不会覆盖。恢复覆盖文件将项目、容器、网络和三个命名卷分离；不能把这套命令指向真实用户数据。
+
+```bash
+snapshot="$HOME/scholar-staging-backups/<SNAPSHOT_ID>"
+test "$(cat "$snapshot/STATUS")" = complete
+test -s "$snapshot/postgres-restorable.sql"
+test -d "$snapshot/minio-data"
+python3 infra/staging/prepare-restore-env.py
+docker compose --env-file docker/.env.restore \
+  -f docker/compose.yaml -f infra/staging/compose.yaml \
+  -f infra/staging/restore-rehearsal.yaml config --format json | \
+  SCHOLAR_COMPOSE_VARIANT=restore node infra/staging/check-config.mjs
+```
+
+先用 `docker ps -aq --filter label=com.docker.compose.project=scholar-restore-rehearsal` 与对应 `docker volume ls -q` 确认均为空，并核对四个端口未占用。随后只创建恢复项目的对象容器和卷，向尚未启动的空卷复制快照。下面的镜像是 staging 中已固定摘要、已导入的 Linux amd64 MinIO 兼容镜像：
+
+```bash
+compose=(docker compose --env-file docker/.env.restore \
+  -f docker/compose.yaml -f infra/staging/compose.yaml \
+  -f infra/staging/restore-rehearsal.yaml)
+"${compose[@]}" create --pull never minio
+test "$(docker volume inspect scholar-restore-rehearsal_minio-data \
+  --format '{{index .Labels "com.docker.compose.project"}}')" = scholar-restore-rehearsal
+docker run --rm \
+  -v scholar-restore-rehearsal_minio-data:/data \
+  -v "$snapshot/minio-data:/backup:ro" \
+  --entrypoint /bin/sh \
+  docker.io/pgsty/minio:RELEASE.2026-08-04T00-00-00Z-amd64@sha256:2b36182f3479c58b5cba920f20479738ee85ce218de0596a244f9a1368268db9 \
+  -ec 'cp -a /backup/. /data/'
+"${compose[@]}" up -d --pull never db
+```
+
+等 `db` 初始化完成后，在该**独立**数据库容器中新建空库并导入可恢复 SQL。绝不把转储导入原项目的 `postgres` 库：
+
+```bash
+docker exec scholar-restore-db pg_isready -U supabase_admin -d postgres
+docker exec scholar-restore-db psql -X -At -U supabase_admin -d postgres \
+  -c "SELECT to_regclass('public.books') IS NOT NULL"
+# 上一行须为 t，才能继续。
+docker exec scholar-restore-db psql -X -v ON_ERROR_STOP=1 \
+  -U supabase_admin -d postgres \
+  -c 'CREATE DATABASE scholar_staging_restored OWNER supabase_admin'
+docker exec -i scholar-restore-db psql -X -q -v ON_ERROR_STOP=1 \
+  -U supabase_admin -d scholar_staging_restored \
+  < "$snapshot/postgres-restorable.sql"
+"${compose[@]}" up -d --pull never
+SCHOLAR_ENV_FILE="$PWD/docker/.env.restore" \
+  python3 infra/staging/check-readiness.py
+```
+
+四路 HTTP 200 只说明服务已启动。若备份前已在原 staging 通过 Auth 注册合成账户、把仓库 `sample-paper.pdf` 上传到 `readest-files/scholar-restore-probe/sample-paper.pdf`，且将 `email`、`password`、`user_id` 保存在主机私有 `0600` 的 `~/scholar-staging-backups/restore-probe-auth.json`，则可运行 `python3 infra/staging/verify-restore-probe.py`。它登录恢复栈并比对用户 ID，再用已固定摘要的 `mc` 读取 PDF，比对源文件 SHA256，不输出凭据。MinIO 数据卷内的对象路径是目录，不能直接对 `minio-data/.../sample-paper.pdf` 执行 `sha256sum`。验证后执行 `"${compose[@]}" stop` 释放内存，保留恢复卷供复核；不运行 `down -v`。最后重新运行原项目的 `check-readiness.py` 并比较其他业务容器 ID。
+
 停止服务使用相同的两个 `-f` 文件执行 `down`，不带 `-v`。删除 staging 卷或备份应单独检查其项目名与路径。

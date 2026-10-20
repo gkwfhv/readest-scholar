@@ -30,7 +30,7 @@ jobs:
           node --check infra/compose/assert-loopback-ports.mjs
           node --check infra/compose/check-readiness.mjs
           node --check infra/staging/check-config.mjs
-          python3 -c 'import ast,pathlib; [ast.parse(pathlib.Path(p).read_text()) for p in ("infra/staging/prepare-env.py", "infra/staging/check-readiness.py", "infra/staging/check-bind-mounts.py")]'
+          python3 -c 'import ast,pathlib; [ast.parse(pathlib.Path(p).read_text()) for p in ("infra/staging/prepare-env.py", "infra/staging/prepare-restore-env.py", "infra/staging/verify-restore-probe.py", "infra/staging/check-readiness.py", "infra/staging/check-bind-mounts.py")]'
       - name: Exercise backup failure and success paths
         run: bash infra/backup/test-backup-compose.sh
       - name: Validate local Compose configuration and port bindings
@@ -49,6 +49,14 @@ jobs:
           docker compose --env-file "$RUNNER_TEMP/scholar-staging.env" \
             -f docker/compose.yaml -f infra/staging/compose.yaml \
             config --format json | node infra/staging/check-config.mjs
+          SCHOLAR_STAGING_ENV_FILE="$RUNNER_TEMP/scholar-staging.env" \
+            SCHOLAR_RESTORE_ENV_FILE="$RUNNER_TEMP/scholar-restore.env" \
+            python3 infra/staging/prepare-restore-env.py
+          test "$(stat -c %a "$RUNNER_TEMP/scholar-restore.env")" = 600
+          docker compose --env-file "$RUNNER_TEMP/scholar-restore.env" \
+            -f docker/compose.yaml -f infra/staging/compose.yaml \
+            -f infra/staging/restore-rehearsal.yaml \
+            config --format json | SCHOLAR_COMPOSE_VARIANT=restore node infra/staging/check-config.mjs
 
   source-inventory:
     runs-on: ubuntu-latest
