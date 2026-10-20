@@ -36,21 +36,21 @@
 ## 当前事实（2026-10-20 更新，替代此前的状态快照）
 
 - Phase 0 [验收记录](docs/evidence/phase0/acceptance-2026-10-20.md)结论为**暂不通过**；阅读、基础同步、staging 备份/恢复已有实测，不把准备工作记为 Phase 1 完成。
-- Turso 原生 L2 在本机 2400 组样本的最大相对误差约 0.0651%，8000 次近邻相邻比较未见顺序颠倒；这是实测而非跨平台上界。[PR #9](https://github.com/gkwfhv/readest-scholar/pull/9) 的 Node 24 全量 Vitest 为 13760 通过、16 跳过，TypeScript 和 Biome 通过。第一次 CI 的 Web 格式作业失败，已在提交 `291602bf6` 修正证据 JSON 格式；新一轮必需 CI 检查已通过。
-- [PR #10](https://github.com/gkwfhv/readest-scholar/pull/10) 修复 `@assistant-ui/react@0.11.58` 初始化方法接收者丢失及空会话不显示输入框。合成 OpenAI 兼容服务的开发 Web 浏览器烟测完成 PDF 索引、问答、来源显示和刷新后的会话恢复；新回归测试先在旧代码失败，再与 AI store/chat 测试一起 33/33 通过。首次 CI 因 pnpm 补丁 hunk 格式失败，已在提交 `81885b74b` 改为仅补运行时文件并重触发。生产 Web AI 入口仍被锁定上游隐藏，旧 Web 来源无 CFI 且刷新后不保留来源。
+- Turso 原生 L2 在本机 2400 组样本的最大相对误差约 0.0651%，8000 次近邻相邻比较未见顺序颠倒；这是实测而非跨平台上界。[PR #9](https://github.com/gkwfhv/readest-scholar/pull/9) 经检查、验证评论后合入受保护 `main`（`0cbe8f8f3`）。合并后源码树与受测分支相同；Node 24 全量 `pnpm test` 为 13760 通过、16 跳过，`pnpm lint` 和 CI 通过。
+- [PR #10](https://github.com/gkwfhv/readest-scholar/pull/10) 修复 `@assistant-ui/react@0.11.58` 初始化方法接收者丢失及空会话不显示输入框。合成 OpenAI 兼容服务的开发 Web 浏览器烟测完成 PDF 索引、问答、来源显示和刷新后的会话恢复；新回归测试先在旧代码失败，再与 AI store/chat 测试一起 33/33 通过。最终提交 `a93e22c67` 的工作流已通过，PR 仍为草稿。生产 Web AI 入口仍被锁定上游隐藏，旧 Web 来源无 CFI 且刷新后不保留来源。
 - [PR #8](https://github.com/gkwfhv/readest-scholar/pull/8) 更新了 Phase 0 验收、资源空闲快照和 [ADR 0002](docs/adr/0002-object-storage-staging-exception.md)。官方 MinIO 镜像拉取返回 401，固定摘要兼容镜像仅用于受限测试；生产对象存储选型未定。
 - Scholar `main` 已受保护并要求 `local-infrastructure`、`source-inventory`。当前工作树的 `origin` 指向官方 Readest；向用户仓库推送时必须显式使用 `git@github.com:gkwfhv/readest-scholar.git`。Linux staging 通过 SSH 隧道可用且端口仅绑回环，无测试域名；不得把个人 SSH 私钥放入 CI。
 
 ## 下一动作
 
-1. 完成 PR #9 的评审与受保护合入，继续核对 PR #10 的必需 CI；在受保护主线合入后重跑全量测试及 Web/桌面关键路径。PR #10 仍为草稿，需完成项目规则要求的所有模式 UI 检查和独立评审后才能合入。
+1. PR #9 已合入；PR #10 的 CI 已通过、仍为草稿。完成项目规则要求的全部 UI 模式检查和评审后再考虑合入，并在主线复验 Web/桌面 AI 关键路径。
 2. 用合成 PDF 完成生产 Web AI 入口、真实可点击 PDF 引用和桌面 Reedy 运行时验证；把检索正确性与固定回答 mock 的传输烟测分开。
 3. 采集同一 staging 栈在打开 PDF 与同步期间的受控资源样本及独立桌面资源；审查对象存储正式候选的许可、SBOM、升级和回滚。
 4. 按 Phase 0 完成判据复核并签收；只有通过后才正式进入 Phase 1。
 
 ## 阻塞
 
-- PR #9/#10 与验收文档尚未合入 `main`；PR #9 的 CI 已通过，PR #10 的补丁安装与必需 Scholar 基线已通过，完整 CI 仍待核对。
+- PR #9 已合入；PR #10 与验收文档尚未合入 `main`。PR #10 最终提交的完整 CI 已通过，但产品 AI 关键路径仍未签收。
 - 原版官方 MinIO 镜像不可用；staging 例外不等于生产选型。
 - 生产 Web AI 设置入口隐藏，旧 Web 来源无法点击定位 PDF，桌面 Reedy 和自托管 AI 未完成端到端复验。
 - 活动负载与独立桌面资源数据未采集；离线并发及旧客户端混用仍是后续同步风险。
