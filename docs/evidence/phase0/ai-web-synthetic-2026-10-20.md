@@ -18,6 +18,11 @@ This is a **development-build transport and UI smoke test**, not a model-quality
 - The synthetic answer appeared, “View sources” showed passages including `TITLE OF THE PAPER`, and the exchange remained visible after reload. Screenshot: [ai-chat-synthetic-sources.png](ai-chat-synthetic-sources.png).
 - A regression test for an active empty conversation failed against the old `!hasActiveConversation` gate with `Unable to find an element with the text: Ask about this book`, then passed after the change. With `ai-chat-store.test.ts` and `ai-store.test.ts`, the focused suite had **33 passed**. `tsc --noEmit` and Biome check of the changed component and test passed.
 
+## CI follow-up
+
+- The first PR run rejected an incomplete patch hunk during `pnpm install --frozen-lockfile`. Commit `81885b74b` reduced the patch to the runtime file and updated the lock hash; the next run passed dependency installation, Web build, and Scholar `source-inventory`.
+- That run's Web browser shard failed an unrelated existing notebook mutation performance assertion: 256 KiB p95 was **62.46 ms** against the approved **50 ms** limit on the shared GitHub runner. The same browser test passed locally, **2/2**, when run alone. This is an unresolved CI result, not an AI feature pass or an accepted relaxation of the limit.
+
 ## Limits and remaining gaps
 
 - The mock returns fixed text regardless of the prompt, so this does not prove grounding or hallucination behavior.
