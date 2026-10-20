@@ -95,7 +95,11 @@ printf '%s\n' "$backup_log"
 snapshot="$(printf '%s\n' "$backup_log" | sed -n 's/^Backup written to //p')"
 [[ -n "$snapshot" && "$(cat "$snapshot/STATUS")" == complete && -s "$snapshot/postgres-restorable.sql" && -d "$snapshot/minio-data" ]]
 
-docker pull "$candidate"
+if docker image inspect "$candidate" >/dev/null 2>&1; then
+  echo "Using the already imported digest-pinned candidate $candidate"
+else
+  docker pull "$candidate"
+fi
 changed=0
 rollback() {
   status=$?
