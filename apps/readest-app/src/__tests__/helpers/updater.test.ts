@@ -40,8 +40,10 @@ vi.mock('@/components/UpdaterWindow', () => ({
 }));
 
 let mockIsTauriAppPlatform = false;
+let mockIsScholarTestBundle = false;
 vi.mock('@/services/environment', () => ({
   isTauriAppPlatform: () => mockIsTauriAppPlatform,
+  isScholarTestBundle: () => mockIsScholarTestBundle,
 }));
 
 let mockAppVersion = '1.0.0';
@@ -78,6 +80,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
   mockIsTauriAppPlatform = false;
+  mockIsScholarTestBundle = false;
   mockAppVersion = '1.0.0';
   MockWebviewWindowLastArgs.length = 0;
   vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -93,6 +96,18 @@ afterEach(() => {
 const dummyTranslate = (key: string) => key;
 
 describe('updater', () => {
+  test('does not check upstream updates for Scholar test bundles', async () => {
+    mockIsScholarTestBundle = true;
+    mockIsTauriAppPlatform = true;
+    mockOsType.mockReturnValue('macos');
+
+    const result = await checkForAppUpdates(dummyTranslate, false);
+
+    expect(result).toBe(false);
+    expect(mockCheck).not.toHaveBeenCalled();
+    expect(mockTauriFetch).not.toHaveBeenCalled();
+  });
+
   // ── setLastShownReleaseNotesVersion / getLastShownReleaseNotesVersion ──
   describe('release notes version tracking', () => {
     test('getLastShownReleaseNotesVersion returns empty string when not set', () => {
@@ -374,6 +389,17 @@ describe('updater', () => {
 
   // ── checkAppReleaseNotes ───────────────────────────────────────
   describe('checkAppReleaseNotes', () => {
+    test('does not fetch upstream release notes for Scholar test bundles', async () => {
+      mockIsScholarTestBundle = true;
+      mockIsTauriAppPlatform = true;
+
+      const result = await checkAppReleaseNotes(false);
+
+      expect(result).toBe(false);
+      expect(mockTauriFetch).not.toHaveBeenCalled();
+      expect(mockSetUpdaterWindowVisible).not.toHaveBeenCalled();
+    });
+
     test('shows release notes when current version is newer than last shown', async () => {
       mockAppVersion = '2.0.0';
       setLastShownReleaseNotesVersion('1.0.0');

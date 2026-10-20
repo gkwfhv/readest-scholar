@@ -650,7 +650,7 @@ export class NativeAppService extends BaseAppService {
       console.warn('[nativeAppService] set_webview_info failed:', err);
     }
     // Ask Rust whether the in-app updater must stay hidden (READEST_DISABLE_UPDATER,
-    // Flatpak, or a Linux deb/rpm/pacman install that Tauri can't self-update). The
+    // Scholar test bundles, Flatpak, or a Linux deb/rpm/pacman install). The
     // command is the reliable source of truth; the `__READEST_UPDATER_DISABLED`
     // init-script global isn't dependable on every Linux/WebKitGTK setup (#4874).
     if (this.isDesktopApp) {

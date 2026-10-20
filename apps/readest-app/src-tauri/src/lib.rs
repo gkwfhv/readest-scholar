@@ -410,6 +410,8 @@ fn restore_main_window_maximized<R: tauri::Runtime>(window: &tauri::WebviewWindo
 // dependency-free so it can be unit tested for every platform combination.
 //
 // - `env_disable`: READEST_DISABLE_UPDATER is set (explicit opt-out).
+// - `com.readest.scholar.*` is reserved for isolated test bundles. Until a
+//   separate signed Scholar channel exists, they must not offer upstream updates.
 // - Linux only: Tauri's updater can self-update AppImage bundles *only*, so
 //   deb/rpm/pacman (`!is_appimage`) and Flatpak installs are updated by the
 //   system package manager and must not show the in-app updater.
@@ -419,12 +421,15 @@ fn compute_updater_disabled(
     is_linux: bool,
     is_flatpak: bool,
     is_appimage: bool,
+    identifier: &str,
 ) -> bool {
-    env_disable || (is_linux && (is_flatpak || !is_appimage))
+    env_disable
+        || identifier.starts_with("com.readest.scholar.")
+        || (is_linux && (is_flatpak || !is_appimage))
 }
 
 #[cfg(desktop)]
-fn updater_disabled() -> bool {
+fn updater_disabled(identifier: &str) -> bool {
     let env_disable = std::env::var("READEST_DISABLE_UPDATER").is_ok();
     #[cfg(target_os = "linux")]
     {
@@ -434,11 +439,11 @@ fn updater_disabled() -> bool {
             || std::env::current_exe()
                 .map(|path| path.to_string_lossy().contains("/tmp/.mount_"))
                 .unwrap_or(false);
-        compute_updater_disabled(env_disable, true, is_flatpak, is_appimage)
+        compute_updater_disabled(env_disable, true, is_flatpak, is_appimage, identifier)
     }
     #[cfg(not(target_os = "linux"))]
     {
-        compute_updater_disabled(env_disable, false, false, false)
+        compute_updater_disabled(env_disable, false, false, false, identifier)
     }
 }
 
@@ -448,8 +453,8 @@ fn updater_disabled() -> bool {
 // scripts on every Linux/WebKitGTK setup (see issue #4874).
 #[cfg(desktop)]
 #[tauri::command]
-fn is_updater_disabled() -> bool {
-    updater_disabled()
+fn is_updater_disabled(app: AppHandle) -> bool {
+    updater_disabled(&app.config().identifier)
 }
 
 // Record the WebView engine/version so Sentry events can be correlated with
@@ -878,14 +883,15 @@ pub fn run() {
             let is_appimage = false;
 
             // The in-app updater is hidden for installs it can't actually update
-            // (Linux deb/rpm/pacman and Flatpak) and when READEST_DISABLE_UPDATER
-            // is set. This mirrors the `is_updater_disabled` command that
+            // (Linux deb/rpm/pacman and Flatpak), Scholar test bundles, and when
+            // READEST_DISABLE_UPDATER is set. This mirrors the `is_updater_disabled` command that
             // `NativeAppService.init()` reads authoritatively; the injected global
             // below is only a best-effort fast path.
             #[cfg(desktop)]
-            let updater_disabled = updater_disabled();
+            let updater_disabled = updater_disabled(&app.config().identifier);
             #[cfg(not(desktop))]
             let updater_disabled = false;
+            let scholar_test_bundle = app.config().identifier.starts_with("com.readest.scholar.");
 
             // One id per app run. The OS keeps re-delivering the URL the app was
             // launched with — Android re-reads the sticky `activity.intent`
@@ -910,6 +916,7 @@ pub fn run() {
                     if ({cli_access}) window.__READEST_CLI_ACCESS = true;
                     if ({is_appimage}) window.__READEST_IS_APPIMAGE = true;
                     if ({updater_disabled}) window.__READEST_UPDATER_DISABLED = true;
+                    if ({scholar_test_bundle}) window.__READEST_SCHOLAR_TEST_BUNDLE = true;
                     window.addEventListener('DOMContentLoaded', function() {{
                         document.documentElement.classList.add('edge-to-edge');
                         const isTauriLocal = window.location.protocol === 'tauri:' ||
@@ -1196,32 +1203,93 @@ mod tests {
     #[test]
     fn env_opt_out_disables_on_any_desktop() {
         // READEST_DISABLE_UPDATER is an explicit opt-out on every desktop OS.
-        assert!(compute_updater_disabled(true, false, false, false));
-        assert!(compute_updater_disabled(true, true, false, true));
+        assert!(compute_updater_disabled(
+            true,
+            false,
+            false,
+            false,
+            "com.bilingify.readest"
+        ));
+        assert!(compute_updater_disabled(
+            true,
+            true,
+            false,
+            true,
+            "com.bilingify.readest"
+        ));
     }
 
     #[test]
     fn linux_system_package_install_is_disabled() {
         // deb/rpm/pacman installs are not AppImage and not Flatpak. Tauri's
         // Linux updater can't self-update them, so the in-app updater is hidden.
-        assert!(compute_updater_disabled(false, true, false, false));
+        assert!(compute_updater_disabled(
+            false,
+            true,
+            false,
+            false,
+            "com.bilingify.readest"
+        ));
     }
 
     #[test]
     fn linux_flatpak_is_disabled() {
-        assert!(compute_updater_disabled(false, true, true, false));
+        assert!(compute_updater_disabled(
+            false,
+            true,
+            true,
+            false,
+            "com.bilingify.readest"
+        ));
     }
 
     #[test]
     fn linux_appimage_keeps_updater() {
         // AppImage is the one Linux bundle Tauri can self-update.
-        assert!(!compute_updater_disabled(false, true, false, true));
+        assert!(!compute_updater_disabled(
+            false,
+            true,
+            false,
+            true,
+            "com.bilingify.readest"
+        ));
     }
 
     #[test]
     fn non_linux_desktop_keeps_updater_without_opt_out() {
         // macOS / Windows: the flatpak/appimage clause must not apply, so the
         // updater stays enabled unless the env opt-out is set.
-        assert!(!compute_updater_disabled(false, false, false, false));
+        assert!(!compute_updater_disabled(
+            false,
+            false,
+            false,
+            false,
+            "com.bilingify.readest"
+        ));
+    }
+
+    #[test]
+    fn scholar_test_bundle_never_uses_upstream_updater() {
+        assert!(compute_updater_disabled(
+            false,
+            false,
+            false,
+            false,
+            "com.readest.scholar.silo-test"
+        ));
+        assert!(compute_updater_disabled(
+            false,
+            true,
+            false,
+            true,
+            "com.readest.scholar.progress-test"
+        ));
+        assert!(!compute_updater_disabled(
+            false,
+            false,
+            false,
+            false,
+            "com.bilingify.readest"
+        ));
     }
 }

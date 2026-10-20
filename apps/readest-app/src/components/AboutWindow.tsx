@@ -5,7 +5,7 @@ import { useEnv } from '@/context/EnvContext';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useSettingsStore } from '@/store/settingsStore';
 import { checkForAppUpdates, checkAppReleaseNotes } from '@/helpers/updater';
-import { isTauriAppPlatform } from '@/services/environment';
+import { isScholarTestBundle, isTauriAppPlatform } from '@/services/environment';
 import { parseWebViewInfo } from '@/utils/ua';
 import { getAppVersion } from '@/utils/version';
 import { writeTextToClipboard } from '@/utils/clipboard';
@@ -145,12 +145,12 @@ export const AboutWindow = () => {
               </button>
             </div>
             <div className='my-1 h-5'>
-              {!updateStatus && (
+              {!updateStatus && !isScholarTestBundle() && (
                 <button
                   className='btn btn-sm btn-primary cursor-pointer p-1 text-xs'
                   onClick={appService?.hasUpdater ? handleCheckUpdate : handleShowRecentUpdates}
                 >
-                  {_('Check Update')}
+                  {appService?.hasUpdater ? _('Check Update') : _('Changelog')}
                 </button>
               )}
               {updateStatus === 'updated' && (
