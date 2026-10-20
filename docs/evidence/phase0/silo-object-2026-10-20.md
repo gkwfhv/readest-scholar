@@ -24,6 +24,8 @@
 
 使用临时 Compose 覆盖文件只更换 `minio` 和 `minio-setup` 镜像，不改变项目、卷或四个回环端口。`docker compose up -d --pull never --no-deps minio` 后，容器镜像为固定摘要 Silo，健康状态为 `healthy`，挂载仍为原 `scholar-staging_minio-data`；新的 mc 桶初始化进程启动。`check-readiness.py` 的 Web、Auth、REST、S3 四项全部通过；原合成账户在 Web API 完成预签名 PDF 上传、列表、下载，源文件与取回文件 SHA256 一致。测试过程中未触发回退，因此准备好的快照卷没有被用于替换正在运行的原卷。
 
+切换后的跨端界面复验使用同一合成账户和隔离的 macOS 测试客户端：桌面上传合成 PDF 后，Web 书库显示该文件，Web 端可下载并打开；在 Web 阅读器移动阅读位置后，桌面端同步显示新的位置（第 3 页）。这覆盖桌面写入、Web 读取和 Web 到桌面的阅读进度路径。测试通过 SSH 回环隧道访问，无公开域名；未使用真实账户或文档。
+
 切换后运行 `sample-active-resource.py`，60 次 Web `/library`、合成登录与 200 次书籍元数据读取、一次 PDF 写入与 150 次逐次哈希验证均通过，窗口 7.1 秒。六个容器前/中/后采样中，对象存储由空闲 `87.18 MiB / 0.15% CPU`，到观测最高 `10.36% CPU`，窗口末 `98.73 MiB / 0.09% CPU`；客户端约 `125.6→126.6 MiB`，Postgres `84.71→85.04 MiB`，Kong `1.166 GiB`。这是同机共享负载下的瞬时样点，不是容量或性能上限；HTTP 和 REST 操作在第一秒完成，采样未捕捉其峰值。
 
 镜像由 Docker Hub 标签与固定摘要拉取到本机，经 `docker image save --platform linux/amd64` 得到 54 MiB 的传输包，传输前后 SHA256 都为 `a16f174a1f0e2aa2e7e94701519d72db5f56d6166fcd7229fa3af687047c8277`。远端导入后的 `docker image inspect` 报告 amd64、镜像 ID `sha256:706e0d419d23bdab663486044165fb4de1ee6b82885a8637b2935216fb2286ec`；归档内镜像配置摘要为 `sha256:c676f34789e6598af571b590a782499df279d0d1cca41600752826634420d0bb`，发行修订标签为 `0cd388c666f8211f552604ae73448a066e9c25ce`。两处元数据的 ID 表示不同对象，不以两者相等作为校验条件。
@@ -36,4 +38,4 @@
 
 ## 范围与剩余门槛
 
-隔离演练证明旧对象读回、Web 文件路径、空卷首次启动和快照回退可行；尚需正式 staging 切换后桌面上传/Web 下载和反向同步。多节点滚动升级、真实账户数据与正式域名不在本次范围内。资源采样见[活跃负载基线](staging-resource-active-2026-10-20.md)。
+隔离演练证明旧对象读回、Web 文件路径、空卷首次启动和快照回退可行；正式 staging 切换后也完成了跨端上传、读取和阅读进度同步。多节点滚动升级、真实账户数据与正式域名不在本次范围内。资源采样见[活跃负载基线](staging-resource-active-2026-10-20.md)。
