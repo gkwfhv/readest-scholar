@@ -31,6 +31,8 @@ SCHOLAR_STAGING_DEPLOY_CONFIRM=yes bash infra/staging/deploy-web.sh \
 
 解锁后的独立客户端补查：点击底部大脑按钮，侧栏切换到 `Chat about Author…` 和“新对话”；聊天按钮高亮，四个入口仍同一行、未超出约 480 物理像素的侧栏边界。该测试客户端在 PDF 第 2 页、侧栏打开且已运行约 2 小时 31 分时，macOS `ps` 的单次采样为 CPU `0.0%`、RSS `56,976 KiB`。这是空闲瞬时值，不代表持续同步或模型生成时的峰值。
 
+再用同一个已登录的独立客户端做**升级后的新进度写入**：从第 2/2 页点击上一页，辅助功能树显示第 1/2 页及 `TITLE OF THE PAPER`；测试主机的 `public.book_configs` 只读查询随后给出 `progress="[1,2]"`、`location=epubcfi(/6/2)`、`updated_at=2026-10-20 13:13:10.94 UTC`。点击下一页恢复第 2/2 页后，服务端记录变为 `progress="[2,2]"`、`location=epubcfi(/6/4)`、`updated_at=2026-10-20 13:14:00.276 UTC`。这证明这次独立桌面客户端的两次翻页实际写入了升级后的 staging 后端。操作期间对该客户端进程采集 18 个 `ps` 样点，观察到的最高 `%cpu` 为 **7.3**、最高 RSS 为 **72,704 KiB**（约 **71.0 MiB**）；这是一次短时采样，不是峰值上限。Web 此时未登录，因此没有把本次记录当作 Web→桌面的新同步证明。
+
 ## 故障回退与冷恢复
 
 运行 `bash infra/staging/rehearse-web-rollback.sh` 创建另一个完整快照 `20261020T124851Z`，给 Web 注入立即退出进程；四路检查检测到 Web 故障。脚本按现有 Compose 配置重建 Web 后四路均恢复 200，最终 Web 镜像仍为 `sha256:141ac3b06f2df2240addeb94006a24c3e81631a2bc257c8d7850058ea38a4151`，上述五个非 Web 容器 ID 未变。它证明 Web 容器故障回退，不证明数据库破坏性迁移可自动撤销。
@@ -39,4 +41,4 @@ SCHOLAR_STAGING_DEPLOY_CONFIRM=yes bash infra/staging/deploy-web.sh \
 
 只创建新对象容器和空卷，把快照的对象目录复制进 `scholar-phase1-restore_minio-data`；只启动新 db，并确认基础 `public.books` schema 存在。另建空库 `scholar_staging_restored`，使用 `psql -v ON_ERROR_STOP=1` 导入 `postgres-restorable.sql`，无 SQL 错误。启动其余服务后，Web、Auth、REST/DB、S3 四路均返回 200；原合成账户登录及 user ID 相同，旧 PDF 对象 SHA256 与仓库源文件相同。恢复栈的新 Scholar Web 再次完成预签名 PDF 上传、列表和下载 SHA256。完成后停止独立容器、保留三个恢复卷；原 staging 四路仍为 200，非 Web 容器 ID 均未变化。
 
-这些测试满足单机合成栈的空环境启动、升级、备份、回退及冷恢复路径。升级后的 Web↔桌面新进度写入、Linux staging AI 模型交互、真实用户数据、外部 TLS 与正式安装包更新分发尚未验收，因此 Phase 1 还未整体完成。
+这些测试满足单机合成栈的空环境启动、升级、备份、回退及冷恢复路径，也新增了升级后桌面→后端的阅读进度写入证据。Web→桌面的新同步、Linux staging AI 模型交互、真实用户数据、外部 TLS 与正式安装包更新分发尚未验收，因此 Phase 1 还未整体完成。
