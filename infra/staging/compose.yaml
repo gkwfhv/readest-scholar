@@ -6,22 +6,26 @@ name: scholar-staging
 services:
   db:
     container_name: scholar-staging-db
+    image: docker.io/supabase/postgres:15.8.1.085@sha256:caae3d066f437332d593011e3e7ecf78ab005ce9b89378efd53f97f0410563ad
   kong:
     container_name: scholar-staging-kong
+    image: docker.io/library/kong:2.8.1@sha256:e21b0b793879ab96720ed4188f9441260273f4bf775bcbff8d435e019ffb759a
     ports: !override
       - "127.0.0.1:${SCHOLAR_API_PORT:?Generate the staging env}:8000"
   auth:
     container_name: scholar-staging-auth
+    image: docker.io/supabase/gotrue:v2.185.0@sha256:85b4575908b0cb6fa27f0e9a355cf499e98f6c8915f8e17befbd7299bf2b2aab
   rest:
     container_name: scholar-staging-rest
+    image: docker.io/postgrest/postgrest:v14.3@sha256:7924f769d8b3b173b93711c90d2fc4164667cffc563551d6a13bc5c93aca2487
   minio:
     container_name: scholar-staging-minio
-    image: docker.io/pgsty/minio:RELEASE.2026-08-04T00-00-00Z-amd64@sha256:8c84c46d2f11f3c5916c628c1dff70d50ba96447533e3342ccaa4eb0e5413d9a
+    image: docker.io/pgsty/minio:RELEASE.2026-08-04T00-00-00Z-amd64@sha256:2b36182f3479c58b5cba920f20479738ee85ce218de0596a244f9a1368268db9
     ports: !override
       - "127.0.0.1:${SCHOLAR_S3_PORT:?Generate the staging env}:9000"
       - "127.0.0.1:${SCHOLAR_S3_CONSOLE_PORT:?Generate the staging env}:9001"
   minio-setup:
-    image: docker.io/pgsty/mc:RELEASE.2026-10-18T00-00-00Z-amd64@sha256:6d814157d1d20a5c32dd972ba6862b6af731d7f0dd7ffa1cfbfdfbd97956862b
+    image: docker.io/pgsty/mc:RELEASE.2026-10-18T00-00-00Z-amd64@sha256:335da4ff7b78b646de8aa3fecd6cbaab975afdfa25554089639e3f2ba9199166
   client:
     container_name: scholar-staging-client
     image: ${READEST_IMAGE:?Set a pinned image digest in the staging env}

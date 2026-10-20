@@ -20,7 +20,7 @@ for (const [service, definition] of Object.entries(config.services ?? {})) {
 }
 if (expectedPorts.size) throw new Error(`Missing staging ports: ${[...expectedPorts.keys()].join(', ')}`);
 
-for (const service of ['client', 'minio', 'minio-setup']) {
+for (const service of ['db', 'kong', 'auth', 'rest', 'minio', 'minio-setup', 'client']) {
   if (!config.services[service]?.image?.includes('@sha256:')) {
     throw new Error(`Unpinned staging image: ${service}`);
   }

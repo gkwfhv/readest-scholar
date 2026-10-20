@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SAMPLE = ROOT / "docker/.env.example"
 DESTINATION = Path(os.environ.get("SCHOLAR_STAGING_ENV_FILE", ROOT / "docker/.env")).resolve()
 PORTS = {"SCHOLAR_WEB_PORT": "3130", "SCHOLAR_API_PORT": "8130", "SCHOLAR_S3_PORT": "9130", "SCHOLAR_S3_CONSOLE_PORT": "9131"}
-UPSTREAM_IMAGE = "ghcr.io/readest/readest:sha-2d37bbf@sha256:9655943b3a363da8a1708582e91e3216e6ed1c9662d2b527821207a09a515d99"
+UPSTREAM_IMAGE = "ghcr.io/readest/readest:sha-2d37bbf@sha256:56a28e655e9d7afe788b398354f01be8feee8f15c09058d08bd165de95a62a43"
 
 
 def b64url(value: bytes) -> str:
