@@ -9,14 +9,25 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 
-const { mockWriteTextToClipboard, mockDispatch, mockIsTauriAppPlatform, mockInvoke } = vi.hoisted(
-  () => ({
-    mockWriteTextToClipboard: vi.fn(async () => true),
-    mockDispatch: vi.fn(),
-    mockIsTauriAppPlatform: vi.fn(() => false),
-    mockInvoke: vi.fn(),
-  }),
-);
+const {
+  mockWriteTextToClipboard,
+  mockDispatch,
+  mockIsTauriAppPlatform,
+  mockInvoke,
+  mockHasUpdater,
+  mockIsScholarTestBundle,
+  mockCheckForAppUpdates,
+  mockCheckAppReleaseNotes,
+} = vi.hoisted(() => ({
+  mockWriteTextToClipboard: vi.fn(async () => true),
+  mockDispatch: vi.fn(),
+  mockIsTauriAppPlatform: vi.fn(() => false),
+  mockInvoke: vi.fn(),
+  mockHasUpdater: vi.fn(() => true),
+  mockIsScholarTestBundle: vi.fn(() => false),
+  mockCheckForAppUpdates: vi.fn(),
+  mockCheckAppReleaseNotes: vi.fn(),
+}));
 
 vi.mock('@/hooks/useTranslation', () => ({
   useTranslation: () => (s: string, params?: Record<string, unknown>) =>
@@ -24,7 +35,7 @@ vi.mock('@/hooks/useTranslation', () => ({
 }));
 
 vi.mock('@/context/EnvContext', () => ({
-  useEnv: () => ({ appService: { hasUpdater: true } }),
+  useEnv: () => ({ appService: { hasUpdater: mockHasUpdater() } }),
 }));
 
 vi.mock('@/store/settingsStore', () => ({
@@ -32,8 +43,8 @@ vi.mock('@/store/settingsStore', () => ({
 }));
 
 vi.mock('@/helpers/updater', () => ({
-  checkForAppUpdates: vi.fn(),
-  checkAppReleaseNotes: vi.fn(),
+  checkForAppUpdates: mockCheckForAppUpdates,
+  checkAppReleaseNotes: mockCheckAppReleaseNotes,
 }));
 
 vi.mock('@/utils/ua', () => ({
@@ -42,6 +53,7 @@ vi.mock('@/utils/ua', () => ({
 
 vi.mock('@/services/environment', () => ({
   isTauriAppPlatform: () => mockIsTauriAppPlatform(),
+  isScholarTestBundle: () => mockIsScholarTestBundle(),
 }));
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -92,6 +104,10 @@ describe('AboutWindow version label', () => {
     mockDispatch.mockClear();
     mockIsTauriAppPlatform.mockReturnValue(false);
     mockInvoke.mockReset();
+    mockHasUpdater.mockReturnValue(true);
+    mockIsScholarTestBundle.mockReturnValue(false);
+    mockCheckForAppUpdates.mockReset();
+    mockCheckAppReleaseNotes.mockReset();
   });
 
   afterEach(() => {
@@ -162,5 +178,25 @@ describe('AboutWindow version label', () => {
 
     expect(label.tagName).toBe('BUTTON');
     expect(label.getAttribute('title')).toBe('Copy');
+  });
+
+  it('labels the release notes action accurately when the updater is disabled', async () => {
+    mockHasUpdater.mockReturnValue(false);
+    mockCheckAppReleaseNotes.mockResolvedValue(false);
+    await openDialog();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Changelog' }));
+
+    await waitFor(() => expect(mockCheckAppReleaseNotes).toHaveBeenCalledWith(false));
+    expect(mockCheckForAppUpdates).not.toHaveBeenCalled();
+  });
+
+  it('does not offer upstream release notes in a Scholar test bundle', async () => {
+    mockHasUpdater.mockReturnValue(false);
+    mockIsScholarTestBundle.mockReturnValue(true);
+    await openDialog();
+
+    expect(screen.queryByRole('button', { name: 'Changelog' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Check Update' })).toBeNull();
   });
 });

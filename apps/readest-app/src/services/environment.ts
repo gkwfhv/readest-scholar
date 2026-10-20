@@ -6,12 +6,15 @@ import { getOSPlatform } from '@/utils/misc';
 declare global {
   interface Window {
     __READEST_CLI_ACCESS?: boolean;
+    __READEST_SCHOLAR_TEST_BUNDLE?: boolean;
   }
 }
 
 export const isTauriAppPlatform = () => process.env['NEXT_PUBLIC_APP_PLATFORM'] === 'tauri';
 export const isWebAppPlatform = () => process.env['NEXT_PUBLIC_APP_PLATFORM'] === 'web';
 export const hasCli = () => window.__READEST_CLI_ACCESS === true;
+export const isScholarTestBundle = () =>
+  typeof window !== 'undefined' && window.__READEST_SCHOLAR_TEST_BUNDLE === true;
 export const isPWA = () => window.matchMedia('(display-mode: standalone)').matches;
 export const getBaseUrl = () =>
   getRuntimeConfig()?.apiBaseUrl ??
