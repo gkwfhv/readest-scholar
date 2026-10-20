@@ -1,6 +1,6 @@
 # Agent 状态
 
-更新时间：2026-10-19。
+更新时间：2026-10-20。
 
 ## 已完成
 
@@ -28,10 +28,13 @@
 - 阅读位置修复已在 [PR #3](https://github.com/gkwfhv/readest-scholar/pull/3) 合并到 `main`（`12a93c9c2`），14 项检查成功、1 项按条件跳过；用户本地 `/Users/admin/github/readest-scholar` 已快进且干净。新桌面构建又发现全新客户端下载后首次打开会将云端第 2 页覆盖为第 1 页；补充的 3 条回归测试先失败后通过，修复未初始化配置的时间戳与自动首屏保存。独立标识 `com.readest.scholar.progress-test` 的新 macOS 包重新构建后，从零下载合成 PDF 恢复云端第 2 页，采用较新的远端第 1 页回退，并保留较新的本地第 1 页；服务端最终恢复为第 2 页。
 - 新增宿主机 `infra/compose/check-readiness.mjs` 就绪探针：Web、Kong/Auth、Kong/PostgREST/数据库、对象存储四个回环 HTTP 路由在合成测试栈均返回 200；错误 Web 端口注入导致退出码 1，未输出凭据。[PR #4](https://github.com/gkwfhv/readest-scholar/pull/4) 以 14 项成功检查、1 项按条件跳过合并到 `main`（`90ac8f96d`）；用户本地仓库已快进且干净。
 - 隔离 npm 对照发现 Turso 原生包 `0.8.3` 在同一 macOS arm64/Node 24 上仍给出完全相同的三个 L2 偏差；单纯升级依赖不能解决此阻塞。
+- [PR #5](https://github.com/gkwfhv/readest-scholar/pull/5) 已将 Turso `0.8.3` 对照与未解决的精度风险合并到 `main`（`a031e6369`）。
+- [PR #6](https://github.com/gkwfhv/readest-scholar/pull/6) 实现隔离的 Linux x86_64 staging Compose、随机测试凭据、四路就绪探针、项目隔离备份、Web 故障回滚演练、固定摘要镜像导入与操作手册。`c2e55592a` 的 Scholar baseline、上游 PR checks 与 CodeQL 均已通过；新增的静态 bind mount 权限预检等待下一轮 CI，PR 尚未合并。
+- 非生产主机已核对为 Linux x86_64，Docker/Compose/Python 可用；测试端口未占用，SSH 通过用户给出的 FRP 地址与本地密钥访问。七个镜像均固定 Linux amd64 平台摘要并已在主机导入；Docker Hub 的五个镜像经固定摘要代理导入，PostgreSQL 的代理下载失败后改用本机已校验摘要的 amd64 镜像归档，Web 镜像亦经本机导出，两份档案都通过主机 SHA256 校验。首次启动因 `umask 077` 导致静态 bind mount 文件只有 `0600`、数据库初始化中断；只删除本次新建且标签确认的两个空数据测试数据库卷，修复静态文件读取权限后第二次启动退出码 `0`。四路就绪探针、SSH 隧道 Web 页面、合成数据备份和 Web 故障回滚均实测通过；三个 staging 卷创建时间未变，其他 12 个容器的 ID 指纹不变。详情见 `docs/evidence/staging/README.md`。主机只绑定回环端口，尚无测试域名。
 
 ## 当前事实
 
-- 当前 Scholar 工作树的上游基点为 `2d37bbfc2e94725e1343ab2a825573545aa59f5f`，分支 `feat/scholar-progress-baseline`。`origin` 仍指向官方 `readest/readest`；Scholar 改动使用显式 SSH 地址推送至 `gkwfhv/readest-scholar`。
+- 当前 Scholar 工作树的上游基点为 `2d37bbfc2e94725e1343ab2a825573545aa59f5f`，分支 `feat/scholar-staging-rehearsal`。`origin` 仍指向官方 `readest/readest`；Scholar 改动使用显式 SSH 地址推送至 `gkwfhv/readest-scholar`。
 - 原始基线工作树除仅供 Agent 使用的 `gstack` 外，7 个源码子模块均已初始化到锁定提交；Scholar 新工作树尚未完成独立依赖与 vendor 初始化，本地单测借用了同一上游 SHA 的已安装依赖和生成资源。
 - 原始基线工作树的依赖安装已成功；新 Scholar 工作树的完整 `pnpm install` 两次遇到 npm 下载超时，因此尚未完成本地全量重建。
 - Node 24 全量单测退出码 1：13752 通过、3 失败、16 跳过。失败均为 Turso Node 向量 L2 距离精度断言；浏览器 WASM 对照 54 项通过、1 跳过。Node 26 加禁用实验性 Web Storage 开关后的同一原生测试仍出现完全相同的 3 个失败。详见 `docs/evidence/phase0/`。首次 Node 26 全量运行中的大量 `localStorage` 错误属于不匹配的环境，不能用它替代 Node 24 基线。
@@ -47,7 +50,7 @@
 ## 下一动作
 
 1. 调查 `@tursodatabase/database` macOS arm64 原生 L2 距离实现；Node 24/26 与隔离新版 0.8.3 结果相同，浏览器 WASM 对照通过。保留真实数值，不放宽断言。
-2. 比较官方 MinIO 的可用分发或可复现构建，不把替代镜像测试当成原版官方 Compose 通过；补充备份后的升级与回滚演练。
+2. 使 PR #6 的权限预检通过受保护 CI 并合并，随后同步用户本地仓库与测试主机；比较官方 MinIO 的可用分发或可复现构建，不把替代镜像测试当成原版官方 Compose 通过。远端备份仍需在另一个空栈独立恢复，真实候选镜像升级和自动部署仍未验收。
 3. 继续真实显式阅读会话、旧客户端混用与离线冲突复验。继续审核剩余子模块与容器许可、AI 基线和 Phase 0 关键路径证据。Phase 0 全项通过前，不开始文献管理或翻译 Worker。
 
 ## 阻塞
@@ -56,4 +59,4 @@
 - 桌面与 Web 已完成合成 PDF 的文件、书签及基础高亮/备注同步实测；备份恢复后 Web 阅读器显示“阅读进度已同步”及第 2/2 页。进度双向更新、离线冲突、PDF 几何锚点仍未端到端验收。
 - 修复前阅读位置回退与首次打开均暴露出旧位置覆盖云端位置：旧桌面端拒绝 Web 第 2→1 页回退；第一版新桌面端首次下载书籍又将云端第 2 页改为第 1 页。当前分支补齐两处后，单测、新 Web 及新桌面端受控测试通过；整份配置时间戳仍不能表达显式阅读会话或离线并发冲突，旧客户端混用未验收，见 Phase 0 截图与风险 R19。
 - 官方 MinIO/mc 镜像拉取 401，原版镜像的 Compose 验收仍阻塞。固定摘要替代镜像的本机测试已通过；官方 `compose.yaml` 默认广域发布端口，本工作区覆盖文件限制为回环地址。
-- PR #2/#3/#4 的 Scholar、上游与 CodeQL 检查已通过并合并。`main` 保护规则已建立。自动部署需要 staging 目标与受保护环境，正式发布另需授权。
+- PR #2/#3/#4/#5 的 Scholar、上游与 CodeQL 检查已通过并合并。`main` 保护规则已建立，SSH 隧道 staging 目标可用；自动部署仍需专用受限部署身份与受保护环境，不能直接把本机个人 SSH 私钥放进 CI。正式发布另需授权。

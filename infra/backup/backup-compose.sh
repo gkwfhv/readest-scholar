@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Backup a local Readest Compose project named "readest".
+# Backup one explicitly selected Readest Compose project.
 # Verified against compose.yaml at Readest 2d37bbfc:
 #   db container_name supabase-db, database POSTGRES_DB
-#   minio container_name readest-minio, data mounted at /data
+#   minio service mounts data at /data
 # Does not start containers, change ports, or print secrets.
 set -euo pipefail
 umask 077
@@ -24,6 +24,23 @@ if ! docker info >/dev/null 2>&1; then
   exit 3
 fi
 
+compose=(docker compose)
+if [[ -n "${SCHOLAR_ENV_FILE:-}" ]]; then
+  [[ -f "$SCHOLAR_ENV_FILE" ]] || { echo "Staging env file is missing." >&2; exit 2; }
+  compose+=(--env-file "$SCHOLAR_ENV_FILE")
+fi
+compose+=(-f "$compose_dir/compose.yaml")
+if [[ -n "${SCHOLAR_COMPOSE_OVERLAY:-}" ]]; then
+  [[ -f "$SCHOLAR_COMPOSE_OVERLAY" ]] || { echo "Compose overlay is missing." >&2; exit 2; }
+  compose+=(-f "$SCHOLAR_COMPOSE_OVERLAY")
+fi
+expected_project="${SCHOLAR_COMPOSE_EXPECTED_PROJECT:-readest}"
+actual_project="$("${compose[@]}" config --format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["name"])')"
+if [[ "$actual_project" != "$expected_project" ]]; then
+  echo "Refusing backup: expected Compose project $expected_project, found $actual_project." >&2
+  exit 2
+fi
+
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 out="$dest/$stamp"
 mkdir -p "$dest"
@@ -31,7 +48,7 @@ mkdir "$out"
 
 (
   cd "$compose_dir"
-  docker compose exec -T db sh -c 'pg_dump -U supabase_admin "$POSTGRES_DB"'
+  "${compose[@]}" exec -T db sh -c 'pg_dump -U supabase_admin "$POSTGRES_DB"'
 ) > "$out/postgres.sql"
 if [[ ! -s "$out/postgres.sql" ]]; then
   echo "Database dump is empty; backup is incomplete: $out" >&2
@@ -44,7 +61,7 @@ fi
 # exact function definition from this database and insert it before that GRANT.
 (
   cd "$compose_dir"
-  docker compose exec -T db psql -X -A -t -U supabase_admin \
+  "${compose[@]}" exec -T db psql -X -A -t -U supabase_admin \
     -c "SELECT pg_get_functiondef('graphql_public.graphql(text,text,jsonb,jsonb)'::regprocedure)"
   printf ';\n'
 ) > "$out/graphql-wrapper.sql"
@@ -62,7 +79,7 @@ awk -v wrapper="$out/graphql-wrapper.sql" '
   END { if (!inserted) exit 1 }
 ' "$out/postgres.sql" > "$out/postgres-restorable.sql"
 
-docker cp readest-minio:/data "$out/minio-data"
+"${compose[@]}" cp minio:/data "$out/minio-data"
 printf 'complete\n' > "$out/STATUS"
 
 echo "Backup written to $out"

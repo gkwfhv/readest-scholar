@@ -5,14 +5,20 @@ here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/../.." && pwd)"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
-mkdir -p "$tmp/bin" "$tmp/ok" "$tmp/fail" "$tmp/wrapper-fail"
+mkdir -p "$tmp/bin" "$tmp/ok" "$tmp/fail" "$tmp/wrapper-fail" "$tmp/wrong-project" "$tmp/staging"
 
 cat > "$tmp/bin/docker" <<'MOCK'
 #!/usr/bin/env bash
 case "$1" in
   info) exit 0 ;;
   compose)
-    if [[ "$*" == *"pg_dump"* ]]; then
+    if [[ "$*" == *"config --format json"* ]]; then
+      printf '{"name":"%s"}\n' "${MOCK_PROJECT:-readest}"
+    elif [[ "$*" == *"cp minio:/data"* ]]; then
+      if [[ "${MOCK_CP_FAIL:-}" == yes ]]; then exit 1; fi
+      mkdir -p "${@: -1}"
+      printf '%s\n' object > "${@: -1}/object"
+    elif [[ "$*" == *"pg_dump"* ]]; then
       printf '%s\n' '-- PostgreSQL database dump' \
         'CREATE SCHEMA graphql_public;' \
         'GRANT ALL ON FUNCTION graphql_public.graphql(text, text, jsonb, jsonb) TO postgres;'
@@ -21,11 +27,6 @@ case "$1" in
       printf '%s\n' \
         "CREATE FUNCTION graphql_public.graphql(text, text, jsonb, jsonb) RETURNS jsonb LANGUAGE sql AS 'SELECT ''{}''::jsonb';"
     fi
-    ;;
-  cp)
-    if [[ "${MOCK_CP_FAIL:-}" == yes ]]; then exit 1; fi
-    mkdir -p "$3"
-    printf '%s\n' object > "$3/object"
     ;;
   *) exit 99 ;;
 esac
@@ -68,4 +69,20 @@ if PATH="$tmp/bin:$PATH" MOCK_WRAPPER_FAIL=yes SCHOLAR_BACKUP_CONFIRM=yes \
 fi
 failed="$(find "$tmp/wrapper-fail" -mindepth 1 -maxdepth 1 -type d -print -quit)"
 [[ -n "$failed" && ! -e "$failed/STATUS" ]]
-echo 'Backup guard, permissions, SQL wrapper, and incomplete-copy tests passed.'
+
+if PATH="$tmp/bin:$PATH" SCHOLAR_BACKUP_CONFIRM=yes \
+  SCHOLAR_COMPOSE_DIR="$root/docker" SCHOLAR_COMPOSE_EXPECTED_PROJECT=scholar-staging \
+  "$here/backup-compose.sh" "$tmp/wrong-project" >/dev/null 2>&1; then
+  echo 'Backup selected the wrong Compose project' >&2
+  exit 1
+fi
+[[ -z "$(find "$tmp/wrong-project" -mindepth 1 -maxdepth 1 -print -quit)" ]]
+
+PATH="$tmp/bin:$PATH" MOCK_PROJECT=scholar-staging SCHOLAR_BACKUP_CONFIRM=yes \
+  SCHOLAR_COMPOSE_DIR="$root/docker" \
+  SCHOLAR_COMPOSE_OVERLAY="$root/infra/staging/compose.yaml" \
+  SCHOLAR_COMPOSE_EXPECTED_PROJECT=scholar-staging \
+  "$here/backup-compose.sh" "$tmp/staging" >/dev/null
+staging_out="$(find "$tmp/staging" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+[[ -n "$staging_out" && -s "$staging_out/minio-data/object" && "$(cat "$staging_out/STATUS")" == complete ]]
+echo 'Backup guard, project isolation, permissions, SQL wrapper, and incomplete-copy tests passed.'
