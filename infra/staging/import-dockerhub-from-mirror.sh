@@ -8,12 +8,14 @@ root="$(cd "$(dirname "$0")/../.." && pwd)"
 environment="${SCHOLAR_STAGING_ENV_FILE:-$root/docker/.env}"
 crane="${CRANE_BIN:-crane}"
 mirror="${SCHOLAR_DOCKERHUB_MIRROR:-hub.1panel.dev}"
+cache="${SCHOLAR_CRANE_CACHE:-$HOME/.cache/scholar-staging-crane}"
 
 if [[ "$mirror" == *://* || "$mirror" == */* ]]; then
   echo "Mirror must be a registry host name." >&2
   exit 2
 fi
 command -v "$crane" >/dev/null
+mkdir -p "$cache"
 
 images=()
 while IFS= read -r reference; do
@@ -54,9 +56,23 @@ for reference in "${images[@]}"; do
     exit 3
   fi
 
-  rm -rf "$temporary/oci"
-  "$crane" pull --format oci --platform linux/amd64 \
-    "$mirror_reference" "$temporary/oci"
+  pulled=0
+  for attempt in 1 2 3; do
+    rm -rf "$temporary/oci"
+    if "$crane" pull --cache_path "$cache" --format oci --platform linux/amd64 \
+      "$mirror_reference" "$temporary/oci"; then
+      pulled=1
+      break
+    fi
+    echo "Mirror pull attempt $attempt failed for $tag." >&2
+    if [[ "$attempt" != 3 ]]; then
+      sleep "$((attempt * 5))"
+    fi
+  done
+  if [[ "$pulled" != 1 ]]; then
+    echo "Could not import $tag after three attempts." >&2
+    exit 4
+  fi
   tar -cf "$temporary/image.tar" -C "$temporary/oci" .
   docker image load -i "$temporary/image.tar"
   docker image tag "$expected" "$tag"
