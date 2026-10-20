@@ -10,8 +10,10 @@ from urllib.parse import quote, urlsplit
 
 
 ROOT = Path(os.environ["SCHOLAR_ROOT"]) if "SCHOLAR_ROOT" in os.environ else Path(__file__).resolve().parents[2]
-ENV_FILE = ROOT / "docker/.env.restore"
-PROBE_FILE = Path.home() / "scholar-staging-backups/restore-probe-auth.json"
+ENV_FILE = Path(os.environ.get("SCHOLAR_ENV_FILE", ROOT / "docker/.env.restore"))
+PROBE_FILE = Path(os.environ.get(
+    "SCHOLAR_PROBE_FILE", Path.home() / "scholar-staging-backups/restore-probe-auth.json"
+))
 PDF = ROOT / "apps/readest-app/src/__tests__/fixtures/data/sample-paper.pdf"
 
 
