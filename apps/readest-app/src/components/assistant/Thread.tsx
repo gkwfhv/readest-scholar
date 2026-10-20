@@ -164,7 +164,7 @@ export const Thread: FC<ThreadProps> = ({
     <ThreadPrimitive.Root className='bg-base-100 relative flex h-full w-full flex-col items-stretch px-3'>
       <LoadingOverlay isVisible={showLoading} />
 
-      {!hasActiveConversation && (
+      {!showLoading && (
         <ThreadPrimitive.Empty>
           <div className='animate-in fade-in flex h-full flex-col items-center justify-center duration-300'>
             <div className='bg-base-content/10 mb-4 rounded-full p-3'>

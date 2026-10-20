@@ -1,9 +1,32 @@
 import withSerwistInit from '@serwist/next';
 import withBundleAnalyzer from '@next/bundle-analyzer';
+import { readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Next may resolve @assistant-ui/react through its `aui-source` condition,
+// including a peer copy reached from the AI SDK or Markdown package.
+// Check every resolved copy before bundling to reject mixed node_modules trees.
+const assistantUiPackages = path.join(__dirname, 'node_modules/@assistant-ui');
+const assistantUiReactRoots = new Set([realpathSync(path.join(assistantUiPackages, 'react'))]);
+for (const peer of ['react-ai-sdk', 'react-markdown']) {
+  const peerRoot = realpathSync(path.join(assistantUiPackages, peer));
+  assistantUiReactRoots.add(realpathSync(path.join(path.dirname(peerRoot), 'react')));
+}
+for (const packageRoot of assistantUiReactRoots) {
+  for (const relativePath of [
+    'src/legacy-runtime/runtime-cores/remote-thread-list/RemoteThreadListHookInstanceManager.tsx',
+    'dist/legacy-runtime/runtime-cores/remote-thread-list/RemoteThreadListHookInstanceManager.js',
+  ]) {
+    const installedPath = path.join(packageRoot, relativePath);
+    const installedSource = readFileSync(installedPath, 'utf8');
+    if (!installedSource.includes('setGetInitializePromise.call(runtimeCore,')) {
+      throw new Error(`Unpatched @assistant-ui/react at ${installedPath}; run pnpm install`);
+    }
+  }
+}
 
 const isDev = process.env['NODE_ENV'] === 'development';
 const appPlatform = process.env['NEXT_PUBLIC_APP_PLATFORM'];
