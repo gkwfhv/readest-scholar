@@ -66,6 +66,7 @@ export interface BuildLookupToolArgs {
   turnState: LookupTurnState;
   /** Optional position cap for spoiler-free retrieval. */
   spoilerBoundPosition?: number;
+  spoilerBoundSectionIndex?: number;
   /**
    * Optional sink for telemetry — wired by M1.9 to record `tool_called`,
    * `tool_returned_empty`, etc. Kept as a callback so the tool factory has
@@ -94,8 +95,15 @@ export interface BuildLookupToolArgs {
  * prompt builder wraps each passage at the system-message boundary.
  */
 export function buildLookupTool(args: BuildLookupToolArgs) {
-  const { bookHash, retriever, activeEmbeddingModel, turnState, spoilerBoundPosition, onEvent } =
-    args;
+  const {
+    bookHash,
+    retriever,
+    activeEmbeddingModel,
+    turnState,
+    spoilerBoundPosition,
+    spoilerBoundSectionIndex,
+    onEvent,
+  } = args;
 
   return tool({
     description:
@@ -129,6 +137,7 @@ export function buildLookupTool(args: BuildLookupToolArgs) {
       q: query.trim().toLowerCase(),
       k: topK,
       sb: spoilerBoundPosition ?? null,
+      sbs: spoilerBoundSectionIndex ?? null,
       m: activeEmbeddingModel.id,
       b: bookHash,
     });
@@ -159,6 +168,7 @@ export function buildLookupTool(args: BuildLookupToolArgs) {
       query,
       k: topK,
       spoilerBoundPosition,
+      spoilerBoundSectionIndex,
       activeEmbeddingModel,
     });
     turnState.totalToolMs += Date.now() - t0;

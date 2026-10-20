@@ -81,10 +81,12 @@ const AIAssistantChat = ({
   bookTitle,
   authorName,
   currentPage,
+  currentSectionIndex,
   backend,
   sourceStore,
   currentTurnId,
   setCurrentTurnId,
+  isPdf,
   onSourceClick,
   onResetIndex,
 }: {
@@ -93,10 +95,12 @@ const AIAssistantChat = ({
   bookTitle: string;
   authorName: string;
   currentPage: number;
+  currentSectionIndex: number;
   backend: RetrievalBackend;
   sourceStore: ReedySourceStore;
   currentTurnId: string | null;
-  setCurrentTurnId: (id: string) => void;
+  setCurrentTurnId: (id: string | null) => void;
+  isPdf: boolean;
   onSourceClick?: (source: SourceItem) => void;
   onResetIndex: () => void;
 }) => {
@@ -106,6 +110,19 @@ const AIAssistantChat = ({
     addMessage,
     isLoadingHistory,
   } = useAIChatStore();
+  const currentTurnIdRef = useRef<string | null>(null);
+  const handleTurnStart = useCallback(
+    (id: string) => {
+      currentTurnIdRef.current = id;
+      setCurrentTurnId(id);
+    },
+    [setCurrentTurnId],
+  );
+
+  useEffect(() => {
+    currentTurnIdRef.current = null;
+    setCurrentTurnId(null);
+  }, [activeConversationId, setCurrentTurnId]);
 
   // use a ref to keep up-to-date options without triggering re-renders of the runtime
   const optionsRef = useRef({
@@ -114,9 +131,10 @@ const AIAssistantChat = ({
     bookTitle,
     authorName,
     currentPage,
+    currentSectionIndex,
     backend,
     sourceStore,
-    onTurnStart: setCurrentTurnId,
+    onTurnStart: handleTurnStart,
   });
 
   // update ref on every render with latest values
@@ -127,9 +145,10 @@ const AIAssistantChat = ({
       bookTitle,
       authorName,
       currentPage,
+      currentSectionIndex,
       backend,
       sourceStore,
-      onTurnStart: setCurrentTurnId,
+      onTurnStart: handleTurnStart,
     };
   });
 
@@ -165,15 +184,30 @@ const AIAssistantChat = ({
 
           if (textContent) {
             await addMessage({
+              id: msg.id,
               conversationId: activeConversationId,
               role: msg.role as 'user' | 'assistant',
               content: textContent,
+              sources:
+                msg.role === 'assistant' && currentTurnIdRef.current
+                  ? sourceStore.get(currentTurnIdRef.current)
+                  : undefined,
             });
           }
         }
       },
     };
-  }, [activeConversationId, storedMessages, addMessage]);
+  }, [activeConversationId, storedMessages, addMessage, sourceStore]);
+
+  const sourcesByMessageId = useMemo(
+    () =>
+      Object.fromEntries(
+        storedMessages
+          .filter((message) => message.sources?.length)
+          .map((message) => [message.id, message.sources!]),
+      ),
+    [storedMessages],
+  );
 
   return (
     <AIAssistantWithRuntime
@@ -184,6 +218,8 @@ const AIAssistantChat = ({
       hasActiveConversation={!!activeConversationId}
       sourceStore={sourceStore}
       currentTurnId={currentTurnId}
+      sourcesByMessageId={sourcesByMessageId}
+      isPdf={isPdf}
       onSourceClick={onSourceClick}
     />
   );
@@ -197,6 +233,8 @@ const AIAssistantWithRuntime = ({
   hasActiveConversation,
   sourceStore,
   currentTurnId,
+  sourcesByMessageId,
+  isPdf,
   onSourceClick,
 }: {
   adapter: NonNullable<ReturnType<typeof createTauriAdapter>>;
@@ -206,6 +244,8 @@ const AIAssistantWithRuntime = ({
   hasActiveConversation: boolean;
   sourceStore: ReedySourceStore;
   currentTurnId: string | null;
+  sourcesByMessageId: Record<string, SourceItem[]>;
+  isPdf: boolean;
   onSourceClick?: (source: SourceItem) => void;
 }) => {
   const runtime = useLocalRuntime(adapter, {
@@ -222,6 +262,8 @@ const AIAssistantWithRuntime = ({
         hasActiveConversation={hasActiveConversation}
         sourceStore={sourceStore}
         currentTurnId={currentTurnId}
+        sourcesByMessageId={sourcesByMessageId}
+        isPdf={isPdf}
         onSourceClick={onSourceClick}
       />
     </AssistantRuntimeProvider>
@@ -234,6 +276,8 @@ const ThreadWrapper = ({
   hasActiveConversation,
   sourceStore,
   currentTurnId,
+  sourcesByMessageId,
+  isPdf,
   onSourceClick,
 }: {
   onResetIndex: () => void;
@@ -241,6 +285,8 @@ const ThreadWrapper = ({
   hasActiveConversation: boolean;
   sourceStore: ReedySourceStore;
   currentTurnId: string | null;
+  sourcesByMessageId: Record<string, SourceItem[]>;
+  isPdf: boolean;
   onSourceClick?: (source: SourceItem) => void;
 }) => {
   const [sources, setSources] = useState<RetrievedChunk[]>(
@@ -270,6 +316,8 @@ const ThreadWrapper = ({
   return (
     <Thread
       sources={sources}
+      sourcesByMessageId={sourcesByMessageId}
+      isPdf={isPdf}
       onSourceClick={onSourceClick}
       onClear={handleClear}
       onResetIndex={onResetIndex}
@@ -319,6 +367,7 @@ const LegacyAIAssistant = ({ bookKey }: AIAssistantProps) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isIndexing, setIsIndexing] = useState(false);
   const [indexProgress, setIndexProgress] = useState<EmbeddingProgress | null>(null);
+  const [indexError, setIndexError] = useState<string | null>(null);
   const [indexed, setIndexed] = useState(false);
   const [currentTurnId, setCurrentTurnId] = useState<string | null>(null);
 
@@ -326,6 +375,7 @@ const LegacyAIAssistant = ({ bookKey }: AIAssistantProps) => {
   const bookTitle = bookData?.book?.title || 'Unknown';
   const authorName = bookData?.book?.author || '';
   const currentPage = progress?.pageinfo?.current ?? 0;
+  const currentSectionIndex = progress?.section?.current ?? 0;
   const aiSettings = settings?.aiSettings;
 
   // Per-instance source store, plus the active backend chosen via the same
@@ -358,12 +408,15 @@ const LegacyAIAssistant = ({ bookKey }: AIAssistantProps) => {
 
   const handleIndex = useCallback(async () => {
     if (!bookData?.bookDoc || !aiSettings || !backend) return;
+    setIndexError(null);
     setIsIndexing(true);
     try {
       await backend.indexBook(bookData.bookDoc, bookHash, { onProgress: setIndexProgress });
       setIndexed(true);
     } catch (e) {
-      aiLogger.rag.indexError(bookHash, (e as Error).message);
+      const message = e instanceof Error ? e.message : String(e);
+      aiLogger.rag.indexError(bookHash, message);
+      setIndexError(message);
     } finally {
       setIsIndexing(false);
       setIndexProgress(null);
@@ -377,15 +430,14 @@ const LegacyAIAssistant = ({ bookKey }: AIAssistantProps) => {
     setIndexed(false);
   }, [bookHash, appService, backend, _]);
 
-  // Navigate the reader to a clicked source's CFI. Legacy backend chunks have
-  // no CFI so the Thread component renders them as static rows — only Reedy
-  // sources are clickable in M1.10.
+  // PDF sections map one-to-one to pages, including for legacy chunks without CFI.
   const handleSourceClick = useCallback(
     (source: SourceItem) => {
-      if (!source.cfi) return;
-      getView(bookKey)?.goTo(source.cfi);
+      const target = source.cfi || (bookData?.book?.format === 'PDF' ? source.sectionIndex : null);
+      if (target === null) return;
+      getView(bookKey)?.goTo(target);
     },
-    [bookKey, getView],
+    [bookKey, bookData?.book?.format, getView],
   );
 
   if (!aiSettings?.enabled) {
@@ -422,6 +474,11 @@ const LegacyAIAssistant = ({ bookKey }: AIAssistantProps) => {
           <BookOpenIcon className='mr-1.5 size-3.5' />
           {_('Start Indexing')}
         </Button>
+        {indexError && (
+          <p role='alert' className='text-error max-w-md text-xs'>
+            {indexError}
+          </p>
+        )}
       </div>
     );
   }
@@ -457,10 +514,12 @@ const LegacyAIAssistant = ({ bookKey }: AIAssistantProps) => {
       bookTitle={bookTitle}
       authorName={authorName}
       currentPage={currentPage}
+      currentSectionIndex={currentSectionIndex}
       backend={backend}
       sourceStore={sourceStore}
       currentTurnId={currentTurnId}
       setCurrentTurnId={setCurrentTurnId}
+      isPdf={bookData?.book?.format === 'PDF'}
       onSourceClick={handleSourceClick}
       onResetIndex={handleResetIndex}
     />

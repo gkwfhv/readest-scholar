@@ -301,5 +301,27 @@ describe('ReedyDb', () => {
       });
       for (const r of res) expect(r.positionIndex).toBeLessThanOrEqual(1);
     });
+
+    it('keeps all chunks on the current PDF page while excluding later pages', async () => {
+      await reedy.insertChunks([
+        { ...chunk('page-two', 'bookA', 10, 'page numbering instructions'), sectionIndex: 1 },
+        { ...chunk('page-three', 'bookA', 11, 'later page numbering'), sectionIndex: 2 },
+      ]);
+      await reedy.insertEmbeddings([
+        { chunkId: 'page-two', bookHash: 'bookA', embedding: unitVec([1, 0, 0, 0]) },
+        { chunkId: 'page-three', bookHash: 'bookA', embedding: unitVec([1, 0, 0, 0]) },
+      ]);
+
+      const res = await reedy.hybridSearch({
+        bookHash: 'bookA',
+        queryText: 'page numbering',
+        queryEmbedding: unitVec([1, 0, 0, 0]),
+        k: 5,
+        spoilerBoundSectionIndex: 1,
+      });
+
+      expect(res.map((row) => row.id)).toContain('page-two');
+      expect(res.map((row) => row.id)).not.toContain('page-three');
+    });
   });
 });

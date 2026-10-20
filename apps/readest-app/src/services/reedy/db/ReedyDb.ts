@@ -486,13 +486,25 @@ export class ReedyDb {
     queryEmbedding: number[];
     k: number;
     spoilerBoundPosition?: number;
+    spoilerBoundSectionIndex?: number;
   }): Promise<ScoredChunk[]> {
-    const { bookHash, queryText, queryEmbedding, k, spoilerBoundPosition } = args;
+    const {
+      bookHash,
+      queryText,
+      queryEmbedding,
+      k,
+      spoilerBoundPosition,
+      spoilerBoundSectionIndex,
+    } = args;
     if (k <= 0) return [];
 
-    const spoilerClause = spoilerBoundPosition !== undefined ? ' AND c.position_index <= ?' : '';
-    const spoilerParam: unknown[] =
-      spoilerBoundPosition !== undefined ? [spoilerBoundPosition] : [];
+    const spoilerClause =
+      (spoilerBoundPosition !== undefined ? ' AND c.position_index <= ?' : '') +
+      (spoilerBoundSectionIndex !== undefined ? ' AND c.section_index <= ?' : '');
+    const spoilerParam: unknown[] = [
+      ...(spoilerBoundPosition !== undefined ? [spoilerBoundPosition] : []),
+      ...(spoilerBoundSectionIndex !== undefined ? [spoilerBoundSectionIndex] : []),
+    ];
 
     // Over-fetch from each path so a chunk surfaced by one path still has a
     // chance to gain RRF mass from the other. Standard hybrid-search pattern.

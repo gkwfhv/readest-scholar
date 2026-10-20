@@ -12,7 +12,7 @@ interface AIChatState {
   loadConversations: (bookHash: string) => Promise<void>;
   setActiveConversation: (id: string | null) => Promise<void>;
   createConversation: (bookHash: string, title: string) => Promise<string>;
-  addMessage: (message: Omit<AIMessage, 'id' | 'createdAt'>) => Promise<void>;
+  addMessage: (message: Omit<AIMessage, 'id' | 'createdAt'> & { id?: string }) => Promise<void>;
   deleteConversation: (id: string) => Promise<void>;
   renameConversation: (id: string, title: string) => Promise<void>;
   clearActiveConversation: () => void;
@@ -85,8 +85,8 @@ export const useAIChatStore = create<AIChatState>((set, get) => ({
     return id;
   },
 
-  addMessage: async (message: Omit<AIMessage, 'id' | 'createdAt'>) => {
-    const id = generateId();
+  addMessage: async (message: Omit<AIMessage, 'id' | 'createdAt'> & { id?: string }) => {
+    const id = message.id ?? generateId();
     const fullMessage: AIMessage = {
       ...message,
       id,

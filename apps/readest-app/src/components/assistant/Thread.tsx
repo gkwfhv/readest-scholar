@@ -38,6 +38,8 @@ import type { SourceItem } from '@/services/ai/adapters/reedySourceStore';
 
 interface ThreadProps {
   sources?: SourceItem[];
+  sourcesByMessageId?: Record<string, SourceItem[]>;
+  isPdf?: boolean;
   /** Invoked when a source row is clicked. Reedy passes the CFI to the reader's goTo. */
   onSourceClick?: (source: SourceItem) => void;
   onClear?: () => void;
@@ -103,6 +105,8 @@ const ScrollToBottomButton: FC = () => {
 
 export const Thread: FC<ThreadProps> = ({
   sources = [],
+  sourcesByMessageId = {},
+  isPdf = false,
   onSourceClick,
   onClear,
   onResetIndex,
@@ -196,7 +200,12 @@ export const Thread: FC<ThreadProps> = ({
                 UserMessage,
                 EditComposer,
                 AssistantMessage: () => (
-                  <AssistantMessage sources={sources} onSourceClick={onSourceClick} />
+                  <AssistantMessage
+                    liveSources={sources}
+                    sourcesByMessageId={sourcesByMessageId}
+                    isPdf={isPdf}
+                    onSourceClick={onSourceClick}
+                  />
                 ),
               }}
             />
@@ -285,11 +294,21 @@ const Composer: FC<ComposerProps> = ({ onClear, onResetIndex }) => {
 };
 
 interface AssistantMessageProps {
-  sources?: SourceItem[];
+  liveSources: SourceItem[];
+  sourcesByMessageId: Record<string, SourceItem[]>;
+  isPdf: boolean;
   onSourceClick?: (source: SourceItem) => void;
 }
 
-const AssistantMessage: FC<AssistantMessageProps> = ({ sources = [], onSourceClick }) => {
+const AssistantMessage: FC<AssistantMessageProps> = ({
+  liveSources,
+  sourcesByMessageId,
+  isPdf,
+  onSourceClick,
+}) => {
+  const messageId = useAssistantState((s) => s.message.id);
+  const lastMessageId = useThread((t) => t.messages.at(-1)?.id);
+  const sources = sourcesByMessageId[messageId] ?? (messageId === lastMessageId ? liveSources : []);
   return (
     <MessagePrimitive.Root className='group/message animate-in fade-in slide-in-from-bottom-1 relative mx-auto mb-1 flex w-full flex-col pb-0.5 duration-200'>
       <div className='flex flex-col items-start'>
@@ -323,13 +342,15 @@ const AssistantMessage: FC<AssistantMessageProps> = ({ sources = [], onSourceCli
                     </div>
                     <div className='flex flex-col gap-1.5'>
                       {sources.map((source, i) => {
-                        const clickable = !!source.cfi && !!onSourceClick;
+                        const clickable = !!onSourceClick && (!!source.cfi || isPdf);
                         const baseClass =
                           'border-base-content/10 bg-base-200/50 rounded-lg border px-2 py-1.5 text-[11px]';
                         const content = (
                           <>
                             <div className='text-base-content font-medium'>
-                              {source.chapterTitle || `Section ${source.sectionIndex + 1}`}
+                              {isPdf
+                                ? `Page ${source.sectionIndex + 1}`
+                                : source.chapterTitle || `Section ${source.sectionIndex + 1}`}
                             </div>
                             <div className='text-base-content/60 mt-0.5 line-clamp-3'>
                               {source.text}

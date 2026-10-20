@@ -85,6 +85,9 @@ export class ReedyBackend implements RetrievalBackend {
     const { indexer, reedy } = await this.reedyReady;
     this.metrics.log('book_indexing_started', { bookHash });
     try {
+      // BookIndexer records the dimension before it embeds any book chunks.
+      // OpenAI-compatible models report that dimension only after a response.
+      await this.model.embed(['Reedy embedding dimension probe']);
       await indexer.indexBook(bookDoc, bookHash, this.model, {
         onProgress: options?.onProgress
           ? (event): void => {
@@ -125,8 +128,9 @@ export class ReedyBackend implements RetrievalBackend {
     turnId: string;
     sourceStore: ReedySourceStore;
     spoilerBoundPosition?: number;
+    spoilerBoundSectionIndex?: number;
   }): Tool {
-    const { bookHash, turnId, sourceStore, spoilerBoundPosition } = args;
+    const { bookHash, turnId, sourceStore, spoilerBoundPosition, spoilerBoundSectionIndex } = args;
     // Wrap the retriever so each lookupPassage call also appends its result
     // to the sourceStore — the Sources dropdown reads from the same store.
     const lazyRetriever: BookRetriever = {
@@ -146,6 +150,7 @@ export class ReedyBackend implements RetrievalBackend {
       activeEmbeddingModel: this.model,
       turnState: createTurnState(),
       spoilerBoundPosition,
+      spoilerBoundSectionIndex,
       onEvent: (event) => {
         // Map the tool's lifecycle events into the metrics schema. The
         // tool emits short type strings; we widen them to the schema's

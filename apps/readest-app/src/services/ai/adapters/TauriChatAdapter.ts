@@ -19,6 +19,7 @@ export interface TauriAdapterOptions {
   bookTitle: string;
   authorName: string;
   currentPage: number;
+  currentSectionIndex: number;
   backend: RetrievalBackend;
   /** Per-adapter-instance source store; the same one the UI subscribes to. */
   sourceStore: ReedySourceStore;
@@ -69,6 +70,7 @@ export function createTauriAdapter(getOptions: () => TauriAdapterOptions): ChatM
         bookTitle,
         authorName,
         currentPage,
+        currentSectionIndex,
         backend,
         sourceStore,
         onTurnStart,
@@ -117,7 +119,9 @@ export function createTauriAdapter(getOptions: () => TauriAdapterOptions): ChatM
             bookHash,
             turnId,
             sourceStore,
-            spoilerBoundPosition: settings.spoilerProtection ? currentPage : undefined,
+            // Reedy's chunk position is not a page number. PDFs have multiple
+            // chunks per page, so bound retrieval by the reader's section.
+            spoilerBoundSectionIndex: settings.spoilerProtection ? currentSectionIndex : undefined,
           });
           const systemPrompt = buildReedySystemPrompt(bookTitle, authorName, currentPage);
           const result = streamText({
@@ -212,7 +216,7 @@ function chunksToRetrieved(chunks: ScoredChunk[]): RetrievedChunk[] {
   return chunks.map((c) => ({
     id: c.id,
     bookHash: c.bookHash,
-    cfi: '', // legacy chunks have no CFI; UI in M1.10 hides the link when cfi is empty
+    cfi: '', // legacy chunks have no CFI; PDF navigation uses sectionIndex instead
     endCfi: '',
     sectionIndex: c.sectionIndex,
     chapterTitle: c.chapterTitle ?? null,
