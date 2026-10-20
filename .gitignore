@@ -1,6 +1,6 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-docker/.env
-docker/.env.restore
+docker/.env*
+!docker/.env.example
 docs/evidence/phase0/backup-test/
 
 # dependencies
