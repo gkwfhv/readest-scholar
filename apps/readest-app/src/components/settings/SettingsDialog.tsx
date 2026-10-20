@@ -8,7 +8,7 @@ import { useCommandPalette } from '@/components/command-palette';
 import { RiFontSize, RiShareLine } from 'react-icons/ri';
 import { RiDashboardLine, RiTranslate } from 'react-icons/ri';
 import { VscSymbolColor } from 'react-icons/vsc';
-import { PiDotsThreeVerticalBold, PiRobot, PiSpeakerHigh } from 'react-icons/pi';
+import { PiBrain, PiDotsThreeVerticalBold, PiSpeakerHigh } from 'react-icons/pi';
 import { LiaHandPointerSolid } from 'react-icons/lia';
 import { IoAccessibilityOutline } from 'react-icons/io5';
 import {
@@ -122,7 +122,7 @@ const SettingsDialog: React.FC<{ bookKey: string }> = ({ bookKey }) => {
     },
     {
       tab: 'AI',
-      icon: PiRobot,
+      icon: PiBrain,
       label: _('AI Assistant'),
     },
     {

@@ -127,7 +127,7 @@ const SidebarContent: React.FC<{
         )}
       </div>
       <div
-        className='shrink-0'
+        className='w-full min-w-0 max-w-full shrink-0 overflow-hidden'
         style={
           {
             // paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) / 2)',

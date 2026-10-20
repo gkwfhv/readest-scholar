@@ -18,7 +18,7 @@ vi.mock('react-icons/io5', () => ({
   IoAccessibilityOutline: () => null,
 }));
 vi.mock('react-icons/pi', () => ({
-  PiRobot: () => null,
+  PiBrain: () => null,
   PiSpeakerHigh: () => null,
   PiSun: () => null,
   PiMoon: () => null,
