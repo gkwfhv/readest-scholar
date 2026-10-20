@@ -33,31 +33,24 @@
 - 非生产主机已核对为 Linux x86_64，Docker/Compose/Python 可用；测试端口未占用，SSH 通过用户给出的 FRP 地址与本地密钥访问。七个镜像均固定 Linux amd64 平台摘要并已在主机导入；Docker Hub 的五个镜像经固定摘要代理导入，PostgreSQL 的代理下载失败后改用本机已校验摘要的 amd64 镜像归档，Web 镜像亦经本机导出，两份档案都通过主机 SHA256 校验。首次启动因 `umask 077` 导致静态 bind mount 文件只有 `0600`、数据库初始化中断；只删除本次新建且标签确认的两个空数据测试数据库卷，修复静态文件读取权限后第二次启动退出码 `0`。四路就绪探针、SSH 隧道 Web 页面、合成数据备份和 Web 故障回滚均实测通过；三个 staging 卷创建时间未变，其他 12 个容器的 ID 指纹不变。详情见 `docs/evidence/staging/README.md`。主机只绑定回环端口，尚无测试域名。
 - 在远端 staging 建立随机合成账户及仓库样例 PDF 对象后，再次备份并在另一个 Compose 项目、网络、空数据库和对象卷中独立恢复。恢复栈四路就绪、原账户登录与用户 ID 核对、PDF 对象 SHA256 比对均通过。恢复栈已停止、三个卷保留；原 staging 和原有 12 个容器未变。恢复步骤及证据见 `infra/staging/README.md` 与 `docs/evidence/staging/README.md`。
 
-## 当前事实
+## 当前事实（2026-10-20 更新，替代此前的状态快照）
 
-- 当前 Scholar 工作树的上游基点为 `2d37bbfc2e94725e1343ab2a825573545aa59f5f`，分支 `feat/scholar-independent-restore`，基于已合并的 `4d9e31e24`。`origin` 仍指向官方 `readest/readest`；Scholar 改动使用显式 SSH 地址推送至 `gkwfhv/readest-scholar`。
-- 原始基线工作树除仅供 Agent 使用的 `gstack` 外，7 个源码子模块均已初始化到锁定提交；Scholar 新工作树尚未完成独立依赖与 vendor 初始化，本地单测借用了同一上游 SHA 的已安装依赖和生成资源。
-- 原始基线工作树的依赖安装已成功；新 Scholar 工作树的完整 `pnpm install` 两次遇到 npm 下载超时，因此尚未完成本地全量重建。
-- Node 24 全量单测退出码 1：13752 通过、3 失败、16 跳过。失败均为 Turso Node 向量 L2 距离精度断言；浏览器 WASM 对照 54 项通过、1 跳过。Node 26 加禁用实验性 Web Storage 开关后的同一原生测试仍出现完全相同的 3 个失败。详见 `docs/evidence/phase0/`。首次 Node 26 全量运行中的大量 `localStorage` 错误属于不匹配的环境，不能用它替代 Node 24 基线。
-- 进度分支第一轮 Node 24 全量单测为 13754 通过、同样 3 项 Turso 精度失败、16 跳过。新增首次打开边界后，3 组定向测试 86/86 通过，更新后全量单测 13757 通过、仍仅同样 3 项 Turso 原生 L2 精度失败、16 跳过；TypeScript `--noEmit` 与改动文件 Biome 通过。
-- 新 Web 生产构建以与本机自托管测试栈一致的公开构建参数通过，静态页面 56/56；首次默认 Turbopack 因跨工作树依赖软链接失败，webpack 首次默认堆内存不足，增加 `--max-old-space-size=4096` 后通过。修复后的 Web 以合成数据实测两个时间戳方向，截图和数据库证据见 `docs/evidence/phase0/README.md`。
-- Node 24 与 Node 26 下 lint 均退出 0；代表性 PDF/样式测试 77 项通过。
-- Rust `1.99.1`、rustfmt 和 Clippy 已装到工作区。Tauri 静态前端、Rust 调试编译及独立应用标识的未签名 `.app` 均构建通过。Docker daemon 已启动；官方 MinIO/mc 镜像拉取返回 401，固定摘要的替代镜像测试栈已启动并完成跨端文件验证。
-- Node 24 Web 生产构建在沙箱外通过；本机 `start-web` 只绑定 `127.0.0.1`，无头 Chromium 从文件导入并打开仓库测试 PDF，显示第 1/2 页。截图在 `docs/evidence/phase0/`。
-- 独立标识 `com.readest.scholar.phase0` 的 macOS 桌面测试版已从文件导入并打开同一份 PDF，界面显示第 1/2 页正文；随后登录本机测试账户并手动触发文件上传。数据库中合成账户/书籍/文件为 `1/1/2`，书籍 `uploaded_at` 非空；Web 端显示该书、下载后打开第 1/2 页正文。
-- 第二套 `scholar-restore-rehearsal` 使用独立容器、数据库卷、对象副本和回环端口 `3100/8100/9100/9101`，从零启动后恢复、登录及阅读通过。恢复后的库包含 `1/1/2` 个合成账户/书籍/文件，PDF 从对象存储下载后显示第 2/2 页。
-- GitHub 仓库为公开仓库，`main` 已有 Scholar 基础提交；Actions 与主分支保护规则已启用。签名凭据和正式发布环境尚未配置。
+- Phase 0 [验收记录](docs/evidence/phase0/acceptance-2026-10-20.md)结论为**暂不通过**；阅读、基础同步、staging 备份/恢复已有实测，不把准备工作记为 Phase 1 完成。
+- Turso 原生 L2 在本机 2400 组样本的最大相对误差约 0.0651%，8000 次近邻相邻比较未见顺序颠倒；这是实测而非跨平台上界。[PR #9](https://github.com/gkwfhv/readest-scholar/pull/9) 经检查、验证评论后合入受保护 `main`（`0cbe8f8f3`）。合并后源码树与受测分支相同；Node 24 全量 `pnpm test` 为 13760 通过、16 跳过，`pnpm lint` 和 CI 通过。
+- [PR #10](https://github.com/gkwfhv/readest-scholar/pull/10) 修复 `@assistant-ui/react@0.11.58` 初始化方法接收者丢失及空会话不显示输入框。合成 OpenAI 兼容服务的开发 Web 浏览器烟测完成 PDF 索引、问答、来源显示和刷新后的会话恢复；新回归测试先在旧代码失败，再与 AI store/chat 测试一起 33/33 通过。最终提交 `a93e22c67` 的工作流已通过，PR 仍为草稿。生产 Web AI 入口仍被锁定上游隐藏，旧 Web 来源无 CFI 且刷新后不保留来源。
+- [PR #8](https://github.com/gkwfhv/readest-scholar/pull/8) 更新了 Phase 0 验收、资源空闲快照和 [ADR 0002](docs/adr/0002-object-storage-staging-exception.md)。官方 MinIO 镜像拉取返回 401，固定摘要兼容镜像仅用于受限测试；生产对象存储选型未定。
+- Scholar `main` 已受保护并要求 `local-infrastructure`、`source-inventory`。当前工作树的 `origin` 指向官方 Readest；向用户仓库推送时必须显式使用 `git@github.com:gkwfhv/readest-scholar.git`。Linux staging 通过 SSH 隧道可用且端口仅绑回环，无测试域名；不得把个人 SSH 私钥放入 CI。
 
 ## 下一动作
 
-1. 调查 `@tursodatabase/database` macOS arm64 原生 L2 距离实现；Node 24/26 与隔离新版 0.8.3 结果相同，浏览器 WASM 对照通过。保留真实数值，不放宽断言。
-2. 将远端独立恢复覆盖文件和证据通过受保护 CI 合并；比较官方 MinIO 的可用分发或可复现构建，不把替代镜像测试当成原版官方 Compose 通过。真实候选镜像升级和自动部署仍未验收。
-3. 继续真实显式阅读会话、旧客户端混用与离线冲突复验。继续审核剩余子模块与容器许可、AI 基线和 Phase 0 关键路径证据。Phase 0 全项通过前，不开始文献管理或翻译 Worker。
+1. PR #9 已合入；PR #10 的 CI 已通过、仍为草稿。完成项目规则要求的全部 UI 模式检查和评审后再考虑合入，并在主线复验 Web/桌面 AI 关键路径。
+2. 用合成 PDF 完成生产 Web AI 入口、真实可点击 PDF 引用和桌面 Reedy 运行时验证；把检索正确性与固定回答 mock 的传输烟测分开。
+3. 采集同一 staging 栈在打开 PDF 与同步期间的受控资源样本及独立桌面资源；审查对象存储正式候选的许可、SBOM、升级和回滚。
+4. 按 Phase 0 完成判据复核并签收；只有通过后才正式进入 Phase 1。
 
 ## 阻塞
 
-- Node 24 的 3 个 Turso 向量距离断言失败，原因待定位；隔离测试的官方 npm `0.8.3` 原生包返回相同数值，详见 `docs/audit/turso-l2-precision.md`。
-- 桌面与 Web 已完成合成 PDF 的文件、书签及基础高亮/备注同步实测；备份恢复后 Web 阅读器显示“阅读进度已同步”及第 2/2 页。进度双向更新、离线冲突、PDF 几何锚点仍未端到端验收。
-- 修复前阅读位置回退与首次打开均暴露出旧位置覆盖云端位置：旧桌面端拒绝 Web 第 2→1 页回退；第一版新桌面端首次下载书籍又将云端第 2 页改为第 1 页。当前分支补齐两处后，单测、新 Web 及新桌面端受控测试通过；整份配置时间戳仍不能表达显式阅读会话或离线并发冲突，旧客户端混用未验收，见 Phase 0 截图与风险 R19。
-- 官方 MinIO/mc 镜像拉取 401，原版镜像的 Compose 验收仍阻塞。固定摘要替代镜像的本机测试已通过；官方 `compose.yaml` 默认广域发布端口，本工作区覆盖文件限制为回环地址。
-- PR #2/#3/#4/#5 的 Scholar、上游与 CodeQL 检查已通过并合并。`main` 保护规则已建立，SSH 隧道 staging 目标可用；自动部署仍需专用受限部署身份与受保护环境，不能直接把本机个人 SSH 私钥放进 CI。正式发布另需授权。
+- PR #9 已合入；PR #10 与验收文档尚未合入 `main`。PR #10 最终提交的完整 CI 已通过，但产品 AI 关键路径仍未签收。
+- 原版官方 MinIO 镜像不可用；staging 例外不等于生产选型。
+- 生产 Web AI 设置入口隐藏，旧 Web 来源无法点击定位 PDF，桌面 Reedy 和自托管 AI 未完成端到端复验。
+- 活动负载与独立桌面资源数据未采集；离线并发及旧客户端混用仍是后续同步风险。
