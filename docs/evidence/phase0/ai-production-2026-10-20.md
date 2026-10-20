@@ -15,8 +15,14 @@ This check uses repository PDF fixtures and a deterministic local OpenAI-compati
 - A production Next.js desktop build and unsigned macOS Tauri bundle succeeded. The isolated desktop app indexed the two-page synthetic PDF using Reedy and a deterministic local OpenAI-compatible fixture. A new answer displayed a source containing the page-two `PAGE NUMBERING` passage; clicking it while the reader was on page one moved the reader to page two. After leaving the chat tab and reopening the saved conversation, the answer and its source menu were still visible. The fixture checks transport, indexing, and navigation, not model quality.
 - `tsc --noEmit`, Biome check of the changed files, and `git diff --check` passed.
 
+## Production Web interaction after merge
+
+On 2026-10-20, the main-based source was built locally as a production Web app with Node 24 and `NEXT_PUBLIC_APP_PLATFORM=web`. The worktree's cross-checkout `node_modules` symlink is rejected by Turbopack, so this supplemental build used `next build --webpack` with an 8 GiB Node heap; it completed 56/56 static pages. The first Webpack attempt with Node's default 4 GiB heap ran out of memory and is not counted as a pass. The PR's normal Web build also passed in GitHub CI.
+
+The production app ran on `127.0.0.1:3133`; the repository's deterministic OpenAI-compatible fixture ran on `127.0.0.1:3132`. The browser's AI settings showed the production **AI Assistant** entry enabled with the fixture endpoint and chat/embedding models. In the same two-page repository PDF, a new chat produced an answer with a source menu containing the page-two `PAGE NUMBERING` passage. Clicking that Page 2 source moved the reader from page 1/2 to page 2/2. After a browser reload and reopening the saved conversation, the answer and the Page 2 source row remained visible. This exercises the Web legacy IndexedDB retrieval path and PDF navigation in a production build; it does not exercise Reedy in the browser.
+
 ## Remaining limits
 
-- The production Web AI path and a model endpoint running on staging have not had a separate interactive smoke test. CI's Web build is a compile check, not that interaction.
+- A model endpoint running on Linux staging has not had a separate interactive smoke test. The Web test above used a loopback fixture, not a hosted provider.
 - The deterministic fixture cannot establish factual answer quality or a retrieval accuracy bound; those require the later real-paper evaluation.
 - E-ink mode is unavailable on the macOS test app. Device-specific visual checks remain outside this production AI code review.

@@ -1,36 +1,20 @@
 # Phase 0 验收记录（2026-10-20）
 
-**结论：暂不通过。** 本次审查以 Scholar `main` 提交 `0cbe8f8f36f841bd9c687c51337c15fdb75d3532`、上游锁定提交 `2d37bbfc2e94725e1343ab2a825573545aa59f5f` 及《Readest Scholar Agent Engineering Plan》第 9 节为准。完成判据要求 Web、桌面端和自托管后端实际阅读与同步，且所有关键路径有可复现证据；任务还明确要求验证现有 AI、跑上游测试、启动官方 Docker 自托管并生成资源基准。
+**结论：通过，限于计划第 9 节定义的可复现基线。** 审查对象为 Scholar main 提交 642a900af5456f38fdc69be01d8d99b3e7fad328，锁定上游提交 2d37bbfc2e94725e1343ab2a825573545aa59f5f。Web、macOS 桌面客户端与单机自托管后端都已在合成测试环境完成实际 PDF 阅读和同步；关键路径有操作、结果和边界记录。本结论允许开始 Phase 1 工程底座工作，不等于正式版本发布。
 
-| 项目 | 结论 | 证据及界限 |
+| 项目 | 结论 | 证据与范围 |
 | --- | --- | --- |
-| 源码锁定、审计和工程产出 | 通过 | [上游基线](../../audit/upstream-baseline.md)、[差距矩阵](../../audit/feature-gap-matrix.md)、[信任边界](../../audit/data-flow-and-trust-boundaries.md)、[风险登记](../../audit/risk-register.md)、[ADR 0001](../../adr/0001-foundation.md)、CI 基线均已建立。 |
-| Web 与 macOS 桌面构建、阅读 | 通过 | [执行证据](README.md)记录 Node 24 Web 生产构建、Tauri 调试 `.app` 构建，以及两端打开同一合成两页 PDF；不是正式签名安装包。 |
-| 自托管和基础跨端同步 | 有条件通过 | 官方 Compose 叠加回环端口及固定摘要 Pigsty MinIO 兼容镜像后，合成账户完成桌面上传、Web 下载阅读、双向书签、桌面高亮到 Web、Web 备注到桌面；另有[独立栈恢复演练](selfhost-restore-rehearsal.md)。原版 MinIO/mc 镜像拉取返回 401，**原版官方镜像组合未通过**。 |
-| 阅读位置 | 部分通过 | 新 Web 与新 macOS 客户端的首次打开、较新远端回退、较旧远端不覆盖等受控测试及截图见[执行证据](README.md)；旧客户端混用和真实离线并发冲突未验收。 |
-| 现有 AI | 部分通过，Phase 0 未签收 | [PR #10](https://github.com/gkwfhv/readest-scholar/pull/10) 的[开发版合成模型烟测](https://github.com/gkwfhv/readest-scholar/blob/fix/assistant-ui-init/docs/evidence/phase0/ai-web-synthetic-2026-10-20.md)完成 PDF 索引、问答、来源片段显示与刷新后的会话恢复；同时修复了 `@assistant-ui/react` 初始化异常及空会话输入框缺失。锁定上游的生产 Web 设置隐藏 AI，Web 旧后端来源没有 CFI、不能点击定位，刷新后来源列表丢失；桌面 Reedy 与自托管 AI 路径也未端到端复验。此前四个定向 Vitest 文件 **48/48 通过**，本次 AI store/chat 与空会话回归测试 **33/33 通过**，均不能替代剩余运行时验收。 |
-| 上游全量测试 | 通过 | [PR #9](https://github.com/gkwfhv/readest-scholar/pull/9) 已合入 `main`（`0cbe8f8f3`）。合并后的源码树与本机受测修复分支字节相同；Node 24 的 `pnpm test` 为 **13760 通过、16 跳过、0 失败**，`pnpm lint` 通过，PR 的 Scholar、上游检查与 CodeQL 全绿。L2 使用小于 0.1% 的相对误差和近邻顺序契约，见[验证记录](turso-l2-validation.md)；实测不是跨平台误差上界。 |
-| 资源基准 | 部分通过 | [Linux staging 空闲快照](staging-resource-idle-2026-10-20.md)记录六个容器三次 CPU/内存/I/O 读数、机器规格和测试数据卷容量；尚无打开 PDF、上传/下载同步期间的受控采样及独立测试桌面客户端资源。 |
+| 源码、审计与工程产出 | 通过 | [上游基线](../../audit/upstream-baseline.md)、[差距矩阵](../../audit/feature-gap-matrix.md)、[信任边界](../../audit/data-flow-and-trust-boundaries.md)、[风险登记](../../audit/risk-register.md)、ADR、环境脚本与 CI 基线已建立。 |
+| Web 与 macOS 构建、阅读 | 通过 | [执行证据](README.md)记录 Node 24 Web 生产构建、隔离标识的未签名 Tauri 包及两端打开同一仓库合成 PDF；[AI 生产烟测](ai-production-2026-10-20.md)另记录合并后 Web 构建 56/56 静态页及交互。正式签名和移动端不在本阶段。 |
+| 自托管与跨端同步 | 通过（Scholar 单机默认路径） | [ADR 0003](../../adr/0003-silo-object-storage.md)将无法拉取的上游 MinIO 镜像替换为固定摘要的 Silo。[隔离迁移和新栈验收](silo-object-2026-10-20.md)记录空栈、旧快照副本迁移、冷恢复、对象 SHA256、合成账户及 staging 运行；桌面上传、Web 下载阅读与 Web→桌面阅读位置再次通过。[既有跨端证据](README.md)还覆盖双向书签、桌面高亮→Web 与 Web 备注→桌面。上游原版 MinIO 镜像组合仍无法拉取，不能称其通过。 |
+| 阅读位置 | 通过（受控在线场景） | [执行证据](README.md)记录 Web 与新 macOS 客户端首次打开、较新远端回退及较旧远端不覆盖；Silo staging 再验 Web→桌面位置。旧客户端混用、断网并发和冲突恢复归入 Phase 3。 |
+| 现有 AI 基线 | 通过（确定性合成模型） | [PR #10](https://github.com/gkwfhv/readest-scholar/pull/10)修复聊天初始化与空对话输入框；[PR #13](https://github.com/gkwfhv/readest-scholar/pull/13)开放生产 AI 设置、修复 PDF 页码定位、来源按消息保存、Reedy 首次索引及页界限。独立 macOS 生产包与生产 Web 均在合成 PDF 上完成问答、点击第 2 页来源及重开后来源恢复，详见[烟测记录](ai-production-2026-10-20.md)。固定回答只验证传输、检索调用和界面，不证明真实论文的回答质量；Linux staging 模型端点尚未单独交互烟测。 |
+| 上游全量测试与 Turso | 通过 | [PR #9](https://github.com/gkwfhv/readest-scholar/pull/9)的 Node 24 全量单测为 **13,760 通过、16 跳过、0 失败**；本验收分支从最新 main 再跑为 **13,768 通过、16 跳过、0 失败**（1166 文件通过、4 跳过），格式、TypeScript 与 Biome 也通过。L2 改用小于 0.1% 的相对误差与近邻顺序契约，见[验证记录](turso-l2-validation.md)；这不是跨平台误差上界。后续 AI、Silo 和 UI PR 的 Scholar、上游 PR 检查与 CodeQL 在各自最终提交上通过。 |
+| 资源基准 | 通过（观测基线） | [空闲](staging-resource-idle-2026-10-20.md)与[活跃采样](staging-resource-active-2026-10-20.md)记录六容器读写、合成 PDF 打开翻页及桌面文件下载期间主进程 200 次 CPU/RSS 样点。服务端和桌面窗口未同步采样，桌面 WebKit 子进程未计入；不能外推并发容量或整机上限。Phase 0 没有预设性能阈值。 |
+| 聊天图标与侧栏布局 | 通过（已测 macOS 尺寸与主题） | [PR #14](https://github.com/gkwfhv/readest-scholar/pull/14)将四个底部入口固定为同一行，并以大脑图标统一侧栏、笔记本、设置和命令入口。[完整窗口截图与测量](ai-sidebar-layout-2026-10-20.md)显示最窄侧栏中选中背景位于边界以内；深色主题也已目视复验。移动端安全区与 e-ink 实机仍需后续平台阶段验证。 |
 
-本次定向复验从 `apps/readest-app` 执行，直接使用工作区已安装的 Node 24 与 Vitest，以免重新安装依赖：
+## 验收边界与后续阶段
 
-```sh
-/Users/admin/personal/redest/.tools/node_modules/.bin/node node_modules/vitest/vitest.mjs run \
-  src/__tests__/ai/ai-store.test.ts \
-  src/__tests__/ai/chunker.test.ts \
-  src/__tests__/store/ai-chat-store.test.ts \
-  src/__tests__/app/api/ai-gateway-routes.test.ts
+这份签收针对 Scholar 单机自托管和合成 PDF 基线。2026-10-20 的额外书签复验开始时，Web 测试页菜单显示“登录”，该新书签只保存在未登录浏览器本地；已清理临时书签，不能把这次观察算作跨端同步结果或故障。跨端书签、高亮和备注的通过依据是此前两端已登录时的服务端记录与截图。断网恢复、并发冲突、旧客户端兼容、PDF 旋转/缩放锚点、真实论文 AI 质量、移动端布局和正式发布签名分别由后续阶段验证。
 
-/Users/admin/personal/redest/.tools/node_modules/.bin/node node_modules/vitest/vitest.mjs run \
-  src/__tests__/database/turso-node.test.ts
-```
-
-## 签收前需要闭环
-
-Turso 基线已闭环：[PR #9](https://github.com/gkwfhv/readest-scholar/pull/9) 经评审、验证记录与必需检查后按校验的 head 合入。剩余动作：
-
-1. 让官方 Docker 镜像组合从空环境启动并完成同步复验；若仍无法获得，按 [ADR 0002](../../adr/0002-object-storage-staging-exception.md) 的 staging 例外继续测试，但须在生产选型 ADR 中完成固定镜像、许可、安全、备份恢复和跨端同步审查。兼容镜像的既有成功记录不能自动等同于官方镜像通过。
-2. [PR #10](https://github.com/gkwfhv/readest-scholar/pull/10) 的最终提交 CI 已通过，但仍为草稿。它提供开发 Web 的合成 PDF/模型问答和来源显示证据；生产 Web AI 设置入口、旧后端缺失 PDF 定位锚点和刷新后来源丢失仍待解决。再做来源点击到页码、桌面 Reedy、自托管运行时验证。固定回答的测试服务只验证 UI 与传输，不能证明检索质量。
-3. 已采集同一 staging 栈的空闲资源快照；继续在打开合成 PDF、执行同步时采样各容器 CPU/内存/存储及独立测试桌面客户端资源，记录操作与时间窗口。Phase 0 只建立可重现基准，不预设未经测量的性能阈值。
-
-离线并发、旧客户端混用和 PDF 缩放/旋转锚点仍有风险；深入的冲突语义与几何修复分别属于 Phase 3、Phase 4。在签收 Phase 0 前，至少应决定这些现有功能的最小烟测范围并在验收清单中写明，避免把“尚未验证”记成通过。Phase 1 已做的 staging 与恢复演练不改变本次 Phase 0 结论。
+Phase 1 可以继续：让 Scholar 自有镜像在 staging 按提交和摘要部署，完成升级/回滚、秘密与构建产物管理及自动更新分发测试。正式品牌、包名和 Bundle ID 依计划仍需单独明确授权；现有测试包标识不是发布身份。
