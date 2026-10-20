@@ -2,6 +2,17 @@ name: Publish Docker image
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/docker-image.yml
+      - Dockerfile
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - patches/**
+      - packages/**
+      - apps/readest-app/**
 
 concurrency:
   group: publish-docker-image-${{ github.event.release.tag_name || github.ref }}
@@ -73,6 +84,25 @@ jobs:
           digest="${{ steps.build.outputs.digest }}"
           touch "/tmp/digests/${digest#sha256:}"
 
+      - name: Install pinned Syft
+        id: syft
+        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0
+
+      - name: Generate image CycloneDX SBOM
+        env:
+          SYFT: ${{ steps.syft.outputs.cmd }}
+        run: |
+          "$SYFT" scan "ghcr.io/${{ github.repository_owner }}/readest@${{ steps.build.outputs.digest }}" \
+            -o cyclonedx-json="scholar-image-${{ env.PLATFORM_PAIR }}.cdx.json"
+
+      - name: Upload image SBOM
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: scholar-image-sbom-${{ env.PLATFORM_PAIR }}
+          path: scholar-image-${{ env.PLATFORM_PAIR }}.cdx.json
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Upload digest
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -107,6 +137,7 @@ jobs:
 
       - name: Detect Docker Hub credentials
         id: dockerhub
+        if: github.event_name == 'workflow_dispatch'
         run: |
           if [ -n "${{ secrets.DOCKERHUB_USERNAME }}" ] && [ -n "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
@@ -129,8 +160,6 @@ jobs:
           images: ghcr.io/${{ github.repository_owner }}/readest
           tags: |
             type=raw,value=main,enable={{is_default_branch}}
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value=latest,enable=${{ github.event_name == 'release' }}
             type=semver,pattern={{version}},enable=${{ github.event_name == 'release' }}
             type=semver,pattern={{major}}.{{minor}},enable=${{ github.event_name == 'release' }}
             type=sha,prefix=sha-
@@ -145,8 +174,6 @@ jobs:
             docker.io/${{ secrets.DOCKERHUB_USERNAME }}/readest
           tags: |
             type=raw,value=main,enable={{is_default_branch}}
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value=latest,enable=${{ github.event_name == 'release' }}
             type=semver,pattern={{version}},enable=${{ github.event_name == 'release' }}
             type=semver,pattern={{major}}.{{minor}},enable=${{ github.event_name == 'release' }}
             type=sha,prefix=sha-
