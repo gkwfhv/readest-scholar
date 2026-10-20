@@ -1,0 +1,33 @@
+# Isolated, SSH-tunnel-only Linux staging overlay for the upstream Compose file.
+# Load this after docker/compose.yaml. Never combine it with the local arm64
+# diagnostic or restore-rehearsal overlays.
+name: scholar-staging
+
+services:
+  db:
+    container_name: scholar-staging-db
+  kong:
+    container_name: scholar-staging-kong
+    ports: !override
+      - "127.0.0.1:${SCHOLAR_API_PORT:?Generate the staging env}:8000"
+  auth:
+    container_name: scholar-staging-auth
+  rest:
+    container_name: scholar-staging-rest
+  minio:
+    container_name: scholar-staging-minio
+    image: docker.io/pgsty/minio:RELEASE.2026-08-04T00-00-00Z-amd64@sha256:8c84c46d2f11f3c5916c628c1dff70d50ba96447533e3342ccaa4eb0e5413d9a
+    ports: !override
+      - "127.0.0.1:${SCHOLAR_S3_PORT:?Generate the staging env}:9000"
+      - "127.0.0.1:${SCHOLAR_S3_CONSOLE_PORT:?Generate the staging env}:9001"
+  minio-setup:
+    image: docker.io/pgsty/mc:RELEASE.2026-10-18T00-00-00Z-amd64@sha256:6d814157d1d20a5c32dd972ba6862b6af731d7f0dd7ffa1cfbfdfbd97956862b
+  client:
+    container_name: scholar-staging-client
+    image: ${READEST_IMAGE:?Set a pinned image digest in the staging env}
+    ports: !override
+      - "127.0.0.1:${SCHOLAR_WEB_PORT:?Generate the staging env}:3000"
+    environment:
+      SUPABASE_PUBLIC_URL: http://127.0.0.1:${SCHOLAR_API_PORT}
+      S3_PUBLIC_ENDPOINT: http://127.0.0.1:${SCHOLAR_S3_PORT}
+      API_BASE_URL: http://127.0.0.1:${SCHOLAR_WEB_PORT}

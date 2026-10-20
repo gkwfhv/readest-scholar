@@ -29,6 +29,8 @@ jobs:
           node --check infra/compose/build-local-tauri.mjs
           node --check infra/compose/assert-loopback-ports.mjs
           node --check infra/compose/check-readiness.mjs
+          node --check infra/staging/check-config.mjs
+          python3 -c 'import ast,pathlib; [ast.parse(pathlib.Path(p).read_text()) for p in ("infra/staging/prepare-env.py", "infra/staging/check-readiness.py")]
       - name: Exercise backup failure and success paths
         run: bash infra/backup/test-backup-compose.sh
       - name: Validate local Compose configuration and port bindings
@@ -39,6 +41,13 @@ jobs:
             -f infra/compose/localhost.yaml \
             -f infra/compose/silo-local-test.yaml \
             config --format json | node infra/compose/assert-loopback-ports.mjs
+      - name: Validate isolated Linux staging configuration
+        run: |
+          SCHOLAR_STAGING_ENV_FILE="$RUNNER_TEMP/scholar-staging.env" python3 infra/staging/prepare-env.py
+          test "$(stat -c %a "$RUNNER_TEMP/scholar-staging.env")" = 600
+          docker compose --env-file "$RUNNER_TEMP/scholar-staging.env" \
+            -f docker/compose.yaml -f infra/staging/compose.yaml \
+            config --format json | node infra/staging/check-config.mjs
 
   source-inventory:
     runs-on: ubuntu-latest
