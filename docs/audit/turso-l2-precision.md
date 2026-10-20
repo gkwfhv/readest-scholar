@@ -12,4 +12,20 @@ Node 24 全量运行与 Node 26 定向运行均重复这 3 项失败，其余 `t
 
 隔离升级对照：从 npm 官方 registry 安装 `@tursodatabase/database@0.8.3` 及对应 `@tursodatabase/database-darwin-arm64@0.8.3` 到 `/private/tmp/scholar-turso-probe`，不改工程依赖或锁文件。在同一 macOS arm64 和 Node `24.11.1` 上直接调用原生 `connect(':memory:')`，上述三个 SQL 样例仍依次返回 `4.99704122543335`、`1.414939284324646`、`4.99704122543335`。所以仅把锁定的 `0.6.0-pre.28` 升到 `0.8.3` 不能消除本机的精度失败；这不等于测试了 0.8.3 的全部 Readest 兼容性。命令、版本与 npm 包完整性摘要见 [隔离对照证据](../evidence/phase0/turso-native-0.8.3.txt)。
 
-[Turso 官方讨论](https://github.com/tursodatabase/turso/issues/7660) 已记录 `simsimd` 在 Rust 核心的依赖与功能开关变动；这仍不证明当前两个 npm 预编译原生包实际选择的计算内核。下一步需在与锁定 npm 原生包对应的 Turso 源码或调试符号中核实实现，并在 macOS arm64 上复现底层 SIMD 调用。修复应来自正确的原生距离实现或经实测有效的上游版本，而非直接扩大断言容差。完成前不能把全量单测记为通过，也不能用 L2 绝对值作为 Scholar 的严格阈值。
+[Turso 官方讨论](https://github.com/tursodatabase/turso/issues/7660) 已记录 `simsimd` 在 Rust 核心的依赖与功能开关变动。此前仅凭较新 Rust 源码不能断定锁定的 npm 原生包走哪条路径；下面是对**实际安装的二进制**的补证。
+
+## 2026-10-20：锁定原生包的实现与误差测量
+
+本机 `@tursodatabase/database-darwin-arm64@0.6.0-pre.28` 的 `turso.darwin-arm64.node` SHA-256 为 `76ff46f11bbb728eb115cc9c279d2675c4f5cba058f56ef5012436c458bb3b96`。`nm -a` 显示 `turso_core::vector::operations::distance_l2::vector_distance_l2`、`simsimd::SpatialSimilarity` 的 f32/f64 L2 包装和 `simsimd_l2_f32` 等符号。对同一文件用 `xcrun llvm-objdump -d --symbolize-operands` 检查调用点，f32 稠密向量分支直接调用 `simsimd::SpatialSimilarity::l2`，后者调用 `simsimd_l2_f32`。二进制还包含以位级初值和乘加计算平方根近似的 SimSIMD serial 路径。调用链已由锁定包本体确认；仅凭静态反汇编不能证明每次运行实际选中的 CPU 分支，实测值与该近似路径一致。
+
+可复现实测脚本：[turso-l2-probe.mjs](../evidence/phase0/turso-l2-probe.mjs)。从 `apps/readest-app` 使用 Node `24.11.1` 执行：
+
+```sh
+node ../../docs/evidence/phase0/turso-l2-probe.mjs > ../../docs/evidence/phase0/turso-l2-probe-macos-arm64.json
+```
+
+[原始 JSON](../evidence/phase0/turso-l2-probe-macos-arm64.json)含固定种子、`vector32`/`vector64` 各 1200 组随机非零距离样本，维度 2/8/128/768、数值尺度 0.01/1/1000。与按输入精度量化后再用平方和开方计算的参考值相比，最大相对偏差分别为 **0.0650109%** 和 **0.0650013%**；2400 组中没有超过 **0.1%**。另对 0.1、1、5、100 附近各 1001 个逐步增大的距离做两种向量精度类型扫描，共 8008 个样本、8000 次相邻比较，未见倒序。这是本机这些输入的经验范围，**不是**所有平台、维度和数值的数学误差上界。零距离的两个示例都返回零。
+
+应用层的 Reedy 混合检索使用 `vector_distance_cos` 加全文检索排序；旧 AI 路径在 JavaScript 中计算余弦相似度。当前 `apps/readest-app/src` 生产代码没有调用 `vector_distance_l2`。因此本次 L2 偏差首先影响全量测试基线，不能据此宣称已有 PDF 阅读、同步或 AI 引用结果出错；如果将来以 L2 距离做排名或阈值，应重新测量近邻边界与目标平台。
+
+**处理决定**：共享测试保留 L2 数值检查，改用小于 0.1% 的相对误差判据，同时检查返回值有限，并在近邻查询中显式核对 `[1,3,2]` 的行顺序；零距离仍按原高精度断言。这个判据比本机实测最大偏差留有余量，也比只把小数位数调低更能适用于不同距离尺度。它是对所测原生后端数值契约的验收，不是修复 Turso 底层算法；没有修改生产检索实现、依赖版本或任意其他测试。浏览器 WASM 与 Node 原生的同一共享套件都需要通过，完整全量测试仍须单独运行后才能记为通过。
