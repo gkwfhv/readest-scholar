@@ -21,7 +21,7 @@ This is a **development-build transport and UI smoke test**, not a model-quality
 ## CI follow-up
 
 - The first PR run rejected an incomplete patch hunk during `pnpm install --frozen-lockfile`. Commit `81885b74b` reduced the patch to the runtime file and updated the lock hash; the next run passed dependency installation, Web build, and Scholar `source-inventory`.
-- That run's Web browser shard failed an unrelated existing notebook mutation performance assertion: 256 KiB p95 was **62.46 ms** against the approved **50 ms** limit on the shared GitHub runner. The same browser test passed locally, **2/2**, when run alone. This is an unresolved CI result, not an AI feature pass or an accepted relaxation of the limit.
+- That run's Web browser shard failed an unrelated existing notebook mutation performance assertion: 256 KiB p95 was **62.46 ms** against the approved **50 ms** limit on the shared GitHub runner. The same browser test passed locally, **2/2**, when run alone. An unchanged rerun at commit `dffea0cdd` ([Actions run](https://github.com/gkwfhv/readest-scholar/actions/runs/39384281125)) passed both Web test shards, the Web and Tauri builds, Scholar baseline, Nix hash check, and CodeQL. The 50 ms threshold was not changed. The earlier result remains evidence of runner variance, not an AI feature failure or a reason to relax the limit.
 
 ## Limits and remaining gaps
 
