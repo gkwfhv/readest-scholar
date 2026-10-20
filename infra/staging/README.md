@@ -8,7 +8,14 @@
 
 仓库的 `Publish Docker image` 工作流在 `main` 的应用、依赖或 Dockerfile 变化后自动构建 Linux amd64/arm64 镜像，也可手动触发。自动路径只使用 GitHub 自带令牌写入本仓库所有者的 GHCR 包；手动触发才保留现有的可选 Docker Hub 发布入口。它发布 `main` 与 `sha-<提交前缀>` 标签，并为两个平台分别保存 CycloneDX 镜像 SBOM 工件；不生成可误认为稳定版本的 `latest` 标签。工作流不连接 staging 主机，也不读取主机私有 `docker/.env`。
 
-部署时从本次工作流记录取完整提交和镜像摘要，以 `ghcr.io/<仓库所有者>/readest@sha256:<摘要>` 设置私有环境文件中的 `READEST_IMAGE`。先按下文备份并验证测试数据，再仅重建 `client`、运行四路就绪检查和合成 PDF 阅读/同步烟测。若 GHCR 从主机不可达，使用下文的固定摘要导出与校验传输，不改用浮动标签。镜像生成和测试栈切换是两次独立动作；自动构建成功本身不代表 staging 已升级。
+部署时从本次工作流记录取完整提交和镜像摘要，在测试主机的已审核 checkout 中运行：
+
+```bash
+SCHOLAR_STAGING_DEPLOY_CONFIRM=yes bash infra/staging/deploy-web.sh \
+  'ghcr.io/<仓库所有者>/readest@sha256:<完整摘要>'
+```
+
+脚本只接受固定摘要，先检查项目名、回环端口、当前镜像与四路健康，备份数据库和对象数据，拉取候选镜像后仅重建 `client`。候选未就绪时恢复上一镜像并重试健康检查；不会把数据库迁移当作 Web 回滚。成功后仍需通过 SSH 隧道做合成 PDF 阅读与跨端同步烟测，并在另一套空栈验证新快照恢复。若 GHCR 从主机不可达，使用下文的固定摘要导出与校验传输，不改用浮动标签。镜像生成和测试栈切换是两次独立动作；自动构建成功本身不代表 staging 已升级。
 
 ## 首次启动
 
