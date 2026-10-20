@@ -9,8 +9,8 @@ if [[ "${SCHOLAR_STAGING_DEPLOY_CONFIRM:-}" != yes ]]; then
 fi
 
 candidate="${1:-}"
-if [[ ! "$candidate" =~ ^ghcr\.io/[a-z0-9_-]+/readest@sha256:[0-9a-f]{64}$ ]]; then
-  echo "Pass a full ghcr.io/<owner>/readest@sha256:<64 hex> image reference." >&2
+if [[ ! "$candidate" =~ ^ghcr\.io/gkwfhv/readest@sha256:[0-9a-f]{64}$ ]]; then
+  echo "Pass a full ghcr.io/gkwfhv/readest@sha256:<64 hex> image reference." >&2
   exit 2
 fi
 

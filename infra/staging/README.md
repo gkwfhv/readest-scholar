@@ -12,7 +12,7 @@
 
 ```bash
 SCHOLAR_STAGING_DEPLOY_CONFIRM=yes bash infra/staging/deploy-web.sh \
-  'ghcr.io/<仓库所有者>/readest@sha256:<完整摘要>'
+  'ghcr.io/gkwfhv/readest@sha256:<完整摘要>'
 ```
 
 脚本只接受固定摘要，先检查项目名、回环端口、当前镜像与四路健康，备份数据库和对象数据，拉取候选镜像后仅重建 `client`。候选未就绪时恢复上一镜像并重试健康检查；不会把数据库迁移当作 Web 回滚。成功后仍需通过 SSH 隧道做合成 PDF 阅读与跨端同步烟测，并在另一套空栈验证新快照恢复。若 GHCR 从主机不可达，使用下文的固定摘要导出与校验传输，不改用浮动标签。镜像生成和测试栈切换是两次独立动作；自动构建成功本身不代表 staging 已升级。
