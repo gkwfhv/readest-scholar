@@ -5,12 +5,15 @@ import hashlib
 import http.client
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[2]
-ENV_FILE = ROOT / "docker/.env.restore"
+ROOT = Path(os.environ["SCHOLAR_ROOT"]) if "SCHOLAR_ROOT" in os.environ else Path(__file__).resolve().parents[2]
+ENV_FILE = Path(os.environ.get("SCHOLAR_ENV_FILE", ROOT / "docker/.env.restore"))
+PROJECT = os.environ.get("SCHOLAR_RESTORE_PROJECT", "scholar-restore-rehearsal")
+MINIO_HOST = os.environ.get("SCHOLAR_RESTORE_MINIO_HOST", "scholar-restore-minio")
 PROBE_FILE = Path(
     os.environ.get(
         "SCHOLAR_RESTORE_PROBE_FILE",
@@ -25,6 +28,8 @@ MC_IMAGE = (
 
 
 def main() -> None:
+    if not re.fullmatch(r"[a-z0-9-]+", PROJECT) or not re.fullmatch(r"[a-z0-9-]+", MINIO_HOST):
+        raise RuntimeError("Invalid isolated restore project or object host")
     values = dict(
         line.split("=", 1)
         for line in ENV_FILE.read_text().splitlines()
@@ -55,11 +60,12 @@ def main() -> None:
 
     command = [
         "docker", "run", "--rm",
-        "--network", "scholar-restore-rehearsal_default",
+        "--network", f"{PROJECT}_default",
         "--env-file", str(ENV_FILE),
+        "-e", f"SCHOLAR_RESTORE_MINIO_HOST={MINIO_HOST}",
         "--entrypoint", "/bin/sh", MC_IMAGE,
         "-ec",
-        'mc alias set restore http://scholar-restore-minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null; '
+        'mc alias set restore "http://$SCHOLAR_RESTORE_MINIO_HOST:9000" "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null; '
         'mc cat restore/"$S3_BUCKET_NAME"/scholar-restore-probe/sample-paper.pdf',
     ]
     object_result = subprocess.run(command, capture_output=True, check=False)

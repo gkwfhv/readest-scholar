@@ -1,11 +1,11 @@
 # Readest Scholar 路线图
 
-状态日期：2026-10-20。**Phase 0 暂不签收。** Web、macOS 桌面与自托管测试栈的 PDF 阅读、文件/书签/基础批注同步已有实测；Turso L2 误差已量化，[PR #9](https://github.com/gkwfhv/readest-scholar/pull/9) 已合入受保护主线，Node 24 全量测试 13760 通过、16 跳过，lint 与 CI 通过。开发 Web 的合成模型索引、问答、来源显示与会话恢复在 [PR #10](https://github.com/gkwfhv/readest-scholar/pull/10) 修复后通过，其最新提交 CI 已通过、仍为草稿；生产 Web AI 入口、可点击 PDF 引用和桌面 Reedy 仍待验证。官方 MinIO 镜像返回 401，[ADR 0002](docs/adr/0002-object-storage-staging-exception.md) 仅允许固定摘要兼容镜像用于受限 staging。Linux staging 的健康、备份和独立恢复演练已通过；活动负载资源基准尚缺。Phase 1 的这些准备项不构成正式阶段验收，后续产品模块暂不开始。
+状态日期：2026-10-20。**Phase 0 已按单机合成基线验收；Phase 1 进行中。** [验收记录](docs/evidence/phase0/acceptance-2026-10-20.md)覆盖 Web、独立 macOS 客户端、自托管对象存储与同步、生产构建 AI 来源、Turso 数值契约、资源采样及 Node 24 全量测试（13,768 通过、16 跳过）。[PR #17](https://github.com/gkwfhv/readest-scholar/pull/17)发布双架构 GHCR 固定提交镜像和 CycloneDX SBOM，[PR #18](https://github.com/gkwfhv/readest-scholar/pull/18)加入摘要固定的 staging Web 升级与回退。Linux 测试主机已完成 Scholar 镜像升级、健康检查、故障回退及第二套空项目的备份冷恢复；见 [执行证据](docs/evidence/phase1/staging-web-rollout-2026-10-20.md)。尚需验收秘密管理、桌面自动更新分发、升级后的新跨端同步及 staging AI 交互；本状态不代表正式发布。
 
 | 阶段 | 状态 | 依赖 | 完成判据 |
 |---|---|---|---|
-| 0 审计与可复现基线 | 进行中，暂不通过 | [验收记录](docs/evidence/phase0/acceptance-2026-10-20.md) | 主线 Turso 测试基线已闭环；生产 AI、原版对象存储及活动负载资源证据尚未闭环 |
-| 1 工程底座 | 准备项已做，正式阶段未启动 | Phase 0 签收 | 本机与 Linux staging 的备份、恢复、就绪及 Web 故障回滚已演练；真实候选镜像升级、SBOM 发布包、受保护自动部署未验收 |
+| 0 审计与可复现基线 | 已通过限定范围验收 | [验收记录](docs/evidence/phase0/acceptance-2026-10-20.md) | 单机合成数据、Web/独立 macOS/Silo 阅读同步及生产 AI 来源验证通过；跨平台、真实模型质量不在此结论内 |
+| 1 工程底座 | 进行中 | Phase 0 签收 | 镜像/SBOM 发布、staging 摘要升级、健康、备份、冷恢复和回退已实测；秘密管理、桌面更新分发和升级后跨端复测待完成 |
 | 2 文献管理 | 未开始 | ADR 0001，bookshelves 源码核对 | 集合、标签、DOI 跨端同步且账户隔离 |
 | 3 同步与离线 | 未开始 | 不新做第二套协议 | 断网、重复提交、冲突都不丢数据 |
 | 4 PDF 笔记 | 未开始 | 客户端坐标结构核对 | 缩放/旋转样本不漂移 |
