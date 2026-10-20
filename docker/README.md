@@ -9,8 +9,8 @@
 | **kong**        | `kong:2.8.1`                | api gateway routing requests to supabase services |
 | **auth**        | `supabase/gotrue:v2.185.0`  | auth service (email, JWT)                         |
 | **rest**        | `postgrest/postgrest:v14.3` | psql rest api                                     |
-| **minio**       | `quay.io/minio/minio`       | s3 storage                                        |
-| **minio-setup** | `quay.io/minio/mc`          | helper container to create s3 buckets             |
+| **minio**       | `pgsty/silo` (pinned)       | S3-compatible storage                             |
+| **minio-setup** | `pgsty/mc` (pinned)         | helper container to create S3 buckets             |
 
 ### Exposed ports
 
@@ -39,6 +39,12 @@ update `docker/.env`:
   - `ANON_KEY` payload: `{"role": "anon"}`
   - `SERVICE_ROLE_KEY` payload: `{"role": "service_role"}`
 - set `MINIO_ROOT_PASSWORD` to a strong password
+
+Scholar selects the maintained [Silo](https://github.com/pgsty/silo) release because
+the previous `quay.io/minio/*` community images no longer pull. The Silo and
+client images are pinned to multiarchitecture manifest digests in `compose.yaml`.
+Silo is AGPL-3.0; read its [compliance notes](https://github.com/pgsty/silo/blob/main/COMPLIANCE.md)
+before redistributing an image or offering a modified server over a network.
 
 ### 2. Start the Stack (pull prebuilt client image)
 
@@ -95,14 +101,26 @@ docker compose -f compose.yaml -f compose.build.yaml up --build -d
 
 ### Upgrading an existing deployment
 
+**Object storage migration:** An existing MinIO or earlier `pgsty/minio` volume
+must be backed up and restored into an isolated stack with the new image before
+changing the running service. Verify account login, object hashes, book download,
+and rollback from the untouched snapshot. Silo's current release does not
+support a rolling downgrade of a shared IAM backend; `docker compose pull &&
+up -d` is not a safe migration procedure for an existing data volume. The
+[Scholar decision record](../docs/adr/0003-silo-object-storage.md) describes
+the tested boundary and rollback procedure.
+
+For a deployment already using this pinned Silo release, client-only upgrades
+follow the steps below.
+
 pulling a newer client image does not touch the database volume, and the first-boot
 hook only runs when that volume is empty. so after an upgrade, apply any new
 migrations yourself:
 
 ```bash
 cd docker
-docker compose pull
-docker compose up -d
+docker compose pull client
+docker compose up -d --no-deps client
 docker compose exec db /docker-entrypoint-initdb.d/zz-readest-migrations.sh
 ```
 

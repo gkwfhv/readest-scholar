@@ -1,9 +1,9 @@
-# Empty-data Phase 0 diagnostic only. This substitutes Pigsty's open-source
-# MinIO-compatible fork because the official community images return 401.
+# Phase 0 arm64 diagnostic. The default Scholar Compose already selects Silo;
+# this overlay pins its arm64 manifest for local image export verification.
 # Always load localhost.yaml before this file to keep ports on loopback.
 # These are arm64 manifests; use matching verified digests on other hosts.
 services:
   minio:
-    image: docker.io/pgsty/minio:RELEASE.2026-08-04T00-00-00Z-arm64@sha256:1026039cd0771ff3bece8559c0f880a38a2ba4f4e7f8d1d506187a1daf809f17
+    image: docker.io/pgsty/silo:RELEASE.2026-10-18T00-00-00Z-arm64@sha256:76bcc42aaf02b1ca949622e0fb68b22fa1630fb49a7c62704092da5c076ac6d2
   minio-setup:
     image: docker.io/pgsty/mc:RELEASE.2026-10-18T00-00-00Z-arm64@sha256:78cb16edaaed03a2a33a7daecf9d1a9a20214ea6813c47cfea4f5b986c293e9c

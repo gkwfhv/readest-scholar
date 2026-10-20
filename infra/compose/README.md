@@ -1,6 +1,6 @@
 # 本机 Phase 0 自托管验证
 
-这里是官方 `docker/compose.yaml` 的测试覆盖文件，不改变上游 Compose。四个宿主机端口都只绑定 `127.0.0.1`；数据库、认证和对象存储仍使用官方服务定义。不要将此配置直接当作公网部署配置。
+这里是 Scholar `docker/compose.yaml` 的测试覆盖文件。四个宿主机端口都只绑定 `127.0.0.1`；数据库、认证和对象存储仍使用该 Compose 的服务定义。不要将此配置直接当作公网部署配置。
 
 首次运行前，在工作区根目录执行：
 
@@ -18,11 +18,11 @@ docker compose --env-file docker/.env \
 
 ## 当前验证结果
 
-2026-10-19：`docker compose config --format json` 确认只有 `127.0.0.1:3000`、`:8000`、`:9000`、`:9001` 映射。官方 `quay.io/minio/mc:latest` 和固定版本 `quay.io/minio/minio:RELEASE.2025-09-06T17-38-46Z` 拉取均返回 registry `401 UNAUTHORIZED`；Docker Hub 的 `minio/minio:RELEASE.2025-04-22T22-12-26Z` 返回 `pull access denied`。[MinIO 官方仓库](https://github.com/minio/minio) 也已归档。原版对象存储镜像的 Compose 尚未启动成功。
+2026-10-19 的上游基线：`docker compose config --format json` 确认只有 `127.0.0.1:3000`、`:8000`、`:9000`、`:9001` 映射。原上游 `quay.io/minio/mc:latest` 和固定版本 `quay.io/minio/minio:RELEASE.2025-09-06T17-38-46Z` 拉取均返回 registry `401 UNAUTHORIZED`；Docker Hub 的 `minio/minio:RELEASE.2025-04-22T22-12-26Z` 返回 `pull access denied`。[MinIO 官方仓库](https://github.com/minio/minio) 已改为源码分发。历史原版镜像组合无法启动。
 
 ## 空数据替代镜像诊断
 
-[MinIO 官方说明](https://github.com/minio/minio/blob/master/README.md) 称社区版已经改为源码分发。为了仅在本机继续验证 Readest 的登录、文件和同步流程，`silo-local-test.yaml` 用 [Pigsty 维护的公开源码分支](https://github.com/pgsty/silo) 提供的 MinIO 兼容服务及 mc，保留官方 Compose 其余服务。两个 arm64 镜像均固定到实测的镜像摘要，端口仍由 `localhost.yaml` 限制在回环地址。替代镜像的测试结果必须单独标注，不能当作原样官方 MinIO 镜像通过。
+本地 `silo-local-test.yaml` 将 Scholar 默认 [Silo 发行版](https://github.com/pgsty/silo) 固定到已核对的 arm64 平台摘要；其余服务和 `localhost.yaml` 的回环绑定保持一致。历史使用旧 `pgsty/minio` 的测试记录在 ADR 0002 中保留，不能混称为当前 Silo 已验证结果。新的升级和恢复证据见 [ADR 0003](../../docs/adr/0003-silo-object-storage.md)。
 
 ```bash
 docker compose --env-file docker/.env \
@@ -35,7 +35,7 @@ docker compose --env-file docker/.env \
   -f infra/compose/silo-local-test.yaml up -d
 ```
 
-以上覆盖文件只固定了当前 macOS arm64 的测试镜像摘要。其他架构应核验对应摘要后再使用。生产部署需要独立评估替代发行版的安全维护、升级兼容性和许可。
+以上覆盖文件只固定了当前 macOS arm64 的测试镜像摘要。其他架构使用默认多平台摘要，或核验对应平台摘要后再覆盖。
 
 这套覆盖文件已在合成账户上完成桌面 PDF 上传、Web 端下载及打开阅读；六个持续服务处于运行状态，数据库、Kong 和 MinIO 健康。此结论只适用于替代镜像。Web UI 的自动化文件选择器无法设置动态创建的 `<input type=file>`；已用独立桌面客户端完成上传与跨端验证，不把该自动化限制记为 Web 上传通过。
 

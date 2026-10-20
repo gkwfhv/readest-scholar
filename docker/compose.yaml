@@ -95,7 +95,7 @@ services:
 
   minio:
     container_name: readest-minio
-    image: quay.io/minio/minio
+    image: docker.io/pgsty/silo:RELEASE.2026-10-18T00-00-00Z@sha256:2636fc4155d9a7e41ff58cdb65ddd13ba9304e67184e13c25bc5cb34016269d7
     restart: unless-stopped
     ports:
       - "9000:9000"
@@ -107,13 +107,13 @@ services:
     volumes:
       - minio-data:/data:z
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD", "silo", "healthcheck", "ready"]
       interval: 5s
       timeout: 5s
       retries: 5
 
   minio-setup:
-    image: quay.io/minio/mc
+    image: docker.io/pgsty/mc:RELEASE.2026-10-18T00-00-00Z@sha256:6ecdaec70bc5e8cf9d0e9a70c190f3beb1c83f11617ff4333f1fcd71ab1daf18
     depends_on:
       minio:
         condition: service_healthy
