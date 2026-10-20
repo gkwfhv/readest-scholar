@@ -34,7 +34,11 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { object: 'list', model: body.model, data: inputs.map((input, index) => ({ object: 'embedding', index, embedding: embedding(input) })), usage: { prompt_tokens: 1, total_tokens: 1 } });
   }
   if (req.url === '/v1/chat/completions' && req.method === 'POST') {
-    const content = 'The title shown on page 1 is TITLE OF THE PAPER. This is a deterministic test response.';
+    const hasLookupTool = body.tools?.some((item) => item.function?.name === 'lookupPassage');
+    const hasToolResult = body.messages?.some((item) => item.role === 'tool');
+    const content = hasToolResult
+      ? 'The page-numbering instructions appear on page 2. This is a deterministic test response.'
+      : 'The title shown on page 1 is TITLE OF THE PAPER. This is a deterministic test response.';
     if (body.stream) {
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
@@ -44,6 +48,11 @@ const server = http.createServer(async (req, res) => {
         'Access-Control-Allow-Headers': 'authorization,content-type,x-title,http-referer',
       });
       const base = { id: 'chatcmpl-scholar-test', object: 'chat.completion.chunk', created: 0, model: body.model ?? 'scholar-test-chat' };
+      if (hasLookupTool && !hasToolResult) {
+        res.write(`data: ${JSON.stringify({ ...base, choices: [{ index: 0, delta: { role: 'assistant', tool_calls: [{ index: 0, id: 'call-scholar-lookup', type: 'function', function: { name: 'lookupPassage', arguments: JSON.stringify({ query: 'page numbering instructions', topK: 5 }) } }] }, finish_reason: null }] })}\n\n`);
+        res.write(`data: ${JSON.stringify({ ...base, choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }] })}\n\n`);
+        return res.end('data: [DONE]\n\n');
+      }
       res.write(`data: ${JSON.stringify({ ...base, choices: [{ index: 0, delta: { role: 'assistant', content }, finish_reason: null }] })}\n\n`);
       res.write(`data: ${JSON.stringify({ ...base, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] })}\n\n`);
       return res.end('data: [DONE]\n\n');
