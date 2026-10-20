@@ -59,7 +59,11 @@ for reference in "${images[@]}"; do
   pulled=0
   for attempt in 1 2 3; do
     rm -rf "$temporary/oci"
-    if "$crane" pull --cache_path "$cache" --format oci --platform linux/amd64 \
+    protocol_debug="${GODEBUG:-}"
+    if [[ "$attempt" != 1 ]]; then
+      protocol_debug="${protocol_debug:+$protocol_debug,}http2client=0"
+    fi
+    if GODEBUG="$protocol_debug" "$crane" pull --cache_path "$cache" --format oci --platform linux/amd64 \
       "$mirror_reference" "$temporary/oci"; then
       pulled=1
       break
