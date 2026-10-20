@@ -17,7 +17,21 @@ docker compose --env-file docker/.env \
   -f docker/compose.yaml -f infra/staging/compose.yaml up -d
 ```
 
-如果目标主机不能访问容器仓库，在一台能访问原始 registry 的受信机器上运行以下传输。`export-images.sh` 从 Compose 配置读取七个镜像，逐一拉取 Linux amd64 版本并与固定平台摘要比对；校验不通过时不会导出镜像。它只把镜像归档写入标准输出，不传输 `.env`。
+如果目标主机的 Docker daemon 不能访问 Docker Hub，但有可用的代理 registry，可在目标主机安装 [go-containerregistry `crane`](https://github.com/google/go-containerregistry/releases) 的 Linux amd64 发行包，并以 GitHub 发布资产的 SHA256 校验。下列脚本先核对代理返回的 Linux amd64 镜像摘要，再以 OCI 格式导入六个 Docker Hub 镜像；它不会更改 daemon 的全局代理设置：
+
+```bash
+CRANE_BIN="$HOME/.local/bin/crane" \
+  bash infra/staging/import-dockerhub-from-mirror.sh
+```
+
+默认代理主机为 `hub.1panel.dev`，可用 `SCHOLAR_DOCKERHUB_MIRROR` 覆盖。只在镜像摘要与仓库锁定值完全一致时导入。Web 镜像来自 GHCR；如果目标主机无法访问 GHCR，在一台能访问原始 registry 的受信机器上运行以下传输。`export-images.sh` 从 Compose 配置读取七个镜像，但此模式只拉取并导出 Web 镜像，先与固定平台摘要比对；它只把镜像归档写入标准输出，不传输 `.env`。
+
+```bash
+SCHOLAR_STAGING_EXPORT_WEB_ONLY=1 bash infra/staging/export-images.sh | gzip -1 | \
+  ssh -p <SSH_PORT> <SSH_USER>@<SSH_HOST> 'gunzip | docker image load'
+```
+
+如果 Docker Hub 和 GHCR 都无法从目标主机或代理访问，也可在受信机器传输全部七个镜像：
 
 ```bash
 bash infra/staging/export-images.sh | gzip -1 | \

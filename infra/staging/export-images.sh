@@ -23,6 +23,20 @@ if [[ "${#images[@]}" != 7 ]]; then
   exit 2
 fi
 
+if [[ "${SCHOLAR_STAGING_EXPORT_WEB_ONLY:-0}" == 1 ]]; then
+  web=()
+  for reference in "${images[@]}"; do
+    if [[ "$reference" == ghcr.io/* ]]; then
+      web+=("$reference")
+    fi
+  done
+  if [[ "${#web[@]}" != 1 ]]; then
+    echo "Expected one GHCR Web image; found ${#web[@]}." >&2
+    exit 2
+  fi
+  images=("${web[@]}")
+fi
+
 tags=()
 for reference in "${images[@]}"; do
   if [[ "$reference" != *@sha256:* ]]; then

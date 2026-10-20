@@ -44,8 +44,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
-"${compose[@]}" -f "$temporary/failure.yaml" up -d --no-deps --force-recreate --pull never client
 changed=1
+"${compose[@]}" -f "$temporary/failure.yaml" up -d --no-deps --force-recreate --pull never client
 if python3 infra/staging/check-readiness.py >/dev/null 2>&1; then
   echo "Expected the injected Web failure to fail readiness, but it passed." >&2
   exit 1
