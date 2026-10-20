@@ -19,6 +19,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Reject tracked private Compose environments
+        run: |
+          python3 infra/staging/check-tracked-env.py
+          git check-ignore -q docker/.env
+          git check-ignore -q docker/.env.restore
+          git check-ignore -q docker/.env.phase1
+          git check-ignore -q docker/.env.production
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
         with:
           node-version: 24
