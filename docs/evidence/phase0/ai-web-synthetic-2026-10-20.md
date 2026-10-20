@@ -16,7 +16,7 @@ This is a **development-build transport and UI smoke test**, not a model-quality
 - Before the fix, selecting an indexed conversation raised `TypeError: Cannot set properties of undefined (setting '_getInitializePromise')` in `@assistant-ui/react@0.11.58`. The package called an extracted instance method without its receiver.
 - After binding that call to `runtimeCore`, the exception stopped. A second defect left newly created empty conversations blank because `ThreadPrimitive.Empty` was rendered only when there was no active conversation. Showing the empty state after history loading restored the composer.
 - The synthetic answer appeared, “View sources” showed passages including `TITLE OF THE PAPER`, and the exchange remained visible after reload. Screenshot: [ai-chat-synthetic-sources.png](ai-chat-synthetic-sources.png).
-- `tsc --noEmit` and Biome lint of the changed component passed. `ai-chat-store.test.ts` and `ai-store.test.ts`: 31 passed.
+- A regression test for an active empty conversation failed against the old `!hasActiveConversation` gate with `Unable to find an element with the text: Ask about this book`, then passed after the change. With `ai-chat-store.test.ts` and `ai-store.test.ts`, the focused suite had **33 passed**. `tsc --noEmit` and Biome check of the changed component and test passed.
 
 ## Limits and remaining gaps
 
