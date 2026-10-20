@@ -1,6 +1,6 @@
 # Readest Scholar 路线图
 
-状态日期：2026-10-20。**Phase 0 暂不签收。** Web、macOS 桌面与自托管测试栈的 PDF 阅读、文件/书签/基础批注同步已有实测；Turso L2 误差已量化，[PR #9](https://github.com/gkwfhv/readest-scholar/pull/9) 在 Node 24 全量测试 13760 通过、16 跳过，待 CI 全部通过及主线合入。开发 Web 的合成模型索引、问答、来源显示与会话恢复在 [PR #10](https://github.com/gkwfhv/readest-scholar/pull/10) 修复后通过；生产 Web AI 入口、可点击 PDF 引用和桌面 Reedy 仍待验证。官方 MinIO 镜像返回 401，[ADR 0002](docs/adr/0002-object-storage-staging-exception.md) 仅允许固定摘要兼容镜像用于受限 staging。Linux staging 的健康、备份和独立恢复演练已通过；活动负载资源基准尚缺。Phase 1 的这些准备项不构成正式阶段验收，后续产品模块暂不开始。
+状态日期：2026-10-20。**Phase 0 暂不签收。** Web、macOS 桌面与自托管测试栈的 PDF 阅读、文件/书签/基础批注同步已有实测；Turso L2 误差已量化，[PR #9](https://github.com/gkwfhv/readest-scholar/pull/9) 在 Node 24 全量测试 13760 通过、16 跳过，CI 必需检查已通过，待评审与主线合入。开发 Web 的合成模型索引、问答、来源显示与会话恢复在 [PR #10](https://github.com/gkwfhv/readest-scholar/pull/10) 修复后通过；生产 Web AI 入口、可点击 PDF 引用和桌面 Reedy 仍待验证。官方 MinIO 镜像返回 401，[ADR 0002](docs/adr/0002-object-storage-staging-exception.md) 仅允许固定摘要兼容镜像用于受限 staging。Linux staging 的健康、备份和独立恢复演练已通过；活动负载资源基准尚缺。Phase 1 的这些准备项不构成正式阶段验收，后续产品模块暂不开始。
 
 | 阶段 | 状态 | 依赖 | 完成判据 |
 |---|---|---|---|

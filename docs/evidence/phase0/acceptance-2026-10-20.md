@@ -27,7 +27,7 @@
 
 ## 签收前需要闭环
 
-1. [PR #9](https://github.com/gkwfhv/readest-scholar/pull/9) 的 Turso 修复已在本机全量验证；等待必需 CI 检查及合入，再对受保护 `main` 执行基线复验。相对误差是本机实测的测试契约，不能推广为所有平台的误差上界。
+1. [PR #9](https://github.com/gkwfhv/readest-scholar/pull/9) 的 Turso 修复已在本机全量验证，格式修正后的必需 CI 检查已通过；仍待评审及合入，然后对受保护 `main` 执行基线复验。相对误差是本机实测的测试契约，不能推广为所有平台的误差上界。
 2. 让官方 Docker 镜像组合从空环境启动并完成同步复验；若仍无法获得，按 [ADR 0002](../../adr/0002-object-storage-staging-exception.md) 的 staging 例外继续测试，但须在生产选型 ADR 中完成固定镜像、许可、安全、备份恢复和跨端同步审查。兼容镜像的既有成功记录不能自动等同于官方镜像通过。
 3. [PR #10](https://github.com/gkwfhv/readest-scholar/pull/10) 已提供开发 Web 的合成 PDF/模型问答和来源显示证据；待 PR 检查与合入。随后解决生产 Web AI 设置入口、旧后端缺失 PDF 定位锚点和刷新后来源丢失；再做来源点击到页码、桌面 Reedy、自托管运行时验证。固定回答的测试服务只验证 UI 与传输，不能证明检索质量。
 4. 已采集同一 staging 栈的空闲资源快照；继续在打开合成 PDF、执行同步时采样各容器 CPU/内存/存储及独立测试桌面客户端资源，记录操作与时间窗口。Phase 0 只建立可重现基准，不预设未经测量的性能阈值。
