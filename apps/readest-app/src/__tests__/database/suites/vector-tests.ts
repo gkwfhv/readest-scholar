@@ -1,6 +1,14 @@
 import { it, expect } from 'vitest';
 import { DatabaseService } from '@/types/database';
 
+// Native Turso uses SimSIMD for dense L2 distances. On macOS arm64 its
+// measured error is below 0.0651%; WASM computes the same cases more exactly.
+// Keep a 0.1% cross-backend bound rather than asserting identical rounding.
+function expectL2Distance(actual: number, expected: number) {
+  expect(Number.isFinite(actual)).toBe(true);
+  expect(Math.abs(actual - expected) / expected).toBeLessThan(0.001);
+}
+
 /**
  * Shared vector search test cases for Turso's built-in vector functions.
  * Call this inside a describe() block after setting up a DatabaseService instance.
@@ -97,7 +105,7 @@ export function vectorTests(getDb: () => DatabaseService) {
     const rows = await db.select<{ d: number }>(
       "SELECT vector_distance_l2(vector32('[0,0]'), vector32('[3,4]')) AS d",
     );
-    expect(rows[0]!.d).toBeCloseTo(5.0, 4);
+    expectL2Distance(rows[0]!.d, 5.0);
   });
 
   it('vector_distance_dot() returns more negative for similar vectors', async () => {
@@ -155,10 +163,11 @@ export function vectorTests(getDb: () => DatabaseService) {
        FROM points ORDER BY dist ASC`,
     );
     expect(rows).toHaveLength(3);
+    expect(rows.map((row) => row.id)).toEqual([1, 3, 2]);
     // Origin first, then [1,1] (dist ~1.41), then [3,4] (dist 5)
     expect(rows[0]!.dist).toBeCloseTo(0, 4);
-    expect(rows[1]!.dist).toBeCloseTo(Math.sqrt(2), 4);
-    expect(rows[2]!.dist).toBeCloseTo(5, 4);
+    expectL2Distance(rows[1]!.dist, Math.sqrt(2));
+    expectL2Distance(rows[2]!.dist, 5);
   });
 
   // ---------------------------------------------------------------------------
@@ -231,7 +240,7 @@ export function vectorTests(getDb: () => DatabaseService) {
     const rows = await db.select<{ d: number }>(
       "SELECT vector_distance_l2(vector64('[0,0]'), vector64('[3,4]')) AS d",
     );
-    expect(rows[0]!.d).toBeCloseTo(5.0, 4);
+    expectL2Distance(rows[0]!.d, 5.0);
   });
 
   // ---------------------------------------------------------------------------
