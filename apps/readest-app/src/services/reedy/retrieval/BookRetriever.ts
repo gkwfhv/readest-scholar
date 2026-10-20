@@ -38,6 +38,7 @@ export interface RetrieveArgs {
   query: string;
   k: number;
   spoilerBoundPosition?: number;
+  spoilerBoundSectionIndex?: number;
   activeEmbeddingModel: EmbeddingModel;
   /** Query embedding wall-clock budget. @default 5000 */
   embeddingTimeoutMs?: number;
@@ -102,6 +103,7 @@ export class BookRetriever {
       queryEmbedding: embedding ?? new Array(args.activeEmbeddingModel.dim).fill(0),
       k: args.k,
       spoilerBoundPosition: args.spoilerBoundPosition,
+      spoilerBoundSectionIndex: args.spoilerBoundSectionIndex,
     });
 
     const passages: RetrievedChunk[] = scored.map((s) => ({

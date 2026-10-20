@@ -51,6 +51,7 @@ export interface RetrievalBackend {
     turnId: string;
     sourceStore: ReedySourceStore;
     spoilerBoundPosition?: number;
+    spoilerBoundSectionIndex?: number;
   }): Tool;
 }
 

@@ -107,6 +107,7 @@ describe('TauriChatAdapter wiring (M1.11)', () => {
       bookTitle: 'Title',
       authorName: 'Author',
       currentPage: 0,
+      currentSectionIndex: 1,
       backend,
       sourceStore,
     }));
@@ -129,6 +130,7 @@ describe('TauriChatAdapter wiring (M1.11)', () => {
       expect.objectContaining({
         bookHash: 'bk1',
         sourceStore,
+        spoilerBoundSectionIndex: 1,
       }),
     );
   });
@@ -154,6 +156,7 @@ describe('TauriChatAdapter wiring (M1.11)', () => {
       bookTitle: 'Title',
       authorName: 'Author',
       currentPage: 0,
+      currentSectionIndex: 0,
       backend,
       sourceStore,
     }));
@@ -186,6 +189,7 @@ describe('TauriChatAdapter wiring (M1.11)', () => {
       bookTitle: 'Title',
       authorName: 'Author',
       currentPage: 0,
+      currentSectionIndex: 0,
       backend,
       sourceStore,
       onTurnStart: (id) => turnStartedWith.push(id),
@@ -212,6 +216,7 @@ describe('TauriChatAdapter wiring (M1.11)', () => {
       bookTitle: 'My Book',
       authorName: '',
       currentPage: 5,
+      currentSectionIndex: 5,
       backend: fakeReedy(),
       sourceStore,
     }));

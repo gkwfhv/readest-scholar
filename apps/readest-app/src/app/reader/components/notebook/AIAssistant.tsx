@@ -81,6 +81,7 @@ const AIAssistantChat = ({
   bookTitle,
   authorName,
   currentPage,
+  currentSectionIndex,
   backend,
   sourceStore,
   currentTurnId,
@@ -94,6 +95,7 @@ const AIAssistantChat = ({
   bookTitle: string;
   authorName: string;
   currentPage: number;
+  currentSectionIndex: number;
   backend: RetrievalBackend;
   sourceStore: ReedySourceStore;
   currentTurnId: string | null;
@@ -129,6 +131,7 @@ const AIAssistantChat = ({
     bookTitle,
     authorName,
     currentPage,
+    currentSectionIndex,
     backend,
     sourceStore,
     onTurnStart: handleTurnStart,
@@ -142,6 +145,7 @@ const AIAssistantChat = ({
       bookTitle,
       authorName,
       currentPage,
+      currentSectionIndex,
       backend,
       sourceStore,
       onTurnStart: handleTurnStart,
@@ -371,6 +375,7 @@ const LegacyAIAssistant = ({ bookKey }: AIAssistantProps) => {
   const bookTitle = bookData?.book?.title || 'Unknown';
   const authorName = bookData?.book?.author || '';
   const currentPage = progress?.pageinfo?.current ?? 0;
+  const currentSectionIndex = progress?.section?.current ?? 0;
   const aiSettings = settings?.aiSettings;
 
   // Per-instance source store, plus the active backend chosen via the same
@@ -509,6 +514,7 @@ const LegacyAIAssistant = ({ bookKey }: AIAssistantProps) => {
       bookTitle={bookTitle}
       authorName={authorName}
       currentPage={currentPage}
+      currentSectionIndex={currentSectionIndex}
       backend={backend}
       sourceStore={sourceStore}
       currentTurnId={currentTurnId}
