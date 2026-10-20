@@ -2,8 +2,7 @@ import clsx from 'clsx';
 import React from 'react';
 import { MdBookmarkBorder } from 'react-icons/md';
 import { IoIosList } from 'react-icons/io';
-import { PiNotePencil } from 'react-icons/pi';
-import { LuMessageSquare } from 'react-icons/lu';
+import { PiBrain, PiNotePencil } from 'react-icons/pi';
 
 import { useEnv } from '@/context/EnvContext';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -43,7 +42,8 @@ const TabNavigation: React.FC<{
   return (
     <div
       className={clsx(
-        'bottom-tab border-base-300/50 bg-base-200 flex w-full border-t',
+        'bottom-tab border-base-300/50 bg-base-200 grid w-full min-w-0 max-w-full border-t',
+        tabs.length === 4 ? 'grid-cols-4' : 'grid-cols-3',
         appService?.hasRoundedWindow && 'rounded-window-bottom-left',
         isMobile && 'h-[65px]',
       )}
@@ -55,7 +55,7 @@ const TabNavigation: React.FC<{
           tabIndex={0}
           role='button'
           className={clsx(
-            'flex-1 m-1.5 cursor-pointer rounded-lg transition-colors duration-200',
+            'm-1.5 min-w-0 cursor-pointer rounded-lg transition-colors duration-200',
             activeTab === tab && 'bg-base-300/85',
             isMobile ? 'p-3' : 'p-2',
           )}
@@ -77,7 +77,7 @@ const TabNavigation: React.FC<{
             ) : tab === 'bookmarks' ? (
               <MdBookmarkBorder className='mx-auto' />
             ) : (
-              <LuMessageSquare className='mx-auto' />
+              <PiBrain className='mx-auto' />
             )}
           </div>
         </div>
