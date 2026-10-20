@@ -363,6 +363,7 @@ const LegacyAIAssistant = ({ bookKey }: AIAssistantProps) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isIndexing, setIsIndexing] = useState(false);
   const [indexProgress, setIndexProgress] = useState<EmbeddingProgress | null>(null);
+  const [indexError, setIndexError] = useState<string | null>(null);
   const [indexed, setIndexed] = useState(false);
   const [currentTurnId, setCurrentTurnId] = useState<string | null>(null);
 
@@ -402,12 +403,15 @@ const LegacyAIAssistant = ({ bookKey }: AIAssistantProps) => {
 
   const handleIndex = useCallback(async () => {
     if (!bookData?.bookDoc || !aiSettings || !backend) return;
+    setIndexError(null);
     setIsIndexing(true);
     try {
       await backend.indexBook(bookData.bookDoc, bookHash, { onProgress: setIndexProgress });
       setIndexed(true);
     } catch (e) {
-      aiLogger.rag.indexError(bookHash, (e as Error).message);
+      const message = e instanceof Error ? e.message : String(e);
+      aiLogger.rag.indexError(bookHash, message);
+      setIndexError(message);
     } finally {
       setIsIndexing(false);
       setIndexProgress(null);
@@ -465,6 +469,11 @@ const LegacyAIAssistant = ({ bookKey }: AIAssistantProps) => {
           <BookOpenIcon className='mr-1.5 size-3.5' />
           {_('Start Indexing')}
         </Button>
+        {indexError && (
+          <p role='alert' className='text-error max-w-md text-xs'>
+            {indexError}
+          </p>
+        )}
       </div>
     );
   }

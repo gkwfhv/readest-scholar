@@ -85,6 +85,9 @@ export class ReedyBackend implements RetrievalBackend {
     const { indexer, reedy } = await this.reedyReady;
     this.metrics.log('book_indexing_started', { bookHash });
     try {
+      // BookIndexer records the dimension before it embeds any book chunks.
+      // OpenAI-compatible models report that dimension only after a response.
+      await this.model.embed(['Reedy embedding dimension probe']);
       await indexer.indexBook(bookDoc, bookHash, this.model, {
         onProgress: options?.onProgress
           ? (event): void => {
