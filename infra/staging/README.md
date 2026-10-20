@@ -10,12 +10,27 @@
 
 ```bash
 python3 infra/staging/prepare-env.py
+python3 infra/staging/check-bind-mounts.py
 docker compose --env-file docker/.env \
   -f docker/compose.yaml -f infra/staging/compose.yaml \
   config --format json | python3 -c 'import json,sys; c=json.load(sys.stdin); assert c["name"] == "scholar-staging"; assert all(p["host_ip"] == "127.0.0.1" for s in c["services"].values() for p in s.get("ports", []))'
 docker compose --env-file docker/.env \
   -f docker/compose.yaml -f infra/staging/compose.yaml up -d
 ```
+
+Kong 和 PostgreSQL 初始化进程会以容器内的非宿主用户读取仓库中的静态 bind mount。若克隆时使用 `umask 077`，这些跟踪文件可能变成 `0600`，预检会报错，容器也会因无法读取 `kong.yml` 或初始化 SQL 而反复重启。只修正**静态**挂载文件的权限后重跑预检：
+
+```bash
+chmod 755 docker docker/volumes docker/volumes/api docker/volumes/db docker/volumes/db/init
+find docker/volumes/db/migrations -type d -exec chmod 755 {} +
+chmod 644 docker/volumes/api/kong.yml docker/volumes/db/roles.sql \
+  docker/volumes/db/jwt.sql docker/volumes/db/init/schema.sql
+find docker/volumes/db/migrations -type f -exec chmod 644 {} +
+chmod 755 docker/volumes/db/apply-migrations.sh
+python3 infra/staging/check-bind-mounts.py
+```
+
+私有 `docker/.env` 继续保持 `0600`；它不在上述命令的更改范围内。若权限错误已造成**首次、空数据**的 staging 数据库部分初始化，先用相同的两个 Compose 文件执行 `down`（不带 `-v`），核对 `scholar-staging_db-data` 与 `scholar-staging_db-config` 卷的项目标签且确认为本次一次性测试数据后，只删除这两个卷，再重新启动。已有用户数据时不得删除卷，应先备份并调查恢复办法。
 
 如果目标主机的 Docker daemon 不能访问 Docker Hub，但有可用的代理 registry，可在目标主机安装 [go-containerregistry `crane`](https://github.com/google/go-containerregistry/releases) 的 Linux amd64 发行包，并以 GitHub 发布资产的 SHA256 校验。下列脚本先核对代理返回的 Linux amd64 镜像摘要，再以 OCI 格式导入六个 Docker Hub 镜像；它不会更改 daemon 的全局代理设置：
 
