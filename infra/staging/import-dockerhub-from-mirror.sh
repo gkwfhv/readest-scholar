@@ -16,6 +16,11 @@ if [[ "$mirror" == *://* || "$mirror" == */* ]]; then
 fi
 command -v "$crane" >/dev/null
 mkdir -p "$cache"
+exec 9>"$cache/.lock"
+if ! flock -n 9; then
+  echo "Another staging image import is using $cache." >&2
+  exit 2
+fi
 
 images=()
 while IFS= read -r reference; do
@@ -59,6 +64,26 @@ for reference in "${images[@]}"; do
   pulled=0
   for attempt in 1 2 3; do
     rm -rf "$temporary/oci"
+    "$crane" manifest --platform linux/amd64 "$mirror_reference" |
+      python3 -c '
+import hashlib,json,pathlib,sys
+cache=pathlib.Path(sys.argv[1])
+manifest=json.load(sys.stdin)
+for layer in manifest["layers"]:
+    path=cache/layer["digest"]
+    if not path.is_file():
+        continue
+    valid=path.stat().st_size == layer["size"]
+    if valid:
+        digest=hashlib.sha256()
+        with path.open("rb") as source:
+            for chunk in iter(lambda: source.read(1024*1024), b""):
+                digest.update(chunk)
+        valid=digest.hexdigest() == layer["digest"].split(":",1)[1]
+    if not valid:
+        path.unlink()
+        print("Discarded incomplete cached layer "+layer["digest"],file=sys.stderr)
+' "$cache"
     protocol_debug="${GODEBUG:-}"
     if [[ "$attempt" != 1 ]]; then
       protocol_debug="${protocol_debug:+$protocol_debug,}http2client=0"

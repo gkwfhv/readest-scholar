@@ -29,8 +29,8 @@
 - 新增宿主机 `infra/compose/check-readiness.mjs` 就绪探针：Web、Kong/Auth、Kong/PostgREST/数据库、对象存储四个回环 HTTP 路由在合成测试栈均返回 200；错误 Web 端口注入导致退出码 1，未输出凭据。[PR #4](https://github.com/gkwfhv/readest-scholar/pull/4) 以 14 项成功检查、1 项按条件跳过合并到 `main`（`90ac8f96d`）；用户本地仓库已快进且干净。
 - 隔离 npm 对照发现 Turso 原生包 `0.8.3` 在同一 macOS arm64/Node 24 上仍给出完全相同的三个 L2 偏差；单纯升级依赖不能解决此阻塞。
 - [PR #5](https://github.com/gkwfhv/readest-scholar/pull/5) 已将 Turso `0.8.3` 对照与未解决的精度风险合并到 `main`（`a031e6369`）。
-- [PR #6](https://github.com/gkwfhv/readest-scholar/pull/6) 实现隔离的 Linux x86_64 staging Compose、随机测试凭据、四路就绪探针、项目隔离备份、Web 故障回滚演练、固定摘要镜像导入与操作手册。最新 `ed836729c` 的 Scholar baseline 和上游 PR checks 已通过；远端实际启动与回滚验收进行中，尚未合并。
-- 非生产主机已核对为 Linux x86_64，Docker/Compose/Python 可用；测试端口未占用，SSH 通过用户给出的 FRP 地址与本地密钥访问。七个镜像均已固定 Linux amd64 平台摘要；因主机 Docker daemon 无法直接拉取 Registry 镜像，用户级 `crane` 已校验并导入五个 Docker Hub 镜像。PostgreSQL 层的代理下载在约 16 分钟后因 HTTP/2 stream 错误失败，导入脚本已补层缓存与有限重试，等待 SSH 限制解除后重试。GHCR Web 镜像已在本机完成校验与导出，尚未传输。主机只绑定回环端口，用户选择 SSH 隧道验收，尚无测试域名。
+- [PR #6](https://github.com/gkwfhv/readest-scholar/pull/6) 实现隔离的 Linux x86_64 staging Compose、随机测试凭据、四路就绪探针、项目隔离备份、Web 故障回滚演练、固定摘要镜像导入与操作手册。`d2743fa39` 的 Scholar baseline、上游 PR checks 与 CodeQL 均已通过；远端实际启动与回滚验收进行中，尚未合并。
+- 非生产主机已核对为 Linux x86_64，Docker/Compose/Python 可用；测试端口未占用，SSH 通过用户给出的 FRP 地址与本地密钥访问。七个镜像均已固定 Linux amd64 平台摘要；因主机 Docker daemon 无法直接拉取 Registry 镜像，用户级 `crane` 已校验并导入五个 Docker Hub 镜像。PostgreSQL 层的代理下载曾因 HTTP/2 stream 错误失败，目前在主机用校验过的层缓存与 HTTP/1 客户端独立重试。GHCR Web 镜像已在本机完成校验与导出，经可续传 SSH 复制到主机并校验 SHA256，`docker image load` 后固定摘要可解析。主机只绑定回环端口，用户选择 SSH 隧道验收，尚无测试域名。
 
 ## 当前事实
 

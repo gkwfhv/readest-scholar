@@ -24,12 +24,14 @@ CRANE_BIN="$HOME/.local/bin/crane" \
   bash infra/staging/import-dockerhub-from-mirror.sh
 ```
 
-默认代理主机为 `hub.1panel.dev`，可用 `SCHOLAR_DOCKERHUB_MIRROR` 覆盖。只在镜像摘要与仓库锁定值完全一致时导入。已下载的层保存在用户目录 `~/.cache/scholar-staging-crane`，失败时最多重试三次；重试时使用 [Go 支持的 HTTP/1 客户端设置](https://pkg.go.dev/net/http#hdr-HTTP_2) 避开镜像代理的 HTTP/2 stream 错误。可以用 `SCHOLAR_CRANE_CACHE` 指定其他目录。Web 镜像来自 GHCR；如果目标主机无法访问 GHCR，在一台能访问原始 registry 的受信机器上运行以下传输。`export-images.sh` 从 Compose 配置读取七个镜像，但此模式只拉取并导出 Web 镜像，先与固定平台摘要比对；它只把镜像归档写入标准输出，不传输 `.env`。
+默认代理主机为 `hub.1panel.dev`，可用 `SCHOLAR_DOCKERHUB_MIRROR` 覆盖。只在镜像摘要与仓库锁定值完全一致时导入。已下载的层保存在用户目录 `~/.cache/scholar-staging-crane`；重试前按清单大小和 SHA256 移除中断留下的无效分片，失败时最多重试三次。重试时使用 [Go 支持的 HTTP/1 客户端设置](https://pkg.go.dev/net/http#hdr-HTTP_2) 避开镜像代理的 HTTP/2 stream 错误。可以用 `SCHOLAR_CRANE_CACHE` 指定其他目录。Web 镜像来自 GHCR；如果目标主机无法访问 GHCR，在一台能访问原始 registry 的受信机器上运行以下传输。`export-images.sh` 从 Compose 配置读取七个镜像，但此模式只拉取并导出 Web 镜像，先与固定平台摘要比对；它只把镜像归档写入标准输出，不传输 `.env`。
 
 ```bash
 SCHOLAR_STAGING_EXPORT_WEB_ONLY=1 bash infra/staging/export-images.sh | gzip -1 | \
   ssh -p <SSH_PORT> <SSH_USER>@<SSH_HOST> 'gunzip | docker image load'
 ```
+
+FRP/SSH 若在长传输中断开，可先把上述管道的 gzip 输出保存为本地档案，记录其 SHA256，再用 `rsync --partial --append -e 'ssh -p <SSH_PORT>'` 续传到主机。主机端用 `sha256sum` 比对**完整**档案与本地摘要，随后 `gunzip -c <档案> | docker image load`；不要加载未校验的分片。
 
 如果 Docker Hub 和 GHCR 都无法从目标主机或代理访问，也可在受信机器传输全部七个镜像：
 
