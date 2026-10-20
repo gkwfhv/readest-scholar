@@ -2,7 +2,7 @@
 
 此配置用于 Linux x86_64 非生产主机上的合成数据验收。它在官方 `docker/compose.yaml` 后追加 `infra/staging/compose.yaml`：Compose 项目、容器名和数据卷均为 `scholar-staging`，四个端口只绑定主机的 `127.0.0.1`。不要把此配置接入公网反向代理；当前没有测试域名或 TLS。主机上已有其他业务时，先确认 `3130/8130/9130/9131` 未占用。
 
-当前 Web 容器仍是锁定 SHA 的**上游 Readest 基线镜像**。这个栈验证自托管部署、备份和回滚机制，不能据此宣称 Scholar 阅读位置修复已在 Linux 容器内验证。七个镜像均固定 Linux amd64 平台摘要；对象存储使用 Pigsty MinIO 兼容发行版，官方镜像可用性和供应链审核仍未完成。
+当前 Web 容器仍是锁定 SHA 的**上游 Readest 基线镜像**。这个栈验证自托管部署、备份和回滚机制，不能据此宣称 Scholar 阅读位置修复已在 Linux 容器内验证。七个镜像均固定 Linux amd64 平台摘要；对象存储采用固定摘要的 Silo 维护发行版。既有旧镜像数据卷必须先在隔离栈完成升级与恢复演练，不能直接滚动降级。
 
 ## 首次启动
 
@@ -104,7 +104,7 @@ docker compose --env-file docker/.env.restore \
   SCHOLAR_COMPOSE_VARIANT=restore node infra/staging/check-config.mjs
 ```
 
-先用 `docker ps -aq --filter label=com.docker.compose.project=scholar-restore-rehearsal` 与对应 `docker volume ls -q` 确认均为空，并核对四个端口未占用。随后只创建恢复项目的对象容器和卷，向尚未启动的空卷复制快照。下面的镜像是 staging 中已固定摘要、已导入的 Linux amd64 MinIO 兼容镜像：
+先用 `docker ps -aq --filter label=com.docker.compose.project=scholar-restore-rehearsal` 与对应 `docker volume ls -q` 确认均为空，并核对四个端口未占用。随后只创建恢复项目的对象容器和卷，向尚未启动的空卷复制快照。下面的镜像是 staging 中已固定摘要、已导入的 Linux amd64 Silo 镜像：
 
 ```bash
 compose=(docker compose --env-file docker/.env.restore \
@@ -117,7 +117,7 @@ docker run --rm \
   -v scholar-restore-rehearsal_minio-data:/data \
   -v "$snapshot/minio-data:/backup:ro" \
   --entrypoint /bin/sh \
-  docker.io/pgsty/minio:RELEASE.2026-08-04T00-00-00Z-amd64@sha256:2b36182f3479c58b5cba920f20479738ee85ce218de0596a244f9a1368268db9 \
+  docker.io/pgsty/silo:RELEASE.2026-10-18T00-00-00Z-amd64@sha256:706e0d419d23bdab663486044165fb4de1ee6b82885a8637b2935216fb2286ec \
   -ec 'cp -a /backup/. /data/'
 "${compose[@]}" up -d --pull never db
 ```

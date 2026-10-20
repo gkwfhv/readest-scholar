@@ -20,7 +20,7 @@ services:
     image: docker.io/postgrest/postgrest:v14.3@sha256:7924f769d8b3b173b93711c90d2fc4164667cffc563551d6a13bc5c93aca2487
   minio:
     container_name: scholar-staging-minio
-    image: docker.io/pgsty/minio:RELEASE.2026-08-04T00-00-00Z-amd64@sha256:2b36182f3479c58b5cba920f20479738ee85ce218de0596a244f9a1368268db9
+    image: docker.io/pgsty/silo:RELEASE.2026-10-18T00-00-00Z-amd64@sha256:706e0d419d23bdab663486044165fb4de1ee6b82885a8637b2935216fb2286ec
     ports: !override
       - "127.0.0.1:${SCHOLAR_S3_PORT:?Generate the staging env}:9000"
       - "127.0.0.1:${SCHOLAR_S3_CONSOLE_PORT:?Generate the staging env}:9001"
