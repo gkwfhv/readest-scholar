@@ -34,8 +34,17 @@
 - 本次修复的 Node 24 全量 Vitest 为 **1,175 个文件通过、4 跳过；13,806 项通过、16 跳过、0 失败**；TypeScript、Biome lint/format、Webpack Web 生产构建及显式合成自托管配置下的 Scholar 桌面静态导出均通过。正式镜像还需 PR CI 与 staging 再部署核验。
 - 临时分享已经撤销（204），公开元数据返回 410 `revoked`；本机和主机的临时令牌文件及 SSH 隧道已清理。分享令牌不写入仓库。
 
+## PR #30 预览修复的 staging 实测
+
+- [PR #30](https://github.com/gkwfhv/readest-scholar/pull/30) 的最终 `f9e0490ba5f2587dfac948a99a3cd503512c1c5e` 经 Scholar baseline、完整 PR checks、CodeQL 和精确 SHA 评审通过后合并为 `3579888b7009d1f6439f47f633baea332fab726f`。[GHCR 发布运行](https://github.com/gkwfhv/readest-scholar/actions/runs/39554768956)的 amd64、arm64 构建和合并任务均成功。amd64 平台摘要为 `sha256:dbfede82633c63e02d4320318677b8c029a2171a8848772a44d87cc1930e7b75`，arm64 为 `sha256:4b64580c48a2d2043e0eeda39ddc7c1dfc7a6657bd0e8ded4eeaa55a5f03e639`。
+- 主机源码经 SHA256 `69716319556b621b4ab514eb134db3598bf86f1dfafe5831be6a68600ee7b9b0` 的增量 Git bundle 快进到该合并提交且干净。Mac 校验新 amd64 镜像 ID 和架构后导出归档，两端 SHA256 为 `453967b211fb0bb8eb8bfde51b049e95a1bdd817d9242c4857cbe89a7bcf7108`，gzip 校验和主机导入成功。主机随后可直接向 GHCR 拉取固定摘要以登记 RepoDigest，最终 `docker image inspect` 显示同一镜像 ID 与 `linux/amd64`。
+- `deploy-web.sh` 在四路预检后创建 `20261021T063400Z` 完整备份（尚未冷恢复）；仅 Web 容器由 `ed54ede8c981` 更新为 `5aec91d81ceb`，Auth、MinIO、数据库、Kong、REST 容器 ID 均不变。四路后检通过，运行时 `scholarRelease=true`。
+- 主机私有合成账户登录、分享创建、公开页面与元数据均通过；新 OG 接口返回 26,966 字节有效 PNG。通过 Web 和对象存储双 SSH 隧道，Chromium 在 390×844 和 1280×800 视口实际打开页面：浏览器标题恰为 `Synthetic Sample Paper · Shared via Readest Scholar`，应用按钮指向 `readest-scholar://`，页脚与 OG URL 均在本站，封面自然尺寸 612×792，两种视口都没有横向溢出或页面脚本错误。[手机截图](scholar-share-mobile-after-preview-fix-2026-10-21.png)、[桌面截图](scholar-share-desktop-after-preview-fix-2026-10-21.png)。只转发 Web 而未转发对象存储的第一次截图出现断图，补上 S3 隧道后复测通过；前一次不计为产品缺陷。
+- 容器内的 OG 取图使用公开的 `127.0.0.1:9130` 签名 URL，而该回环地址从 Web 容器不可达，因此这次 PNG 实际采用文字回退卡片，没有封面。针对自托管 S3 的内部取图回归用例先失败后通过；R2 路径保留原有公开签名 URL。第一次全量命令直接调用 Vitest，绕过仓库的 `dotenv` 包装，触发大量环境缺失错误后已中止；按项目标准命令重跑，Node 24 套件为 **1,175 个文件通过、4 跳过；13,808 项通过、16 跳过、0 失败**。TypeScript、Biome、Webpack Web 生产构建和 Scholar 桌面静态导出通过。新内部取图代码尚未部署，需在下一镜像中验证带封面的实际 OG 图片。
+- 合成分享已撤销（204），公开元数据为 410；令牌文件和 SSH 隧道已清理。主机新备份未做独立冷恢复。
+
 ## 尚未验收
 
 - 没有测试域名；回环链接只有 SSH 隧道本机可用。正式 HTTPS 分享/批注链接、真实 OAuth 提供方回跳及外部收件人打开分享均未验收。虽然两种 scheme 已加入 Auth 白名单，尚无 OAuth 提供方可发起真实回跳。
-- 标题后缀和 OG 渲染修复尚未进入 staging 镜像；分享导入到第二个独立账户尚未实测。根布局其他页面的构建时标题模板仍需单独核对。
+- 分享 OG 的容器内部封面读取修复尚未进入 staging 镜像；分享导入到第二个独立账户尚未实测。根布局其他页面的构建时标题模板仍需单独核对。
 - 正式签名安装包与更新分发仍是独立发布门槛。

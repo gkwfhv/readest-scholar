@@ -1,6 +1,9 @@
 import { ImageResponse } from 'next/og';
 import { NextResponse } from 'next/server';
+import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { getDownloadSignedUrl } from '@/utils/object';
+import { s3Storage } from '@/utils/s3';
+import { getStorageType } from '@/utils/storage';
 import { rejectionToHttp, resolveActiveShare } from '@/libs/shareServer';
 import { SHARE_PRESIGN_TTL_SECONDS } from '@/services/constants';
 import {
@@ -30,12 +33,27 @@ export const renderShareOgImage = async (token: string): Promise<Response> => {
   let coverDataUrl: string | null = null;
   if (share.coverFileKey) {
     try {
-      const signedUrl = await getDownloadSignedUrl(share.coverFileKey, SHARE_PRESIGN_TTL_SECONDS);
-      const response = await fetch(signedUrl);
-      if (response.ok) {
-        const buffer = await response.arrayBuffer();
-        const contentType = response.headers.get('content-type') ?? 'image/jpeg';
-        coverDataUrl = `data:${contentType};base64,${arrayBufferToBase64(buffer)}`;
+      if (getStorageType() === 's3') {
+        // The public presigned URL can use a host loopback address that is
+        // unreachable from this container. Read the same object internally.
+        const object = await s3Storage.getClient().send(
+          new GetObjectCommand({
+            Bucket: process.env['S3_BUCKET_NAME'] || '',
+            Key: share.coverFileKey,
+          }),
+        );
+        if (object.Body) {
+          const bytes = await object.Body.transformToByteArray();
+          coverDataUrl = `data:${object.ContentType ?? 'image/jpeg'};base64,${bytesToBase64(bytes)}`;
+        }
+      } else {
+        const signedUrl = await getDownloadSignedUrl(share.coverFileKey, SHARE_PRESIGN_TTL_SECONDS);
+        const response = await fetch(signedUrl);
+        if (response.ok) {
+          const bytes = new Uint8Array(await response.arrayBuffer());
+          const contentType = response.headers.get('content-type') ?? 'image/jpeg';
+          coverDataUrl = `data:${contentType};base64,${bytesToBase64(bytes)}`;
+        }
       }
     } catch (err) {
       console.error('Share og.png cover fetch failed:', err);
@@ -59,8 +77,7 @@ export const renderShareOgImage = async (token: string): Promise<Response> => {
   );
 };
 
-const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
-  const bytes = new Uint8Array(buffer);
+const bytesToBase64 = (bytes: Uint8Array): string => {
   let binary = '';
   for (let i = 0; i < bytes.byteLength; i++) {
     binary += String.fromCharCode(bytes[i]!);
