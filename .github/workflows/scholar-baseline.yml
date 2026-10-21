@@ -64,11 +64,11 @@ jobs:
             -f docker/compose.yaml -f infra/staging/compose.yaml \
             -f infra/staging/restore-rehearsal.yaml \
             config --format json | SCHOLAR_COMPOSE_VARIANT=restore node infra/staging/check-config.mjs
-      - name: Exercise Scholar document identity migration and RLS
+      - name: Exercise Scholar document identity migrations and RLS
         timeout-minutes: 10
         env:
           SCHOLAR_TEST_POSTGRES_IMAGE: docker.io/supabase/postgres:15.8.1.085@sha256:caae3d066f437332d593011e3e7ecf78ab005ce9b89378efd53f97f0410563ad
-        run: bash docker/volumes/db/tests/run-029.sh
+        run: bash docker/volumes/db/tests/run-scholar-document-identity.sh
 
   source-inventory:
     runs-on: ubuntu-latest
