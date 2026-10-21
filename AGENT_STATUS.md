@@ -43,10 +43,11 @@
 - `main` 受保护并要求 Scholar 检查。工作树 `origin` 指向上游 Readest；向用户 fork 推送须显式使用 `git@github.com:gkwfhv/readest-scholar.git`。测试栈端口仅绑回环并通过 SSH 隧道访问，尚无测试域名；个人 SSH 私钥不进入 CI。
 - 独立桌面测试包已做上游更新渠道隔离：测试 Bundle ID 禁用 Tauri 更新，JS 更新检查和上游日志请求被阻断，未签名 macOS 包的关于窗口不再出现更新入口。定向测试 56/56、Node 24 静态导出与 Tauri 打包通过；详见 [Phase 1 更新隔离证据](docs/evidence/phase1/scholar-test-updater-isolation-2026-10-20.md)。这不等于正式签名更新分发验收。
 - 升级后 Web→后端→独立 macOS 测试包的新进度已在同一合成账户通过：Web 将两页 PDF 从第 2 页改到第 1 页，服务端记录更新，桌面端打开时出现“阅读进度已同步”并显示第 1 页，旧本地第 2 页没有覆盖它。桌面实际截图还核对了四个侧栏入口同一行、脑图标在边界内；见 [Web→桌面复验证据](docs/evidence/phase1/web-to-desktop-progress-2026-10-20.md)。
-- 用户已批准正式名称 `Readest Scholar` 与 Bundle ID `io.github.gkwfhv.readestscholar`。独立未签名 macOS 包完成静态导出、Tauri 打包、本地 PDF 阅读、窗口/菜单/源码链接检查，且不调用上游更新；见[正式身份本地验证](docs/evidence/phase1/scholar-release-identity-2026-10-21.md)。[PR #24](https://github.com/gkwfhv/readest-scholar/pull/24) 已在最终提交的全部必需 CI 与评审记录通过后合并。该包不代表签名发布或更新分发验收。后续工作分支已完成[独立书籍协议本地实测](docs/evidence/phase1/scholar-deeplink-identity-2026-10-21.md)：系统将 `readest-scholar://book/...` 唤起到正式身份包，样例 PDF 正常打开；真实 OAuth/分享回调仍未验收。
+- 用户已批准正式名称 `Readest Scholar` 与 Bundle ID `io.github.gkwfhv.readestscholar`。独立未签名 macOS 包完成静态导出、Tauri 打包、本地 PDF 阅读、窗口/菜单/源码链接检查，且不调用上游更新；见[正式身份本地验证](docs/evidence/phase1/scholar-release-identity-2026-10-21.md)。[PR #24](https://github.com/gkwfhv/readest-scholar/pull/24) 已在最终提交的全部必需 CI 与评审记录通过后合并。该包不代表签名发布或更新分发验收。[PR #25](https://github.com/gkwfhv/readest-scholar/pull/25) 将正式身份包的应用链接改为 `readest-scholar://` 并保留旧链接解析，最终 CI 全绿后已合并；[独立书籍协议本地实测](docs/evidence/phase1/scholar-deeplink-identity-2026-10-21.md)中，系统唤起样例 PDF 成功。真实 OAuth/分享回调仍未验收。
+- [Staging Web 合成 AI 交互](docs/evidence/phase1/staging-ai-smoke-2026-10-21.md)通过：Mac 浏览器经 SSH 隧道访问 Linux staging，连接 Mac 本地确定性模型夹具，完成样例 PDF 索引、问答、来源列表和重开后的会话恢复；移动侧栏四入口在同一行且脑图标位于边界内。来源点击跳转未在这次浏览器自动化中复验；真实模型质量和 Linux 主机模型运行不在此结论内。
 
 ## 下一动作
 
-1. 测试环境秘密文件防误提交已在 PR #20 建立，独立桌面测试包已隔离上游更新渠道；桌面→后端新进度写入与 Web→桌面新位置采用均已在升级后的合成 staging 验证。继续验收正式环境的秘密与构建产物管理、正式签名桌面更新分发，以及 Linux staging AI 模型交互。
-2. 将已本地验证的独立协议变更通过 PR 合入，再在 staging 运行环境配置中增加 OAuth 回调白名单并实测可用的回调/分享路径；本地身份包尚未作为可发布产物。
+1. 测试环境秘密文件防误提交、独立桌面测试包更新隔离、双向阅读位置同步及 staging Web 合成 AI 交互已留证。继续验收正式环境的秘密与构建产物管理、真实模型服务、正式签名桌面更新分发。
+2. 在 staging 运行环境配置中增加 OAuth 回调白名单，补齐 Scholar 自托管 HTTPS 分享/批注地址，再实测可用的回调/分享路径；本地身份包尚未作为可发布产物。
 3. Phase 1 签收后再按 [ROADMAP](ROADMAP.md)实施 Phase 2 文献管理。生产真实数据、外部 TLS、签名与正式发布仍需单独审批和验收。
