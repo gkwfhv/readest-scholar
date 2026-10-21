@@ -48,6 +48,7 @@ const buildWebReaderUrl = (bookHash: string, cfi: string | null): string => {
 
 const OpenAnnotationLanding = () => {
   const _ = useTranslation();
+  const scholarRelease = isScholarReleaseBundle();
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -136,8 +137,12 @@ const OpenAnnotationLanding = () => {
                 'The annotation link is missing required information. The original link may have been truncated.',
               )}
             </p>
-            <a href='https://readest.com' className='btn btn-ghost btn-block mt-6' rel='noopener'>
-              {_('Go to Readest')}
+            <a
+              href={scholarRelease ? getPublicWebBaseUrl() : 'https://readest.com'}
+              className='btn btn-ghost btn-block mt-6'
+              rel='noopener'
+            >
+              {scholarRelease ? _('Go to Readest Scholar') : _('Go to Readest')}
             </a>
           </div>
         </Card>
@@ -153,10 +158,12 @@ const OpenAnnotationLanding = () => {
     <main className='bg-base-200 flex min-h-dvh flex-col items-center justify-center p-4 sm:p-8'>
       <Card>
         <BrandHeader
-          title={_('Open in Readest')}
+          title={scholarRelease ? _('Open in Readest Scholar') : _('Open in Readest')}
           subtitle={
             showManualOpen
-              ? _("If Readest didn't open automatically, choose an option below:")
+              ? scholarRelease
+                ? _("If Readest Scholar didn't open automatically, choose an option below:")
+                : _("If Readest didn't open automatically, choose an option below:")
               : _('Continue reading where you left off.')
           }
           alt={_('Readest logo')}
@@ -171,7 +178,9 @@ const OpenAnnotationLanding = () => {
             aria-live='polite'
           >
             <span className='loading loading-dots loading-md text-primary' aria-hidden='true' />
-            <span className='text-base-content/70 text-sm'>{_('Opening Readest...')}</span>
+            <span className='text-base-content/70 text-sm'>
+              {scholarRelease ? _('Opening Readest Scholar...') : _('Opening Readest...')}
+            </span>
           </div>
         )}
 
@@ -184,13 +193,13 @@ const OpenAnnotationLanding = () => {
         >
           <a href={appUrl} className='btn btn-primary btn-block' rel='noopener'>
             <IoBookOutline className='h-5 w-5' aria-hidden='true' />
-            {_('Open in Readest app')}
+            {scholarRelease ? _('Open in Readest Scholar app') : _('Open in Readest app')}
           </a>
           <a href={webReaderHref} className='btn btn-ghost btn-block' rel='noopener'>
             <IoOpenOutline className='h-5 w-5' aria-hidden='true' />
             {_('Continue in browser')}
           </a>
-          {!isScholarReleaseBundle() && (
+          {!scholarRelease && (
             <p className='text-base-content/60 mt-3 text-center text-xs'>
               {_("Don't have Readest?")}{' '}
               <a
