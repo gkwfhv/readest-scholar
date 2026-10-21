@@ -6,6 +6,8 @@
 
 [PR #34 的 staging 验收](docs/evidence/phase1/scholar-account-brand-staging-2026-10-21.md)确认登录、账户及书库菜单使用 Scholar 身份并移除上游付费/下载入口；新版摘要部署、四路健康、备份及浏览器中的侧栏四按钮布局均通过。Phase 1 仍需外部回调/分享、真实模型与正式签名更新分发证据。
 
+[独立测试包的签名更新往返](docs/evidence/phase1/scholar-updater-loopback-smoke-2026-10-21.md)已在本机回环环境完成 `0.12.16 → 0.12.17` 检测、下载、验签、替换和重启；一次性密钥未进入仓库。正式 Scholar 包的 Apple 签名/公证、公开 HTTPS 更新源及跨机器安装仍待验收。
+
 | 阶段 | 状态 | 依赖 | 完成判据 |
 |---|---|---|---|
 | 0 审计与可复现基线 | 已通过限定范围验收 | [验收记录](docs/evidence/phase0/acceptance-2026-10-20.md) | 单机合成数据、Web/独立 macOS/Silo 阅读同步及生产 AI 来源验证通过；跨平台、真实模型质量不在此结论内 |
