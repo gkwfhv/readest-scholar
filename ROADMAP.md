@@ -4,6 +4,8 @@
 
 [PR #32 的 staging 验收](docs/evidence/phase1/scholar-web-build-brand-2026-10-21.md)进一步确认双架构 GHCR 发布、构建时 Scholar 品牌标记、`/library` 标题与 Web 安装清单；固定 amd64 摘要升级后四路健康通过，只有 Web 容器变化，合成分享预览与撤销复验通过。[正式身份 macOS 包的 staging 双向进度](docs/evidence/phase1/formal-desktop-staging-sync-2026-10-21.md)已通过合成账户验收；签名更新分发仍待完成。
 
+[PR #34 的 staging 验收](docs/evidence/phase1/scholar-account-brand-staging-2026-10-21.md)确认登录、账户及书库菜单使用 Scholar 身份并移除上游付费/下载入口；新版摘要部署、四路健康、备份及浏览器中的侧栏四按钮布局均通过。Phase 1 仍需外部回调/分享、真实模型与正式签名更新分发证据。
+
 | 阶段 | 状态 | 依赖 | 完成判据 |
 |---|---|---|---|
 | 0 审计与可复现基线 | 已通过限定范围验收 | [验收记录](docs/evidence/phase0/acceptance-2026-10-20.md) | 单机合成数据、Web/独立 macOS/Silo 阅读同步及生产 AI 来源验证通过；跨平台、真实模型质量不在此结论内 |
