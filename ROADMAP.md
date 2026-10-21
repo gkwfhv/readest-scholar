@@ -10,7 +10,7 @@
 
 [Phase 1 验收记录](docs/evidence/phase1/acceptance-2026-10-21.md)依据计划第 9 节将空栈、升级、备份恢复、CI/SBOM、测试秘密、回环更新和普通阅读列为非生产工程底座通过项；公开服务、真实模型、正式签名分发仍不可发布，也不阻塞 Phase 2 的本地文献管理开发。
 
-Phase 2 已从[手动 DOI 元数据](docs/evidence/phase2/doi-metadata-2026-10-21.md)开始：Scholar 书籍详情可编辑和显示 DOI，沿用现有元数据保存路径。[隔离 staging 的双向同步实测](docs/evidence/phase2/doi-staging-bidirectional-2026-10-21.md)已验证 Web ↔ 服务端 ↔ macOS 的一次 DOI 修改往返，以及现有 `books` 记录的双账户读取隔离；[书库文本检索](docs/evidence/phase2/doi-search-2026-10-21.md)新增 DOI 和出版年份。[文献/文件身份迁移](docs/evidence/phase2/document-file-identity-2026-10-21.md)已在隔离 PostgreSQL 与 staging 中验证回填、复合外键、双账户 RLS 和 PostgREST 可见性。[新书自动文献映射](docs/evidence/phase2/document-auto-link-2026-10-21.md)已通过本地数据库行为测试和 staging 写入角色验收；[原文文件自动关联](docs/evidence/phase2/document-file-auto-link-2026-10-21.md)已通过隔离数据库的两种写入顺序、恢复与边界测试，待 staging 部署及实际 Web/桌面新书往返。客户端文献操作、集合、去重、200+ 文献规模和更广的隔离/冲突场景尚未完成。
+Phase 2 已从[手动 DOI 元数据](docs/evidence/phase2/doi-metadata-2026-10-21.md)开始：Scholar 书籍详情可编辑和显示 DOI，沿用现有元数据保存路径。[隔离 staging 的双向同步实测](docs/evidence/phase2/doi-staging-bidirectional-2026-10-21.md)已验证 Web ↔ 服务端 ↔ macOS 的一次 DOI 修改往返，以及现有 `books` 记录的双账户读取隔离；[书库文本检索](docs/evidence/phase2/doi-search-2026-10-21.md)新增 DOI 和出版年份。[文献/文件身份迁移](docs/evidence/phase2/document-file-identity-2026-10-21.md)已在隔离 PostgreSQL 与 staging 中验证回填、复合外键、双账户 RLS 和 PostgREST 可见性。[新书自动文献映射](docs/evidence/phase2/document-auto-link-2026-10-21.md)已通过本地数据库行为测试和 staging 写入角色验收；[原文文件自动关联](docs/evidence/phase2/document-file-auto-link-2026-10-21.md)已通过隔离数据库、staging 写入角色及真实 HTTP 签名上传/下载校验，Web 导入按钮与桌面新书往返仍待测。客户端文献操作、集合、去重、200+ 文献规模和更广的隔离/冲突场景尚未完成。
 
 | 阶段 | 状态 | 依赖 | 完成判据 |
 |---|---|---|---|
