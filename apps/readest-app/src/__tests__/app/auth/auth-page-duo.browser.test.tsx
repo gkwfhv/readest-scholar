@@ -31,6 +31,7 @@ vi.mock('@/services/environment', () => ({
   hasCli: () => false,
   isPWA: () => false,
   getBaseUrl: () => 'https://web.readest.com',
+  getAppDeepLinkScheme: () => 'readest',
   getNodeBaseUrl: () => 'https://web.readest.com',
   needsPointerWindowControls: () => false,
   isMacPlatform: () => false,

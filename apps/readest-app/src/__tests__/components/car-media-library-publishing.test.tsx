@@ -17,6 +17,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 }));
 vi.mock('@/services/environment', () => ({
   isTauriAppPlatform: () => true,
+  getAppDeepLinkScheme: () => 'readest',
   getInitializedAppService: () => ({
     supportsCoverThumbnailOptimization: false,
     resolveNativeBookFilePath: mocks.resolveNativeBookFilePath,

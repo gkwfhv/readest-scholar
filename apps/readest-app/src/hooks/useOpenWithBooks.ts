@@ -64,7 +64,7 @@ export function useOpenWithBooks() {
         if (url.startsWith('file://')) {
           url = appService?.isIOSApp ? decodeURI(url) : decodeURI(url.replace('file://', ''));
         }
-        if (!/^(https?:|data:|blob:|readest:)/i.test(url)) {
+        if (!/^(https?:|data:|blob:|readest(?:-scholar)?:)/i.test(url)) {
           filePaths.push(url);
         }
       }

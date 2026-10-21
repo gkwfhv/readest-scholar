@@ -45,6 +45,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllEnvs();
 });
 
 describe('LinkDevice', () => {
@@ -58,6 +59,15 @@ describe('LinkDevice', () => {
       'readest://link?code=RQGF-WDCF',
     );
     expect(screen.getByText('Sign in to continue')).toBeTruthy();
+  });
+
+  it('offers the Scholar scheme from a Scholar web build', () => {
+    vi.stubEnv('NEXT_PUBLIC_SCHOLAR_RELEASE', 'true');
+    inApp = false;
+    render(<LinkDevice />);
+    expect(screen.getByText('Open in app').closest('a')?.getAttribute('href')).toBe(
+      'readest-scholar://link?code=RQGF-WDCF',
+    );
   });
 
   // Like the account page it shares a header with: the user's theme mode and

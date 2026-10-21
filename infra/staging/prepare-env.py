@@ -44,7 +44,8 @@ def main() -> None:
         "SITE_URL": f"http://127.0.0.1:{PORTS['SCHOLAR_WEB_PORT']}",
         "ADDITIONAL_REDIRECT_URLS": (
             f"http://127.0.0.1:{PORTS['SCHOLAR_WEB_PORT']}/**,"
-            f"http://127.0.0.1:{PORTS['SCHOLAR_API_PORT']}/**"
+            f"http://127.0.0.1:{PORTS['SCHOLAR_API_PORT']}/**,"
+            "readest://auth-callback,readest-scholar://auth-callback"
         ),
     }
     lines = SAMPLE.read_text().splitlines()

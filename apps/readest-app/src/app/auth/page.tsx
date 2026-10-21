@@ -14,7 +14,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { useEnsureSettingsLoaded } from '@/hooks/useEnsureSettingsLoaded';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTrafficLightStore } from '@/store/trafficLightStore';
-import { getBaseUrl, isTauriAppPlatform } from '@/services/environment';
+import { getAppDeepLinkScheme, getBaseUrl, isTauriAppPlatform } from '@/services/environment';
 import { onOpenUrl } from '@tauri-apps/plugin-deep-link';
 import { start, cancel, onUrl, onInvalidUrl } from '@fabianlars/tauri-plugin-oauth';
 import { openUrl } from '@tauri-apps/plugin-opener';
@@ -34,7 +34,7 @@ interface SingleInstancePayload {
 }
 
 const WEB_AUTH_CALLBACK = `${getBaseUrl()}/auth/callback`;
-const DEEPLINK_CALLBACK = 'readest://auth-callback';
+const DEEPLINK_CALLBACK = `${getAppDeepLinkScheme()}://auth-callback`;
 const USE_APPLE_SIGN_IN = process.env['NEXT_PUBLIC_USE_APPLE_SIGN_IN'] === 'true';
 
 export default function AuthPage() {

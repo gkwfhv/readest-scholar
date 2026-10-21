@@ -4,6 +4,7 @@ import { parseBookDeepLink } from '@/utils/deeplink';
 describe('parseBookDeepLink', () => {
   it('parses the custom-scheme book-open form', () => {
     expect(parseBookDeepLink('readest://book/abc123')).toEqual({ bookHash: 'abc123' });
+    expect(parseBookDeepLink('readest-scholar://book/abc123')).toEqual({ bookHash: 'abc123' });
   });
   it('parses the web form', () => {
     expect(parseBookDeepLink('https://web.readest.com/o/book/abc123')).toEqual({
