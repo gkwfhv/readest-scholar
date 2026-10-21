@@ -9,6 +9,7 @@ vi.mock('@/libs/shareServer', () => ({
 }));
 
 import { generateMetadata } from '@/app/s/page';
+import { resolveActiveShare } from '@/libs/shareServer';
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -34,7 +35,9 @@ describe('shared-book metadata', () => {
     const scholar = await generateMetadata({
       searchParams: Promise.resolve({ token: 'synthetic' }),
     });
-    expect(scholar.title).toBe('Synthetic paper · Shared via Readest Scholar');
+    expect(scholar.title).toEqual({
+      absolute: 'Synthetic paper · Shared via Readest Scholar',
+    });
     expect(scholar.description).toBe('Example Author · Shared via Readest Scholar');
     expect(scholar.openGraph).toMatchObject({
       title: 'Synthetic paper',
@@ -46,5 +49,25 @@ describe('shared-book metadata', () => {
       searchParams: Promise.resolve({ token: 'synthetic' }),
     });
     expect(upstream.title).toBe('Synthetic paper · Shared via Readest');
+  });
+
+  it('keeps Scholar fallback titles outside the baked upstream template', async () => {
+    vi.stubEnv('NEXT_PUBLIC_APP_PLATFORM', 'web');
+    vi.stubEnv('SCHOLAR_RELEASE', 'true');
+    const missing = await generateMetadata({ searchParams: Promise.resolve({}) });
+    expect(missing.title).toEqual({ absolute: 'Open in Readest Scholar' });
+
+    vi.mocked(resolveActiveShare).mockResolvedValueOnce({
+      ok: false,
+      reason: { kind: 'not_found' },
+    });
+    const unavailable = await generateMetadata({
+      searchParams: Promise.resolve({ token: 'missing' }),
+    });
+    expect(unavailable.title).toEqual({ absolute: 'Share link unavailable · Readest Scholar' });
+
+    vi.stubEnv('SCHOLAR_RELEASE', 'false');
+    const upstream = await generateMetadata({ searchParams: Promise.resolve({}) });
+    expect(upstream.title).toBe('Open in Readest');
   });
 });

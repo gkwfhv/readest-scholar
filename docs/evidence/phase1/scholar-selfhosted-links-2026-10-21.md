@@ -24,8 +24,18 @@
 - 使用主机私有 `0600` 合成账户在内存中登录（HTTP 200、用户 ID 与基线相符），从 REST 文件列表选出已上传的仓库样例 PDF。`POST /api/share/create` 返回 HTTP 200、22 字符令牌和 `http://127.0.0.1:3130/s/` 本站链接。公开元数据与 `/s/{token}` 均为 200；落地页 OG URL 指向相同本站链接，不含 `web.readest.com/s/{token}`。`/api/share/{token}/og.png` 为 200、`image/png`；下载 API 为 302，目标是回环对象端口。随即撤销临时分享得到 204，再读公开元数据为 410 `revoked`。令牌、邮箱、密码均未输出或入库到证据文件。
 - 这次页面烟测发现 HTML 的分享标题和图片署名仍写普通 Readest；同类问题也存在于批注落地页与共用页脚。本次后续修复以先失败的回归测试覆盖 Scholar 与普通 Readest 两种模式；补充中文用例先复现了新增英文键导致的回退，改为复用现有译文后，定向 9 项全通过。最终 Node 24 全量 Vitest 为 **1,174 个文件通过、4 跳过；13,802 项通过、16 跳过、0 失败**，TypeScript、Biome 与格式检查通过。文案补丁前的父提交使用 `next build --webpack` 完成 Web 生产构建及显式合成自托管配置下的 Scholar 桌面静态导出；最终提交的构建结果由 PR CI 复验。默认 Turbopack 构建因本工作树 `node_modules` 指向工作树外的共享依赖目录而失败；这是本机链接布局限制，生产 Docker 构建使用独立依赖树。修复代码合并和新镜像部署后的结果另行补记，不能把当前部署当作品牌文案通过。
 
+## PR #29 品牌镜像升级与界面复验
+
+- [PR #29](https://github.com/gkwfhv/readest-scholar/pull/29) 的最终 `f021772b827154a22af5f33a83f1ca1288d11ed3` 经 Scholar baseline、完整 PR checks 与 CodeQL 通过，并在精确 SHA 评审后合并为 `460a97d84017823cb836352e48eb1d93ebafb99e`。[镜像发布](https://github.com/gkwfhv/readest-scholar/actions/runs/39551472818)完成双架构与 SBOM；amd64 平台摘要为 `sha256:b384ce4bce3708078fd6520c7a73a95663dea05fb29f269fdaf2e1b587118872`，arm64 为 `sha256:c6169f2a5ebf8ba20516d9659bb4c1425a27d1e4c6effcf0adbee4befccad6dc`。
+- 主机源码由经 SHA256 `a402a6af5d8585109d6839d09c2ad45db54ba1843e678fe424fd07522e89a3df` 核对的增量 Git bundle 快进到该合并提交，工作树干净。Mac 拉取并核对 amd64 镜像 ID 与架构后生成 132 MiB gzip 归档，经 SSH/rsync 传到主机；两端归档 SHA256 为 `0b5105f94b0373ed02560791e407a6f7904ec0fede4b5f25f893cb9710302e16`，主机 gzip 校验和 `docker image load` 均通过。主机以完整平台摘要解析到相同镜像 ID。
+- `deploy-web.sh` 在四路预检后创建 `20261021T055840Z` 完整备份（`STATUS=complete`，尚未冷恢复），仅重建 Web 为 `ed54ede8c981`，四路后检通过。Auth `1ea0af687aff`、数据库 `91ef7c962cd1`、Kong `452374bb5638`、MinIO `5f198c232aa4`、REST `5436a7e57610` 容器 ID 保持不变。私有 `.env` 仍为 `0600`，Web 运行时返回 `scholarRelease=true` 与 `selfHosted=true`。
+- 重新生成一个仓库合成 PDF 的临时分享并经 SSH 隧道用 Chromium 实际打开。390px 手机和 1280px 桌面宽度下，标题、本站页脚、`readest-scholar://` 按钮及本站 OG URL 均出现；页面及按钮无横向溢出，浏览器没有页面脚本错误。[手机截图](scholar-share-mobile-2026-10-21.png)、[桌面截图](scholar-share-desktop-2026-10-21.png)。合成封面虽看起来纯白，但浏览器读到 612×792 自然尺寸、对象请求 HTTP 200；不把它误判成图片加载失败。
+- 这次进一步发现两项未通过：浏览器标题为 `Synthetic Sample Paper · Shared via Readest Scholar | Readest`，根布局的构建时标题模板仍追加普通 Readest；OG 图片请求在新镜像上断开连接。容器未重启，脱敏日志显示服务端取合成封面的回环 S3 地址失败后回退文字卡片，而动态品牌文本触发图片渲染器“多个子节点需明确 display”错误。新增真实 `ImageResponse` PNG 流测试先复现该错误，修复文字节点后覆盖有封面、无封面与取封面失败的三种路径；分享页改用 Scholar 绝对标题以绕开根模板。这些修复还未部署，不能把当前镜像的标题和 OG 图片记为通过。
+- 本次修复的 Node 24 全量 Vitest 为 **1,175 个文件通过、4 跳过；13,806 项通过、16 跳过、0 失败**；TypeScript、Biome lint/format、Webpack Web 生产构建及显式合成自托管配置下的 Scholar 桌面静态导出均通过。正式镜像还需 PR CI 与 staging 再部署核验。
+- 临时分享已经撤销（204），公开元数据返回 410 `revoked`；本机和主机的临时令牌文件及 SSH 隧道已清理。分享令牌不写入仓库。
+
 ## 尚未验收
 
 - 没有测试域名；回环链接只有 SSH 隧道本机可用。正式 HTTPS 分享/批注链接、真实 OAuth 提供方回跳及外部收件人打开分享均未验收。虽然两种 scheme 已加入 Auth 白名单，尚无 OAuth 提供方可发起真实回跳。
-- 新版品牌文案尚未进入 staging 镜像；分享导入到第二个独立账户和客户端落地页的交互尚未实测。
+- 标题后缀和 OG 渲染修复尚未进入 staging 镜像；分享导入到第二个独立账户尚未实测。根布局其他页面的构建时标题模板仍需单独核对。
 - 正式签名安装包与更新分发仍是独立发布门槛。
