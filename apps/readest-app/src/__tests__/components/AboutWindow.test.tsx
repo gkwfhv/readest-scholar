@@ -16,6 +16,7 @@ const {
   mockInvoke,
   mockHasUpdater,
   mockIsScholarTestBundle,
+  mockIsScholarReleaseBundle,
   mockCheckForAppUpdates,
   mockCheckAppReleaseNotes,
 } = vi.hoisted(() => ({
@@ -25,6 +26,7 @@ const {
   mockInvoke: vi.fn(),
   mockHasUpdater: vi.fn(() => true),
   mockIsScholarTestBundle: vi.fn(() => false),
+  mockIsScholarReleaseBundle: vi.fn(() => false),
   mockCheckForAppUpdates: vi.fn(),
   mockCheckAppReleaseNotes: vi.fn(),
 }));
@@ -54,6 +56,10 @@ vi.mock('@/utils/ua', () => ({
 vi.mock('@/services/environment', () => ({
   isTauriAppPlatform: () => mockIsTauriAppPlatform(),
   isScholarTestBundle: () => mockIsScholarTestBundle(),
+  isScholarReleaseBundle: () => mockIsScholarReleaseBundle(),
+  getAppDisplayName: () => (mockIsScholarReleaseBundle() ? 'Readest Scholar' : 'Readest'),
+  getAboutAppLabel: (label: string) =>
+    label.replace('Readest', mockIsScholarReleaseBundle() ? 'Readest Scholar' : 'Readest'),
 }));
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -76,10 +82,21 @@ vi.mock('next/image', () => ({
   default: ({ alt }: { alt: string }) => <span>{alt}</span>,
 }));
 
-vi.mock('@/components/SupportLinks', () => ({ default: () => null }));
-vi.mock('@/components/LegalLinks', () => ({ default: () => null }));
+vi.mock('@/components/SupportLinks', () => ({
+  default: () => <a href='https://github.com/readest/readest'>Readest Support</a>,
+}));
+vi.mock('@/components/LegalLinks', () => ({
+  default: () => (
+    <>
+      <a href='https://readest.com/terms-of-service'>Terms of Service</a>
+      <a href='https://readest.com/privacy-policy'>Privacy Policy</a>
+    </>
+  ),
+}));
 vi.mock('@/components/Link', () => ({
-  default: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+  default: ({ children, href }: { children: ReactNode; href: string }) => (
+    <a href={href}>{children}</a>
+  ),
 }));
 vi.mock('@/components/Dialog', () => ({
   default: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -106,6 +123,7 @@ describe('AboutWindow version label', () => {
     mockInvoke.mockReset();
     mockHasUpdater.mockReturnValue(true);
     mockIsScholarTestBundle.mockReturnValue(false);
+    mockIsScholarReleaseBundle.mockReturnValue(false);
     mockCheckForAppUpdates.mockReset();
     mockCheckAppReleaseNotes.mockReset();
   });
@@ -198,5 +216,26 @@ describe('AboutWindow version label', () => {
 
     expect(screen.queryByRole('button', { name: 'Changelog' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Check Update' })).toBeNull();
+  });
+
+  it('names the formal Scholar bundle and hides upstream updates', async () => {
+    mockHasUpdater.mockReturnValue(false);
+    mockIsScholarReleaseBundle.mockReturnValue(true);
+    await openDialog();
+
+    expect(screen.getByRole('heading', { name: 'Readest Scholar' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Changelog' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Check Update' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'GitHub' }).getAttribute('href')).toBe(
+      'https://github.com/gkwfhv/readest-scholar',
+    );
+    expect(screen.queryByRole('link', { name: 'Privacy Policy' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Terms of Service' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Readest Support' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /Version 0\.11\.20/ }));
+    await waitFor(() =>
+      expect(mockWriteTextToClipboard).toHaveBeenCalledWith('Readest Scholar 0.11.20 (Chrome 148)'),
+    );
   });
 });

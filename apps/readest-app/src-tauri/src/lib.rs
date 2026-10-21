@@ -410,8 +410,8 @@ fn restore_main_window_maximized<R: tauri::Runtime>(window: &tauri::WebviewWindo
 // dependency-free so it can be unit tested for every platform combination.
 //
 // - `env_disable`: READEST_DISABLE_UPDATER is set (explicit opt-out).
-// - `com.readest.scholar.*` is reserved for isolated test bundles. Until a
-//   separate signed Scholar channel exists, they must not offer upstream updates.
+// - Scholar test and formal bundles cannot use the upstream Readest channel.
+//   A separate signed Scholar channel must be configured before enabling updates.
 // - Linux only: Tauri's updater can self-update AppImage bundles *only*, so
 //   deb/rpm/pacman (`!is_appimage`) and Flatpak installs are updated by the
 //   system package manager and must not show the in-app updater.
@@ -425,6 +425,7 @@ fn compute_updater_disabled(
 ) -> bool {
     env_disable
         || identifier.starts_with("com.readest.scholar.")
+        || identifier == "io.github.gkwfhv.readestscholar"
         || (is_linux && (is_flatpak || !is_appimage))
 }
 
@@ -883,7 +884,7 @@ pub fn run() {
             let is_appimage = false;
 
             // The in-app updater is hidden for installs it can't actually update
-            // (Linux deb/rpm/pacman and Flatpak), Scholar test bundles, and when
+            // (Linux deb/rpm/pacman and Flatpak), Scholar bundles, and when
             // READEST_DISABLE_UPDATER is set. This mirrors the `is_updater_disabled` command that
             // `NativeAppService.init()` reads authoritatively; the injected global
             // below is only a best-effort fast path.
@@ -892,6 +893,13 @@ pub fn run() {
             #[cfg(not(desktop))]
             let updater_disabled = false;
             let scholar_test_bundle = app.config().identifier.starts_with("com.readest.scholar.");
+            let scholar_release_bundle =
+                app.config().identifier == "io.github.gkwfhv.readestscholar";
+            let app_window_title = if scholar_release_bundle {
+                "Readest Scholar"
+            } else {
+                "Readest"
+            };
 
             // One id per app run. The OS keeps re-delivering the URL the app was
             // launched with — Android re-reads the sticky `activity.intent`
@@ -917,6 +925,7 @@ pub fn run() {
                     if ({is_appimage}) window.__READEST_IS_APPIMAGE = true;
                     if ({updater_disabled}) window.__READEST_UPDATER_DISABLED = true;
                     if ({scholar_test_bundle}) window.__READEST_SCHOLAR_TEST_BUNDLE = true;
+                    if ({scholar_release_bundle}) window.__READEST_SCHOLAR_RELEASE_BUNDLE = true;
                     window.addEventListener('DOMContentLoaded', function() {{
                         document.documentElement.classList.add('edge-to-edge');
                         const isTauriLocal = window.location.protocol === 'tauri:' ||
@@ -999,7 +1008,7 @@ pub fn run() {
             let win_builder = win_builder
                 .decorations(true)
                 .title_bar_style(TitleBarStyle::Overlay)
-                .title("Readest");
+                .title(app_window_title);
 
             #[cfg(all(not(target_os = "macos"), desktop))]
             let win_builder = {
@@ -1007,7 +1016,7 @@ pub fn run() {
                     .decorations(false)
                     .visible(false)
                     .shadow(undecorated_shadow_is_symmetric())
-                    .title("Readest");
+                    .title(app_window_title);
 
                 #[cfg(target_os = "windows")]
                 {
@@ -1290,6 +1299,17 @@ mod tests {
             false,
             false,
             "com.bilingify.readest"
+        ));
+    }
+
+    #[test]
+    fn scholar_release_bundle_never_uses_upstream_updater() {
+        assert!(compute_updater_disabled(
+            false,
+            false,
+            false,
+            false,
+            "io.github.gkwfhv.readestscholar"
         ));
     }
 }

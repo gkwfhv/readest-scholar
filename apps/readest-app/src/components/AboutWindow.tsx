@@ -5,7 +5,13 @@ import { useEnv } from '@/context/EnvContext';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useSettingsStore } from '@/store/settingsStore';
 import { checkForAppUpdates, checkAppReleaseNotes } from '@/helpers/updater';
-import { isScholarTestBundle, isTauriAppPlatform } from '@/services/environment';
+import {
+  getAboutAppLabel,
+  getAppDisplayName,
+  isScholarReleaseBundle,
+  isScholarTestBundle,
+  isTauriAppPlatform,
+} from '@/services/environment';
 import { parseWebViewInfo } from '@/utils/ua';
 import { getAppVersion } from '@/utils/version';
 import { writeTextToClipboard } from '@/utils/clipboard';
@@ -104,12 +110,13 @@ export const AboutWindow = () => {
   };
 
   const versionInfo = `${_('Version {{version}}', { version: getAppVersion() })} (${browserInfo})`;
+  const appName = getAppDisplayName();
 
   // Mobile users can't select the version string to paste it into a bug
   // report (#5285), so tapping the label copies it. The label itself stays
   // localized; the copied string is locale-neutral and names the app first.
   const handleCopyVersion = async () => {
-    const copied = await writeTextToClipboard(`Readest ${getAppVersion()} (${browserInfo})`);
+    const copied = await writeTextToClipboard(`${appName} ${getAppVersion()} (${browserInfo})`);
     if (!copied) return;
     eventDispatcher.dispatch('toast', {
       type: 'info',
@@ -123,7 +130,7 @@ export const AboutWindow = () => {
     <Dialog
       id='about_window'
       isOpen={isOpen}
-      title={_('About Readest')}
+      title={getAboutAppLabel(_('About Readest'))}
       onClose={handleClose}
       boxClassName='sm:w-[480px]! sm:max-w-(--breakpoint-sm)! sm:h-auto'
     >
@@ -134,7 +141,7 @@ export const AboutWindow = () => {
               <Image src='/icon.png' alt='App Logo' className='h-20 w-20' width={64} height={64} />
             </div>
             <div className='flex select-text flex-col items-center'>
-              <h2 className='mb-2 text-2xl font-bold'>Readest</h2>
+              <h2 className='mb-2 text-2xl font-bold'>{appName}</h2>
               <button
                 type='button'
                 title={_('Copy')}
@@ -145,7 +152,7 @@ export const AboutWindow = () => {
               </button>
             </div>
             <div className='my-1 h-5'>
-              {!updateStatus && !isScholarTestBundle() && (
+              {!updateStatus && !isScholarTestBundle() && !isScholarReleaseBundle() && (
                 <button
                   className='btn btn-sm btn-primary cursor-pointer p-1 text-xs'
                   onClick={appService?.hasUpdater ? handleCheckUpdate : handleShowRecentUpdates}
@@ -190,15 +197,22 @@ export const AboutWindow = () => {
             </p>
             <p className='text-neutral-content text-xs'>
               Source code is available at{' '}
-              <Link href='https://github.com/readest/readest' className='text-blue-500 underline'>
+              <Link
+                href={
+                  isScholarReleaseBundle()
+                    ? 'https://github.com/gkwfhv/readest-scholar'
+                    : 'https://github.com/readest/readest'
+                }
+                className='text-blue-500 underline'
+              >
                 GitHub
               </Link>
               .
             </p>
 
-            <LegalLinks />
+            {!isScholarReleaseBundle() && <LegalLinks />}
           </div>
-          <SupportLinks />
+          {!isScholarReleaseBundle() && <SupportLinks />}
         </div>
       )}
     </Dialog>

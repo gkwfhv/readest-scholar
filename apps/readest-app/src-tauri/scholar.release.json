@@ -1,0 +1,22 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Readest Scholar",
+  "mainBinaryName": "readest-scholar",
+  "identifier": "io.github.gkwfhv.readestscholar",
+  "build": {
+    "beforeBuildCommand": ""
+  },
+  "bundle": {
+    "createUpdaterArtifacts": false
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["readest-scholar"]
+      }
+    },
+    "updater": {
+      "endpoints": []
+    }
+  }
+}

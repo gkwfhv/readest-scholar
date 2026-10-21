@@ -20,6 +20,7 @@ vi.mock('@tauri-apps/api/webviewWindow', () => {
 });
 
 vi.mock('@/services/environment', () => ({
+  getAppDisplayName: vi.fn().mockReturnValue('Readest'),
   isPWA: vi.fn().mockReturnValue(false),
   isWebAppPlatform: vi.fn().mockReturnValue(false),
   isTauriAppPlatform: vi.fn().mockReturnValue(false),
@@ -37,7 +38,12 @@ import { redirect } from 'next/navigation';
 import { version as osVersion } from '@tauri-apps/plugin-os';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { isPWA, isTauriAppPlatform, isWebAppPlatform } from '@/services/environment';
+import {
+  getAppDisplayName,
+  isPWA,
+  isTauriAppPlatform,
+  isWebAppPlatform,
+} from '@/services/environment';
 import {
   navigateToReader,
   navigateToLogin,
@@ -79,6 +85,7 @@ beforeEach(() => {
   vi.mocked(isWebAppPlatform).mockReturnValue(false);
   vi.mocked(isPWA).mockReturnValue(false);
   vi.mocked(isTauriAppPlatform).mockReturnValue(false);
+  vi.mocked(getAppDisplayName).mockReturnValue('Readest');
 
   // Reset getCurrentWindow default
   vi.mocked(getCurrentWindow).mockReturnValue({
@@ -402,6 +409,14 @@ describe('showReaderWindow', async () => {
     expect(options.titleBarStyle).toBe('overlay');
   });
 
+  test('names a Scholar reader before its page loads', async () => {
+    vi.mocked(getAppDisplayName).mockReturnValue('Readest Scholar');
+
+    await showReaderWindow(makeAppService(true) as never, ['book1']);
+
+    expect(vi.mocked(WebviewWindow).mock.calls[0]![1]!.title).toBe('Readest Scholar');
+  });
+
   test('uses non-macOS window options', async () => {
     const appService = makeAppService(false);
     await showReaderWindow(appService as never, ['book1']);
@@ -472,6 +487,7 @@ describe('ensureMainLibraryWindow', () => {
 
   test('creates a new main-labelled window pointing at /library when missing', async () => {
     WebviewWindowCtor.getByLabel.mockResolvedValue(null);
+    vi.mocked(getAppDisplayName).mockReturnValue('Readest Scholar');
 
     await ensureMainLibraryWindow(makeAppService() as never);
 
@@ -479,6 +495,7 @@ describe('ensureMainLibraryWindow', () => {
     const [label, options] = vi.mocked(WebviewWindow).mock.calls[0]!;
     expect(label).toBe('main');
     expect((options as { url: string }).url).toBe('/library');
+    expect(options!.title).toBe('Readest Scholar');
   });
 });
 

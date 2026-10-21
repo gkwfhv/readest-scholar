@@ -20,9 +20,28 @@ beforeEach(() => {
   // Clean up any window globals we set
   delete (window as unknown as Record<string, unknown>)['__READEST_CLI_ACCESS'];
   delete (window as unknown as Record<string, unknown>)['__READEST_RUNTIME_CONFIG'];
+  delete (window as unknown as Record<string, unknown>)['__READEST_SCHOLAR_RELEASE_BUNDLE'];
 });
 
 describe('environment', () => {
+  describe('isScholarReleaseBundle', () => {
+    test('recognizes only the formal Scholar bundle marker', async () => {
+      const { isScholarReleaseBundle, getAppDisplayName, getAboutAppLabel } = await import(
+        '@/services/environment'
+      );
+      expect(isScholarReleaseBundle()).toBe(false);
+      expect(getAppDisplayName()).toBe('Readest');
+      expect(getAboutAppLabel('关于 Readest')).toBe('关于 Readest');
+      window.__READEST_SCHOLAR_RELEASE_BUNDLE = true;
+      expect(isScholarReleaseBundle()).toBe(true);
+      expect(getAppDisplayName()).toBe('Readest Scholar');
+      expect(getAboutAppLabel('关于 Readest')).toBe('关于 Readest Scholar');
+      delete window.__READEST_SCHOLAR_RELEASE_BUNDLE;
+      vi.stubEnv('NEXT_PUBLIC_SCHOLAR_RELEASE', 'true');
+      expect(isScholarReleaseBundle()).toBe(true);
+      vi.unstubAllEnvs();
+    });
+  });
   // ── isTauriAppPlatform ─────────────────────────────────────────
   describe('isTauriAppPlatform', () => {
     test('returns true when NEXT_PUBLIC_APP_PLATFORM is tauri', async () => {

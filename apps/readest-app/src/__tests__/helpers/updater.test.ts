@@ -41,9 +41,11 @@ vi.mock('@/components/UpdaterWindow', () => ({
 
 let mockIsTauriAppPlatform = false;
 let mockIsScholarTestBundle = false;
+let mockIsScholarReleaseBundle = false;
 vi.mock('@/services/environment', () => ({
   isTauriAppPlatform: () => mockIsTauriAppPlatform,
   isScholarTestBundle: () => mockIsScholarTestBundle,
+  isScholarReleaseBundle: () => mockIsScholarReleaseBundle,
 }));
 
 let mockAppVersion = '1.0.0';
@@ -81,6 +83,7 @@ beforeEach(() => {
   localStorage.clear();
   mockIsTauriAppPlatform = false;
   mockIsScholarTestBundle = false;
+  mockIsScholarReleaseBundle = false;
   mockAppVersion = '1.0.0';
   MockWebviewWindowLastArgs.length = 0;
   vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -104,6 +107,16 @@ describe('updater', () => {
     const result = await checkForAppUpdates(dummyTranslate, false);
 
     expect(result).toBe(false);
+    expect(mockCheck).not.toHaveBeenCalled();
+    expect(mockTauriFetch).not.toHaveBeenCalled();
+  });
+
+  test('does not check upstream updates for the formal Scholar bundle', async () => {
+    mockIsScholarReleaseBundle = true;
+    mockIsTauriAppPlatform = true;
+    mockOsType.mockReturnValue('macos');
+
+    expect(await checkForAppUpdates(dummyTranslate, false)).toBe(false);
     expect(mockCheck).not.toHaveBeenCalled();
     expect(mockTauriFetch).not.toHaveBeenCalled();
   });
@@ -396,6 +409,15 @@ describe('updater', () => {
       const result = await checkAppReleaseNotes(false);
 
       expect(result).toBe(false);
+      expect(mockTauriFetch).not.toHaveBeenCalled();
+      expect(mockSetUpdaterWindowVisible).not.toHaveBeenCalled();
+    });
+
+    test('does not fetch upstream release notes for the formal Scholar bundle', async () => {
+      mockIsScholarReleaseBundle = true;
+      mockIsTauriAppPlatform = true;
+
+      expect(await checkAppReleaseNotes(false)).toBe(false);
       expect(mockTauriFetch).not.toHaveBeenCalled();
       expect(mockSetUpdaterWindowVisible).not.toHaveBeenCalled();
     });

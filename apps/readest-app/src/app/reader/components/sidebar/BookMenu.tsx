@@ -10,7 +10,7 @@ import { useSidebarStore } from '@/store/sidebarStore';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useParallelViewStore } from '@/store/parallelViewStore';
-import { isWebAppPlatform } from '@/services/environment';
+import { getAboutAppLabel, isWebAppPlatform } from '@/services/environment';
 import { eventDispatcher } from '@/utils/event';
 import { canPairAudiobook } from '@/utils/audiobook';
 import { FIXED_LAYOUT_FORMATS } from '@/types/book';
@@ -312,7 +312,7 @@ const BookMenu: React.FC<BookMenuProps> = ({ menuClassName, setIsDropdownOpen })
       <MenuItem label={_('Reload Page')} shortcut='Shift+R' onClick={handleReloadPage} />
       <hr aria-hidden='true' className='border-base-200 my-1' />
       {isWebAppPlatform() && <MenuItem label={_('Download Readest')} onClick={downloadReadest} />}
-      <MenuItem label={_('About Readest')} onClick={showAboutReadest} />
+      <MenuItem label={getAboutAppLabel(_('About Readest'))} onClick={showAboutReadest} />
     </Menu>
   );
 };

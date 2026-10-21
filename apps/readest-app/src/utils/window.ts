@@ -5,9 +5,8 @@ import { exit } from '@tauri-apps/plugin-process';
 import { type as osType, version as osVersion } from '@tauri-apps/plugin-os';
 import { AppService } from '@/types/system';
 import { useTrafficLightStore } from '@/store/trafficLightStore';
+import { getAppDisplayName } from '@/services/environment';
 import { eventDispatcher } from './event';
-
-const APP_NAME = 'Readest';
 
 /**
  * The OS window title, e.g. `Readest - The Hobbit`. It is never drawn in the
@@ -17,7 +16,8 @@ const APP_NAME = 'Readest';
  */
 export const formatAppWindowTitle = (bookTitle?: string) => {
   const title = bookTitle?.trim();
-  return title ? `${APP_NAME} - ${title}` : APP_NAME;
+  const appName = getAppDisplayName();
+  return title ? `${appName} - ${title}` : appName;
 };
 
 /**
