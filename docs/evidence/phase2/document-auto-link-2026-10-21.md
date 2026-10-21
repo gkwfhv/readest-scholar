@@ -5,7 +5,7 @@
 ## 行为验证
 
 - 先在仅应用 029 的隔离 Supabase PostgreSQL 中插入一条新活跃书和一条软删除书，运行 030 断言，按预期失败：`migration gap backfill or tombstone exclusion failed`。
-- 应用 030 后，同一断言通过：迁移缺口被补齐，软删除书仍无映射；以 `authenticated` 合成账户新插入活跃书立即获得文献关系，恢复旧软删除书后立即获得关系，新软删除书在恢复前无关系、恢复后有关系，重复映射数仍为 1。测试用的书籍、文献与文件均在临时无端口、无持久卷的数据库容器内。
+- 应用 030 后，同一断言通过：迁移缺口被补齐，软删除书仍无映射；以 `authenticated` 合成账户新插入活跃书立即获得文献关系，恢复旧软删除书后立即获得关系，新软删除书在恢复前无关系、恢复后有关系，重复映射数仍为 1。Readest 同步 API 使用的 `service_role` 无 JWT 用户声明插入另一账户书籍时也立即创建该账户的文献关系。测试用的书籍、文献与文件均在临时无端口、无持久卷的数据库容器内。
 - `bash docker/volumes/db/tests/run-scholar-document-identity.sh` 一次执行 029/030 的合成数据、迁移和行为断言；Scholar baseline CI 对同一脚本使用固定 amd64 Supabase PostgreSQL 镜像。`bash -n`、`git diff --check` 和数据库引导 Vitest 可复跑。
 
 ## 边界

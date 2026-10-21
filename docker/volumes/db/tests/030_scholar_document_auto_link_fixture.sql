@@ -9,3 +9,4 @@ CREATE POLICY synthetic_books_owner ON public.books FOR ALL TO authenticated
   USING ((SELECT auth.uid()) = user_id)
   WITH CHECK ((SELECT auth.uid()) = user_id);
 GRANT SELECT, INSERT, UPDATE ON public.books TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.books TO service_role;

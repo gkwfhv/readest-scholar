@@ -59,3 +59,21 @@ BEGIN
 END;
 $$;
 RESET ROLE;
+
+-- Readest's sync API writes books with the service role. Its inserts must
+-- receive the same document identity without a JWT user claim.
+SET ROLE service_role;
+INSERT INTO public.books (user_id, book_hash, format)
+VALUES ('22222222-2222-4222-8222-222222222222', 'service-book', 'pdf');
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM public.scholar_document_books
+    WHERE user_id = '22222222-2222-4222-8222-222222222222'
+      AND book_hash = 'service-book'
+  ) THEN
+    RAISE EXCEPTION 'service-role book did not receive document identity';
+  END IF;
+END;
+$$;
+RESET ROLE;
