@@ -4,7 +4,7 @@
 
 | service         | Image                       | Description                                       |
 | --------------- | --------------------------- | ------------------------------------------------- |
-| **client**      | `ghcr.io/readest/readest`   | readest frontend                                  |
+| **client**      | `ghcr.io/gkwfhv/readest`    | Readest Scholar web client                        |
 | **db**          | `supabase/postgres`         | psql db with supabase extensions                  |
 | **kong**        | `kong:2.8.1`                | api gateway routing requests to supabase services |
 | **auth**        | `supabase/gotrue:v2.185.0`  | auth service (email, JWT)                         |
@@ -55,7 +55,7 @@ cd docker
 docker compose up -d
 ```
 
-this pulls `${READEST_IMAGE}` (default: `ghcr.io/readest/readest:latest`) instead of building the client locally.
+this pulls `${READEST_IMAGE}` (default: a verified `ghcr.io/gkwfhv/readest` multiarchitecture digest) instead of building the client locally. The default digest is also recorded in `docker/.env.example`; update both when promoting a new Scholar image. `ghcr.io/gkwfhv/readest:main` is a moving tag for trying the newest web build, while the digest keeps a Compose deployment reproducible.
 the web client now reads `SUPABASE_PUBLIC_URL`, `SUPABASE_ANON_KEY`, `API_BASE_URL`, `OBJECT_STORAGE_TYPE`, `SELF_HOSTED`, `STORAGE_FIXED_QUOTA`, and `TRANSLATION_FIXED_QUOTA` from runtime
 container env, so custom self-hosted values work with pulled images.
 
@@ -75,11 +75,11 @@ READEST_IMAGE=docker.io/your-dockerhub-username/readest:latest
 replace `your-dockerhub-username` with the Docker Hub namespace that publishes your `readest` image.
 for official images, use the namespace configured for this repository's Docker Hub publishing secrets.
 
-published tags:
-- `latest`: rolling image from the default branch and from release events
-- `<release-tag>` (for example `v1.2.3`): published from release events
-- `main`: rolling image from the default branch
-- `sha-<commit>`: immutable commit tag
+Scholar tags currently published by `.github/workflows/docker-image.yml`:
+- `main`: moving image from the default branch
+- `sha-<commit>`: image built from that commit
+
+Use a verified `@sha256:<manifest digest>` for a stable deployment. The `main` tag may advance without changing an existing `docker/.env`.
 
 ### Build locally instead of pulling
 

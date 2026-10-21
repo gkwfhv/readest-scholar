@@ -1,4 +1,4 @@
-> **Readest Scholar 工程状态：Phase 0 / Phase 1 验证中。** 本仓库基于 [Readest 上游](https://github.com/readest/readest) 开发，尚无 Scholar 正式发行版。当前验收、已知失败和下一步见 [AGENT_STATUS.md](AGENT_STATUS.md) 与 [ROADMAP.md](ROADMAP.md)；完整设计见 [工程方案](Readest_Scholar_Agent_Engineering_Plan.md)。下文保留上游 Readest 的原始介绍和链接，不代表 Scholar 的发行渠道。
+> **Readest Scholar 工程状态：Phase 0 / Phase 1 已按限定范围验收，Phase 2 开发中。** 本仓库基于 [Readest 上游](https://github.com/readest/readest) 开发，尚无 Scholar 正式安装包或 [GitHub Release](https://github.com/gkwfhv/readest-scholar/releases)。已发布的 Linux amd64/arm64 自托管 Web 镜像为 `ghcr.io/gkwfhv/readest:main`；完整 Docker 栈及固定摘要见 [自托管说明](docker/README.md)。当前验收与下一步见 [ROADMAP.md](ROADMAP.md)；完整设计见 [工程方案](Readest_Scholar_Agent_Engineering_Plan.md)。下文保留上游 Readest 的原始介绍和下载链接，不代表 Scholar 的发行渠道。
 
 <div align="center">
   <a href="https://readest.com?utm_source=github&utm_medium=referral&utm_campaign=readme" target="_blank">
@@ -99,6 +99,8 @@ Stay tuned for continuous improvements and updates! Contributions and suggestion
 ---
 
 ## Downloads
+
+The links in this section download upstream **Readest**, not **Readest Scholar**. Scholar installers have not been published to this repository's [Releases](https://github.com/gkwfhv/readest-scholar/releases).
 
 ### Mobile Apps
 
