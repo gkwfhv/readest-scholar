@@ -63,6 +63,7 @@ function makeWindow(label: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.useFakeTimers();
+  delete window.__READEST_SCHOLAR_RELEASE_BUNDLE;
 });
 
 describe('tauriHandleOnCloseWindow', () => {
@@ -247,6 +248,16 @@ describe('tauriSetWindowTitle', () => {
     await tauriSetWindowTitle();
 
     expect(win.setTitle).toHaveBeenCalledWith('Readest');
+  });
+
+  test('formal Scholar windows include the approved app name', async () => {
+    window.__READEST_SCHOLAR_RELEASE_BUNDLE = true;
+    const win = makeTitledWindow();
+
+    await tauriSetWindowTitle('The Hobbit');
+
+    expect(win.setTitle).toHaveBeenCalledWith('Readest Scholar - The Hobbit');
+    expect(formatAppWindowTitle()).toBe('Readest Scholar');
   });
 
   test('sets the title natively where the window has traffic lights', async () => {

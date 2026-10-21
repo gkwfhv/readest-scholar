@@ -7,6 +7,7 @@ declare global {
   interface Window {
     __READEST_CLI_ACCESS?: boolean;
     __READEST_SCHOLAR_TEST_BUNDLE?: boolean;
+    __READEST_SCHOLAR_RELEASE_BUNDLE?: boolean;
   }
 }
 
@@ -15,6 +16,12 @@ export const isWebAppPlatform = () => process.env['NEXT_PUBLIC_APP_PLATFORM'] ==
 export const hasCli = () => window.__READEST_CLI_ACCESS === true;
 export const isScholarTestBundle = () =>
   typeof window !== 'undefined' && window.__READEST_SCHOLAR_TEST_BUNDLE === true;
+export const isScholarReleaseBundle = () =>
+  process.env['NEXT_PUBLIC_SCHOLAR_RELEASE'] === 'true' ||
+  (typeof window !== 'undefined' && window.__READEST_SCHOLAR_RELEASE_BUNDLE === true);
+export const getAppDisplayName = () => (isScholarReleaseBundle() ? 'Readest Scholar' : 'Readest');
+export const getAboutAppLabel = (aboutReadest: string) =>
+  aboutReadest.replace('Readest', getAppDisplayName());
 export const isPWA = () => window.matchMedia('(display-mode: standalone)').matches;
 export const getBaseUrl = () =>
   getRuntimeConfig()?.apiBaseUrl ??

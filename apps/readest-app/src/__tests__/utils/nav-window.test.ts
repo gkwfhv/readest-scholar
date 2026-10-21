@@ -25,6 +25,7 @@ vi.mock('@tauri-apps/api/window', () => ({
 }));
 
 vi.mock('@/services/environment', () => ({
+  getAppDisplayName: () => 'Readest',
   isTauriAppPlatform: () => true,
   isWebAppPlatform: () => false,
   isPWA: () => false,

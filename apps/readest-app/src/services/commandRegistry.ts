@@ -9,6 +9,7 @@ import { TbSunMoon } from 'react-icons/tb';
 import { MdRefresh } from 'react-icons/md';
 import { IconType } from 'react-icons';
 import { stubTranslation as _ } from '@/utils/misc';
+import { getAboutAppLabel } from '@/services/environment';
 
 export type CommandCategory = 'settings' | 'actions' | 'navigation';
 
@@ -847,7 +848,8 @@ export const buildCommandRegistry = (options: CommandRegistryOptions): CommandIt
     return {
       id: def.id,
       labelKey: item.labelKey,
-      localizedLabel: _(item.labelKey),
+      localizedLabel:
+        def.id === 'action.about' ? getAboutAppLabel(_(item.labelKey)) : _(item.labelKey),
       keywords: item.keywords,
       icon: def.icon ?? getThemeIcon(),
       category: 'actions',
