@@ -13,6 +13,7 @@ import {
 
 import { Book } from '@/types/book';
 import { BookMetadata } from '@/libs/document';
+import { isScholarReleaseBundle } from '@/services/environment';
 import { openExternalUrl } from '@/utils/open';
 import { sanitizeHtml } from '@/utils/sanitize';
 import { getBookGoodreadsQuery, getGoodreadsSearchUrl } from '@/utils/goodreads';
@@ -345,6 +346,14 @@ const BookDetailView: React.FC<BookDetailViewProps> = ({
                     {metadata?.identifier || _('Unknown')}
                   </p>
                 </div>
+                {isScholarReleaseBundle() && metadata?.doi && (
+                  <div className='col-span-2 overflow-hidden sm:col-span-1'>
+                    <span className='font-bold'>{_('DOI')}</span>
+                    <p className='text-neutral-content text-sm break-all' title={metadata.doi}>
+                      {metadata.doi}
+                    </p>
+                  </div>
+                )}
                 {/*
                   Calibre custom columns embedded in the OPF (#4811). Column
                   names are user content, not translation keys. The identifier

@@ -50,9 +50,10 @@
 - [PR #34](https://github.com/gkwfhv/readest-scholar/pull/34) 修复 Scholar 登录、同步和账户残留的 Readest 付费/下载入口，最终 CI 与评审通过并合并为 `dbbf7befb`。新 GHCR 双架构镜像、SBOM 发布成功；amd64 固定摘要已升级到 Linux staging，四路健康和备份通过，其他五个容器不变。SSH 隧道浏览器复核登录页、账户页、书库菜单、阅读器四按钮同排和大脑图标；见[部署与界面验收](docs/evidence/phase1/scholar-account-brand-staging-2026-10-21.md)。
 - [独立 macOS 签名更新往返](docs/evidence/phase1/scholar-updater-loopback-smoke-2026-10-21.md)已用一次性密钥及回环清单实测：`0.12.16` 测试包检测、下载、验签并安装 `0.12.17`，进程重启且磁盘包版本改变。首次因测试公钥重复 Base64 编码失败，修正后成功；正式 Scholar 包仍禁用上游更新，真实签名/公证和公开 HTTPS 分发尚未验收。
 - [Phase 1 限定范围验收](docs/evidence/phase1/acceptance-2026-10-21.md)以 `49eb1e55d` 为审查基线：计划第 9 节的非生产工程底座通过，允许启动 Phase 2。2026-10-21 测试主机官方探针四路均 `OK`，运行已验收的 PR #34 Web 摘要；PR #36 最终提交的 Scholar baseline、PR checks、CodeQL 均为 `success`。公开 HTTPS、真实模型、正式签名分发与生产秘密策略属于后续功能或发布门槛，不在本次通过范围。
+- Phase 2 首项[手动 DOI 元数据](docs/evidence/phase2/doi-metadata-2026-10-21.md)已实现并完成本地 Node 24 单测、Scholar Web 构建与手机宽度的浅色/深色/墨水屏检查。DOI 沿用 `books.metadata` 保存；文献/文件 ID 分离、集合、跨 Web/桌面 DOI 同步与账户隔离尚未验收。
 
 ## 下一动作
 
-1. 按 [ROADMAP](ROADMAP.md)启动 Phase 2：先对现有 `books.metadata`、标签和 bookshelf/分组语义做最小增量，保持上游阅读与同步行为；新行为先写失败测试再实现。
+1. 继续 Phase 2：核对 bookshelf/分组与标签的现有数据和 API 语义，设计文献与文件分离的最小迁移；再用合成数据验证 DOI 和集合在 Web/桌面间同步及账户隔离。
 2. 外部 HTTPS 分享、真实 OAuth 提供方回跳及独立收件人导入仍需域名和相应测试配置；真实模型质量留给 Phase 5，正式身份包的签名更新分发留给 Phase 8。测试包不是可发布产物。
 3. 生产真实数据、外部 TLS、签名与正式发布仍需单独审批和验收。

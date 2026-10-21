@@ -3,6 +3,7 @@ import { render, cleanup, fireEvent, waitFor } from '@testing-library/react';
 
 import { Book } from '@/types/book';
 import BookDetailView from '@/components/metadata/BookDetailView';
+import BookDetailEdit from '@/components/metadata/BookDetailEdit';
 import { DropdownProvider } from '@/context/DropdownContext';
 
 const mocks = vi.hoisted(() => ({
@@ -72,7 +73,10 @@ vi.mock('next/image', () => ({
   },
 }));
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  vi.unstubAllEnvs();
+});
 
 const makeBook = (overrides?: Partial<Book>): Book =>
   ({
@@ -125,6 +129,56 @@ describe('BookDetailView delete dropdown layout', () => {
     // It should keep position: relative via the relative! override so it
     // anchors against the centered parent.
     expect(menu!.className).toContain('relative!');
+  });
+});
+
+describe('scholarly DOI metadata', () => {
+  it('shows the DOI in book details when one is saved', () => {
+    vi.stubEnv('NEXT_PUBLIC_SCHOLAR_RELEASE', 'true');
+    const { getByText } = renderView({
+      metadata: { title: 'Paper', author: 'Researcher', language: 'en', doi: '10.1000/example' },
+    });
+
+    expect(getByText('DOI')).toBeTruthy();
+    expect(getByText('10.1000/example')).toBeTruthy();
+  });
+
+  it('offers a DOI input and sends its value to the metadata editor', () => {
+    vi.stubEnv('NEXT_PUBLIC_SCHOLAR_RELEASE', 'true');
+    const onFieldChange = vi.fn();
+    const { getByPlaceholderText } = render(
+      <BookDetailEdit
+        book={makeBook()}
+        metadata={{ title: 'Paper', author: 'Researcher', language: 'en' }}
+        tags={[]}
+        fieldSources={{}}
+        lockedFields={{}}
+        fieldErrors={{}}
+        searchLoading={false}
+        onFieldChange={onFieldChange}
+        onToggleFieldLock={vi.fn()}
+        onAutoRetrieve={vi.fn()}
+        onLockAll={vi.fn()}
+        onUnlockAll={vi.fn()}
+        onCancel={vi.fn()}
+        onReset={vi.fn()}
+        onSave={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(getByPlaceholderText('10.1000/example'), {
+      target: { value: '10.1000/example' },
+    });
+    expect(onFieldChange).toHaveBeenCalledWith('doi', '10.1000/example');
+  });
+
+  it('keeps the ordinary Readest details free of the Scholar DOI row', () => {
+    vi.stubEnv('NEXT_PUBLIC_SCHOLAR_RELEASE', 'false');
+    const { queryByText } = renderView({
+      metadata: { title: 'Paper', author: 'Researcher', language: 'en', doi: '10.1000/example' },
+    });
+
+    expect(queryByText('DOI')).toBeNull();
   });
 });
 
