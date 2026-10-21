@@ -34,7 +34,12 @@ import { useLocalSendStore } from '@/store/localsendStore';
 import { CatalogManager } from '@/app/opds/components/CatalogManager';
 import { saveSysSettings } from '@/helpers/settings';
 import { isCloudSyncAllowed } from '@/utils/access';
-import { isTauriAppPlatform, isWebAppPlatform } from '@/services/environment';
+import {
+  getAppDisplayName,
+  isScholarReleaseBundle,
+  isTauriAppPlatform,
+  isWebAppPlatform,
+} from '@/services/environment';
 import {
   getLocalSendAlias,
   isLocalSendEnabled,
@@ -112,6 +117,11 @@ type SubPage =
  */
 const IntegrationsPanel: React.FC = () => {
   const _ = useTranslation();
+  const scholarRelease = isScholarReleaseBundle();
+  const cloudName = scholarRelease ? getAppDisplayName() : _('Readest Cloud');
+  const cloudSyncLabel = scholarRelease
+    ? _('Sync with Readest Cloud').replace('Readest Cloud', cloudName)
+    : _('Sync with Readest Cloud');
   const router = useAppRouter();
   const { envConfig, appService } = useEnv();
   const { user } = useAuth();
@@ -442,14 +452,24 @@ const IntegrationsPanel: React.FC = () => {
       <div className='my-4 w-full'>
         <SubPageHeader
           parentLabel={_('Integrations')}
-          currentLabel={_('Readest Cloud')}
-          description={_('Sync your library, reading progress, and highlights with Readest Cloud.')}
+          currentLabel={cloudName}
+          description={
+            scholarRelease
+              ? _(
+                  'Sync your library, reading progress, and highlights with Readest Cloud.',
+                ).replace('Readest Cloud', cloudName)
+              : _('Sync your library, reading progress, and highlights with Readest Cloud.')
+          }
           onBack={() => setSubPage(null)}
         />
         <BoxedList>
           <NavigationRow
             title={_('Account and Storage')}
-            status={_('Manage your plan and stored files')}
+            status={
+              scholarRelease
+                ? _('Manage your stored files')
+                : _('Manage your plan and stored files')
+            }
             onClick={() => navigateToProfile(router)}
           />
         </BoxedList>
@@ -713,13 +733,13 @@ const IntegrationsPanel: React.FC = () => {
           >
             <CloudProviderRow
               icon={RiCloudFill}
-              title={_('Readest Cloud')}
+              title={cloudName}
               status={readestStatus}
               checked={!!user && readestEnabled}
               canToggle={!!user}
               onToggle={(next) => toggleCloudProvider('readest', next)}
               onOpen={() => (user ? setSubPage('readest-cloud') : navigateToLogin(router))}
-              toggleLabel={_('Sync with Readest Cloud')}
+              toggleLabel={cloudSyncLabel}
             />
             {/* Third-party providers are premium: every row carries the tier
                 badge; on a free plan the checkbox is disabled and opening a
@@ -855,12 +875,14 @@ const IntegrationsPanel: React.FC = () => {
               status={absStatus}
               onClick={() => setSubPage('audiobookshelf')}
             />
-            <IntegrationRow
-              icon={RiSendPlaneLine}
-              title={_('Send to Readest')}
-              status={_('Email books to your library')}
-              onClick={() => setSubPage('send')}
-            />
+            {!scholarRelease && (
+              <IntegrationRow
+                icon={RiSendPlaneLine}
+                title={_('Send to Readest')}
+                status={_('Email books to your library')}
+                onClick={() => setSubPage('send')}
+              />
+            )}
           </div>
         </div>
       </div>

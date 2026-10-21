@@ -15,7 +15,7 @@ import { useAvailablePlans } from '@/hooks/useAvailablePlans';
 import type { PlanType } from '@/types/quota';
 import { navigateBackFromProfile } from '@/utils/nav';
 import { eventDispatcher } from '@/utils/event';
-import { isTauriAppPlatform } from '@/services/environment';
+import { isScholarReleaseBundle, isTauriAppPlatform } from '@/services/environment';
 import { getPlanDetails, shouldUseBillingPortal } from './utils/plan';
 import { Toast } from '@/components/Toast';
 import {
@@ -56,6 +56,7 @@ type CheckoutState = {
 };
 
 const ProfilePage = () => {
+  const scholarRelease = isScholarReleaseBundle();
   const _ = useTranslation();
   const router = useAppRouter();
   const { appService } = useEnv();
@@ -106,6 +107,7 @@ const ProfilePage = () => {
 
   const { availablePlans, iapAvailable } = useAvailablePlans({
     hasIAP: appService?.hasIAP || false,
+    enabled: !scholarRelease,
     onError: useCallback(
       (message: string) => {
         eventDispatcher.dispatch('toast', {
@@ -371,18 +373,20 @@ const ProfilePage = () => {
                   </div>
                 ) : (
                   <>
-                    <div className='flex flex-col gap-y-8 px-2 sm:px-6'>
-                      <PlansComparison
-                        availablePlans={availablePlans}
-                        userPlan={userProfilePlan}
-                        customizationPurchased={customizationPurchased}
-                        onSubscribe={
-                          appService.hasIAP && iapAvailable
-                            ? handleIAPSubscribe
-                            : handleStripeSubscribe
-                        }
-                      />
-                    </div>
+                    {!scholarRelease && (
+                      <div className='flex flex-col gap-y-8 px-2 sm:px-6'>
+                        <PlansComparison
+                          availablePlans={availablePlans}
+                          userPlan={userProfilePlan}
+                          customizationPurchased={customizationPurchased}
+                          onSubscribe={
+                            appService.hasIAP && iapAvailable
+                              ? handleIAPSubscribe
+                              : handleStripeSubscribe
+                          }
+                        />
+                      </div>
+                    )}
                     <div className='flex flex-col gap-y-8 px-6'>
                       <AccountActions
                         userPlan={userProfilePlan}
@@ -402,7 +406,7 @@ const ProfilePage = () => {
                   </>
                 )}
 
-                <LegalLinks />
+                {!scholarRelease && <LegalLinks />}
               </div>
             </div>
           )}

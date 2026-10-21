@@ -6,7 +6,12 @@ import { TbSunMoon } from 'react-icons/tb';
 import { MdCloudSync, MdSync, MdSyncProblem, MdOutlineSensors } from 'react-icons/md';
 
 import { useAppRouter } from '@/hooks/useAppRouter';
-import { getAboutAppLabel, isTauriAppPlatform, isWebAppPlatform } from '@/services/environment';
+import {
+  getAboutAppLabel,
+  isScholarReleaseBundle,
+  isTauriAppPlatform,
+  isWebAppPlatform,
+} from '@/services/environment';
 import { DOWNLOAD_READEST_URL } from '@/services/constants';
 import { setBackupDialogVisible } from '@/app/library/components/BackupWindow';
 import { setCacheManagerDialogVisible } from '@/app/library/components/CacheManagerWindow';
@@ -467,10 +472,12 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
         </ul>
       </MenuItem>
       <hr aria-hidden='true' className='border-base-200 my-1' />
-      {user && userProfilePlan === 'free' && (
+      {!isScholarReleaseBundle() && user && userProfilePlan === 'free' && (
         <MenuItem label={_('Upgrade to Readest Premium')} onClick={handleUpgrade} />
       )}
-      {isWebAppPlatform() && <MenuItem label={_('Download Readest')} onClick={downloadReadest} />}
+      {isWebAppPlatform() && !isScholarReleaseBundle() && (
+        <MenuItem label={_('Download Readest')} onClick={downloadReadest} />
+      )}
       <MenuItem label={getAboutAppLabel(_('About Readest'))} onClick={showAboutReadest} />
     </Menu>
   );
