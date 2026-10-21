@@ -47,7 +47,10 @@ vi.mock('@/hooks/useResponsiveSize', () => ({
 
 vi.mock('@/helpers/settings', () => ({ saveSysSettings: vi.fn() }));
 
-vi.mock('@/services/environment', () => ({ isWebAppPlatform: () => false }));
+vi.mock('@/services/environment', () => ({
+  isWebAppPlatform: () => false,
+  isScholarReleaseBundle: () => false,
+}));
 
 vi.mock('@/libs/metadata', () => ({ searchMetadata: vi.fn(async () => []) }));
 

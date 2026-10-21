@@ -26,6 +26,7 @@ export const useMetadataEdit = (metadata: BookMetadata | null, tags: string[]) =
     'title',
     'author',
     'isbn',
+    'doi',
     'publisher',
     'published',
     'language',

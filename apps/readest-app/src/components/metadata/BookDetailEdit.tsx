@@ -4,6 +4,7 @@ import { MdEdit, MdDelete, MdLock, MdLockOpen, MdOutlineSearch } from 'react-ico
 
 import { Book } from '@/types/book';
 import { BookMetadata } from '@/libs/document';
+import { isScholarReleaseBundle } from '@/services/environment';
 import { useEnv } from '@/context/EnvContext';
 import { useTranslation } from '@/hooks/useTranslation';
 import { flattenContributors, formatAuthors, formatPublisher, formatTitle } from '@/utils/book';
@@ -111,6 +112,16 @@ const BookDetailEdit: React.FC<BookDetailEditProps> = ({
       value: metadata.isbn || '',
       placeholder: '9780123456789',
     },
+    ...(isScholarReleaseBundle()
+      ? [
+          {
+            field: 'doi',
+            label: _('DOI'),
+            value: metadata.doi || '',
+            placeholder: '10.1000/example',
+          },
+        ]
+      : []),
     {
       field: 'publisher',
       label: _('Publisher'),

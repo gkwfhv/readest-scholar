@@ -50,6 +50,21 @@ describe('saveBookMetadataEdit (#6584)', () => {
     expect(appService.saveLibraryBooks).toHaveBeenCalledWith([saved]);
   });
 
+  test('persists a manually entered DOI in the existing metadata sync field', async () => {
+    await saveBookMetadataEdit(
+      envConfig,
+      makeBook({ metadata: { ...metadata } }),
+      { ...metadata, doi: '10.1000/example' },
+      [],
+      false,
+    );
+
+    const saved = useLibraryStore.getState().library[0]!;
+    expect(saved.metadata?.doi).toBe('10.1000/example');
+    expect(saved.metadataUpdatedAt).toEqual(expect.any(Number));
+    expect(appService.saveLibraryBooks).toHaveBeenCalledWith([saved]);
+  });
+
   test('edits the library entry, not the stale snapshot the reader holds', async () => {
     useLibraryStore.getState().setLibrary([makeBook({ updatedAt: 500, readingStatus: 'reading' })]);
 
