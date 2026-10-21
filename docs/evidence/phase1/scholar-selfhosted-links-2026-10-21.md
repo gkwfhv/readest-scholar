@@ -7,10 +7,10 @@
 ## 测试先行与本地验证
 
 - 改动前四个定向用例失败：批注生成仍为 `web.readest.com`、分享生成仍为 `web.readest.com`、设备绑定解析拒绝自托管域名、分享列表 API 返回上游地址。加入 staging Web 运行时 Scholar 标记后，另一个用例先失败，显示原代码仍选择 `readest://`。
-- 修复后，批注、分享、设备绑定、服务端创建/列表/预览元数据、运行时标记和桌面静态导出目标均有定向测试；错误站点和 HTTP 降级链接不被当成 Scholar 站点链接。TypeScript、Biome 与 staging Compose 配置解析通过，Compose 解析结果为 `scholar-staging`、`SCHOLAR_RELEASE=true`，公开端口仍全部绑定回环。
-- 首次 Node 24 全量测试为 13,784 通过、9 失败、16 跳过。9 个失败都来自 Readwise 测试完整模拟 `environment` 模块但遗漏新增函数；改为保留真实导出、仅覆盖平台判定后，该文件的 14 项和桌面地址选择的 1 项定向测试通过。重放到最新主分支后的完整套件为 **1,171 个文件、13,793 通过、16 跳过、0 失败**（`vitest run --maxWorkers=4`）。
-- Web 生产构建第一次因本机默认 Node 堆上限耗尽而终止；使用 `NODE_OPTIONS=--max-old-space-size=8192` 重跑成功，生成 56 个静态页面。构建保留原有两条 WASM 资源不预缓存警告。
-- 同一显式自托管目标下，`build-scholar-macos-smoke.mjs` 完成静态导出与未签名 macOS Tauri `.app` 打包。包标识为 `io.github.gkwfhv.readestscholar`，唯一注册的 URL scheme 为 `readest-scholar`，二进制 SHA-256 为 `1a0c8b009f3a65cff257e026f1e53394a5fbda2ed445abe8e8ce122141812d6d`。这验证编译产物，不等于真实 OAuth/分享往返或正式签名更新。
+- 修复后，批注、分享、设备绑定、服务端创建/列表/预览元数据、运行时标记和桌面静态导出目标均有定向测试；错误站点和 HTTP 降级链接不被当成 Scholar 站点链接。最终审阅又发现服务端首屏未读取 `SCHOLAR_RELEASE`：新增用例先得到普通 Readest 标记，修复后服务端和浏览器均选择 `readest-scholar://`。TypeScript、Biome 与 staging Compose 配置解析通过，Compose 解析结果为 `scholar-staging`、`SCHOLAR_RELEASE=true`，公开端口仍全部绑定回环。
+- 首次 Node 24 全量测试为 13,784 通过、9 失败、16 跳过。9 个失败都来自 Readwise 测试完整模拟 `environment` 模块但遗漏新增函数；改为保留真实导出、仅覆盖平台判定后，该文件的 14 项和桌面地址选择的 1 项定向测试通过。含服务端首屏回归用例的最新完整套件为 **1,171 个文件、13,794 通过、16 跳过、0 失败**（`vitest run --maxWorkers=4`）。
+- 父提交的 Web 生产构建第一次因本机默认 Node 堆上限耗尽而终止；使用 `NODE_OPTIONS=--max-old-space-size=8192` 重跑成功，生成 56 个静态页面。构建保留原有两条 WASM 资源不预缓存警告。
+- 在服务端首屏一行修复之前的父提交上，`build-scholar-macos-smoke.mjs` 使用显式自托管目标完成静态导出与未签名 macOS Tauri `.app` 打包。包标识为 `io.github.gkwfhv.readestscholar`，唯一注册的 URL scheme 为 `readest-scholar`，二进制 SHA-256 为 `1a0c8b009f3a65cff257e026f1e53394a5fbda2ed445abe8e8ce122141812d6d`。最新提交的重新构建将由 PR CI 验证；这仍不等于真实 OAuth/分享往返或正式签名更新。
 - 最终提交的远端 CI 与实际页面验收结果在完成后补记。
 
 ## 已有 staging 配置事实
