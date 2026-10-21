@@ -38,6 +38,7 @@ jobs:
     env:
       BUILD_ARGS: |
         NEXT_PUBLIC_APP_PLATFORM=web
+        NEXT_PUBLIC_SCHOLAR_RELEASE=true
     steps:
       - name: Prepare platform pair
         run: |
