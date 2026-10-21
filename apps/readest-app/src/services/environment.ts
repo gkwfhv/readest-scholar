@@ -18,6 +18,7 @@ export const isScholarTestBundle = () =>
   typeof window !== 'undefined' && window.__READEST_SCHOLAR_TEST_BUNDLE === true;
 export const isScholarReleaseBundle = () =>
   process.env['NEXT_PUBLIC_SCHOLAR_RELEASE'] === 'true' ||
+  process.env['SCHOLAR_RELEASE'] === 'true' ||
   getRuntimeConfig()?.scholarRelease === true ||
   (typeof window !== 'undefined' && window.__READEST_SCHOLAR_RELEASE_BUNDLE === true);
 export const getAppDisplayName = () => (isScholarReleaseBundle() ? 'Readest Scholar' : 'Readest');
