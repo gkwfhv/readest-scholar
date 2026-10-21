@@ -25,6 +25,16 @@ BEGIN
 END;
 $$;
 
+UPDATE public.books SET deleted_at = now() WHERE book_hash = 'new-book';
+UPDATE public.books SET deleted_at = NULL WHERE book_hash = 'new-book';
+DO $$
+BEGIN
+  IF (SELECT count(*) FROM public.scholar_document_books WHERE book_hash = 'new-book') <> 1 THEN
+    RAISE EXCEPTION 'restoring an already mapped book created a duplicate';
+  END IF;
+END;
+$$;
+
 UPDATE public.books SET deleted_at = NULL WHERE book_hash = 'resurrect-book';
 DO $$
 BEGIN
