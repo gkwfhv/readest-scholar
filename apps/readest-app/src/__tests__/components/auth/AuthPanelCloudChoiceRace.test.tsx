@@ -49,9 +49,19 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  delete window.__READEST_SCHOLAR_RELEASE_BUNDLE;
 });
 
 describe('AuthPanel cloud choice vs OAuth redirect', () => {
+  test('uses Scholar identity for the sign-in and sync choice', () => {
+    window.__READEST_SCHOLAR_RELEASE_BUNDLE = true;
+    render(<AuthPanel supabaseClient={{} as never} onProviderSignIn={vi.fn()} magicLink />);
+
+    expect(screen.getByRole('heading', { name: 'Sign in to Readest Scholar' })).toBeTruthy();
+    expect(screen.getByText('Sync with Readest Scholar')).toBeTruthy();
+    expect(screen.queryByText('Sync with Readest Cloud')).toBeNull();
+  });
+
   test('holds provider sign-in until the opt-out has been written', async () => {
     const onProviderSignIn = vi.fn(async () => {});
     render(

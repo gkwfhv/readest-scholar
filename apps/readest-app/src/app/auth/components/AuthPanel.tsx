@@ -4,6 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { FcGoogle } from 'react-icons/fc';
 import { FaApple, FaGithub, FaDiscord } from 'react-icons/fa';
 import { useTranslation } from '@/hooks/useTranslation';
+import { getAppDisplayName } from '@/services/environment';
 import { ProviderLogin, type OAuthProvider } from './ProviderLogin';
 import EmailPasswordAuth from './EmailPasswordAuth';
 import ReadestCloudOptIn from './ReadestCloudOptIn';
@@ -36,7 +37,9 @@ export default function AuthPanel({
       <div className='flex flex-col items-center gap-3 text-center'>
         <Image src='/icon.png' alt='' width={56} height={56} className='eink-bordered rounded-xl' />
         <div>
-          <h1 className='text-xl font-semibold tracking-tight'>{_('Sign in to Readest')}</h1>
+          <h1 className='text-xl font-semibold tracking-tight'>
+            {_('Sign in to Readest').replace('Readest', getAppDisplayName())}
+          </h1>
           <p className='text-base-content/70 mt-1.5 text-sm leading-relaxed'>
             {_('Sync your library, reading progress, and highlights across your devices.')}
           </p>

@@ -7,6 +7,8 @@ vi.mock('@/services/environment', () => ({
   isTauriAppPlatform: () => true,
   getBaseUrl: () => 'https://web.readest.com',
   getAppDeepLinkScheme: () => 'readest',
+  getAppDisplayName: () => 'Readest',
+  isScholarReleaseBundle: () => false,
 }));
 
 vi.mock('@/context/AuthContext', () => ({

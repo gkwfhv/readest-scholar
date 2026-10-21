@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useEnv } from '@/context/EnvContext';
 import { useTranslation } from '@/hooks/useTranslation';
+import { getAppDisplayName, isScholarReleaseBundle } from '@/services/environment';
 import { UserPlan } from '@/types/quota';
 
 interface DeleteConfirmationModalProps {
@@ -90,7 +91,7 @@ const AccountActions: React.FC<AccountActionsProps> = ({
       title: _('Delete All Books?'),
       message: _(
         'This action cannot be undone. Every book will be removed from this device and from your Readest cloud library, along with reading progress, bookmarks, and annotations. Books you imported in place keep their original files, and books uploaded to cloud storage stay there until you remove them under Manage Storage. Other signed-in devices keep their own copies.',
-      ),
+      ).replace('Readest', getAppDisplayName()),
       onConfirm: onConfirmDeleteAllBooks,
     },
   };
@@ -109,7 +110,7 @@ const AccountActions: React.FC<AccountActionsProps> = ({
         }}
       />
       <div className='flex flex-col gap-4 md:grid md:grid-cols-2 lg:grid-cols-3'>
-        {appService?.hasIAP && iapAvailable ? (
+        {!isScholarReleaseBundle() && appService?.hasIAP && iapAvailable ? (
           <button
             onClick={onRestorePurchase}
             className='bg-base-300 hover:bg-base-content/15 text-base-content border-base-content/10 eink-bordered w-full rounded-lg border px-6 py-3 font-medium transition-colors duration-150 md:w-auto'
@@ -117,6 +118,7 @@ const AccountActions: React.FC<AccountActionsProps> = ({
             {_('Restore Purchase')}
           </button>
         ) : (
+          !isScholarReleaseBundle() &&
           userPlan !== 'free' && (
             <button
               onClick={onManageSubscription}

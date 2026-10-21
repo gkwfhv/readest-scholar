@@ -39,9 +39,20 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllEnvs();
 });
 
 describe('BookMenu page thumbnails toggle', () => {
+  it('hides the upstream download link in Scholar Web', () => {
+    vi.stubEnv('NEXT_PUBLIC_APP_PLATFORM', 'web');
+    vi.stubEnv('NEXT_PUBLIC_SCHOLAR_RELEASE', 'true');
+    setBook({}, {});
+    render(<BookMenu />);
+
+    expect(screen.queryByRole('menuitem', { name: 'Download Readest' })).toBeNull();
+    expect(screen.getByRole('menuitem', { name: 'About Readest Scholar' })).toBeTruthy();
+  });
+
   it('is not offered for books without page thumbnails', () => {
     setBook({}, { showTOCThumbnails: true });
     render(<BookMenu />);

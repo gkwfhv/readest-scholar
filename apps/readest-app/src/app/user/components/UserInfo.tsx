@@ -2,6 +2,7 @@ import { PiUserCircle } from 'react-icons/pi';
 import { useTranslation } from '@/hooks/useTranslation';
 import { PlanDetails } from '../utils/plan';
 import UserAvatar from '@/components/UserAvatar';
+import { isScholarReleaseBundle } from '@/services/environment';
 
 interface UserInfoProps {
   avatarUrl?: string;
@@ -36,13 +37,15 @@ const UserInfo: React.FC<UserInfoProps> = ({ avatarUrl, userFullName, userEmail,
       <div className='grow text-center md:text-left'>
         <h2 className='text-base-content text-xl font-bold md:text-2xl'>{userFullName}</h2>
         <p className='text-base-content/60'>{userEmail}</p>
-        <div className='mt-3'>
-          <span
-            className={`inline-block rounded-full px-3 py-1 text-sm font-medium ${planDetails.color}`}
-          >
-            {_(planDetails.name)}
-          </span>
-        </div>
+        {!isScholarReleaseBundle() && (
+          <div className='mt-3'>
+            <span
+              className={`inline-block rounded-full px-3 py-1 text-sm font-medium ${planDetails.color}`}
+            >
+              {_(planDetails.name)}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );

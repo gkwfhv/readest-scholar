@@ -50,9 +50,19 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  delete window.__READEST_SCHOLAR_RELEASE_BUNDLE;
 });
 
 describe('IntegrationsPanel Nearby BookDrop section', () => {
+  it('labels local account sync as Scholar and hides the upstream email import', () => {
+    window.__READEST_SCHOLAR_RELEASE_BUNDLE = true;
+    render(<IntegrationsPanel />);
+
+    expect(screen.getByText('Readest Scholar')).toBeTruthy();
+    expect(screen.queryByText('Send to Readest')).toBeNull();
+    expect(screen.queryByText('Readest Cloud')).toBeNull();
+  });
+
   it('puts BookDrop in its own section ahead of every other integration', () => {
     render(<IntegrationsPanel />);
     const sections = Array.from(document.querySelectorAll('[data-setting-id]')).map((el) =>

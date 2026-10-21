@@ -2,6 +2,7 @@ import { useEnv } from '@/context/EnvContext';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useSettingsStore } from '@/store/settingsStore';
 import { persistReadestCloudChoice } from '@/services/sync/cloudSyncActivation';
+import { getAppDisplayName, isScholarReleaseBundle } from '@/services/environment';
 import { hasAnyThirdPartyEnabled, isReadestCloudEnabled } from '@/services/sync/cloudSyncProvider';
 
 /**
@@ -74,11 +75,15 @@ export default function ReadestCloudOptIn({ onPendingWrite }: ReadestCloudOptInP
           className='checkbox checkbox-sm mt-0.5 shrink-0'
         />
         <span className='flex flex-col gap-1'>
-          <span className='text-sm'>{_('Sync with Readest Cloud')}</span>
+          <span className='text-sm'>
+            {isScholarReleaseBundle()
+              ? _('Sync with Readest Cloud').replace('Readest Cloud', getAppDisplayName())
+              : _('Sync with Readest Cloud')}
+          </span>
           <span className='text-base-content/60 text-xs leading-relaxed'>
             {_(
               'Store your library, reading progress, and highlights in your Readest account. You can change this any time in Settings.',
-            )}
+            ).replace('Readest', getAppDisplayName())}
           </span>
         </span>
       </label>
