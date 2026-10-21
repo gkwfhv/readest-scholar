@@ -3,6 +3,11 @@ import { NextResponse } from 'next/server';
 import { getDownloadSignedUrl } from '@/utils/object';
 import { rejectionToHttp, resolveActiveShare } from '@/libs/shareServer';
 import { SHARE_PRESIGN_TTL_SECONDS } from '@/services/constants';
+import {
+  getAppDisplayName,
+  getPublicWebBaseUrl,
+  isScholarReleaseBundle,
+} from '@/services/environment';
 
 // JSX renderer for the OG image. Lives in a non-route `.tsx` so the route
 // file itself can be `.ts` and get filtered out of the Tauri static export
@@ -19,6 +24,8 @@ export const renderShareOgImage = async (token: string): Promise<Response> => {
     return NextResponse.json(body, { status });
   }
   const { share } = result;
+  const appName = getAppDisplayName();
+  const siteHost = isScholarReleaseBundle() ? new URL(getPublicWebBaseUrl()).host : 'readest.com';
 
   let coverDataUrl: string | null = null;
   if (share.coverFileKey) {
@@ -40,8 +47,8 @@ export const renderShareOgImage = async (token: string): Promise<Response> => {
   // No raw HTML strings cross the boundary.
   return new ImageResponse(
     coverDataUrl
-      ? withCoverCard(coverDataUrl, share.bookTitle, share.bookAuthor)
-      : textOnlyCard(share.bookTitle, share.bookAuthor),
+      ? withCoverCard(coverDataUrl, share.bookTitle, share.bookAuthor, appName, siteHost)
+      : textOnlyCard(share.bookTitle, share.bookAuthor, appName, siteHost),
     {
       width: WIDTH,
       height: HEIGHT,
@@ -63,7 +70,13 @@ const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
 
 // Cover-on-left composition. Asymmetric (anti-slop). Cover is the visual
 // anchor; metadata sits to the right with strong vertical hierarchy.
-const withCoverCard = (cover: string, title: string, author: string | null) => (
+const withCoverCard = (
+  cover: string,
+  title: string,
+  author: string | null,
+  appName: string,
+  siteHost: string,
+) => (
   <div
     style={{
       width: '100%',
@@ -113,8 +126,8 @@ const withCoverCard = (cover: string, title: string, author: string | null) => (
       )}
       <div style={{ flex: 1 }} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <div style={{ fontSize: 22, color: '#0066cc', fontWeight: 500 }}>Shared via Readest</div>
-        <div style={{ fontSize: 18, color: '#a3a3a3' }}>readest.com</div>
+        <div style={{ fontSize: 22, color: '#0066cc', fontWeight: 500 }}>Shared via {appName}</div>
+        <div style={{ fontSize: 18, color: '#a3a3a3' }}>{siteHost}</div>
       </div>
     </div>
   </div>
@@ -122,7 +135,7 @@ const withCoverCard = (cover: string, title: string, author: string | null) => (
 
 // Cover-less fallback (eng-review locked option A). Title becomes the visual
 // anchor at display size. No placeholder rectangle, no procedural pattern.
-const textOnlyCard = (title: string, author: string | null) => (
+const textOnlyCard = (title: string, author: string | null, appName: string, siteHost: string) => (
   <div
     style={{
       width: '100%',
@@ -152,8 +165,8 @@ const textOnlyCard = (title: string, author: string | null) => (
       )}
     </div>
     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-      <div style={{ fontSize: 26, color: '#0066cc', fontWeight: 500 }}>Shared via Readest</div>
-      <div style={{ fontSize: 20, color: '#a3a3a3' }}>readest.com</div>
+      <div style={{ fontSize: 26, color: '#0066cc', fontWeight: 500 }}>Shared via {appName}</div>
+      <div style={{ fontSize: 20, color: '#a3a3a3' }}>{siteHost}</div>
     </div>
   </div>
 );

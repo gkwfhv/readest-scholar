@@ -5,6 +5,7 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { IoAlertCircleOutline, IoBookOutline, IoOpenOutline } from 'react-icons/io5';
 import { DOWNLOAD_READEST_URL } from '@/services/constants';
 import {
+  getAboutAppLabel,
   getAppDeepLinkScheme,
   getPublicWebBaseUrl,
   isScholarReleaseBundle,
@@ -48,6 +49,7 @@ const buildWebReaderUrl = (bookHash: string, cfi: string | null): string => {
 
 const OpenAnnotationLanding = () => {
   const _ = useTranslation();
+  const scholarRelease = isScholarReleaseBundle();
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -136,8 +138,12 @@ const OpenAnnotationLanding = () => {
                 'The annotation link is missing required information. The original link may have been truncated.',
               )}
             </p>
-            <a href='https://readest.com' className='btn btn-ghost btn-block mt-6' rel='noopener'>
-              {_('Go to Readest')}
+            <a
+              href={scholarRelease ? getPublicWebBaseUrl() : 'https://readest.com'}
+              className='btn btn-ghost btn-block mt-6'
+              rel='noopener'
+            >
+              {getAboutAppLabel(_('Go to Readest'))}
             </a>
           </div>
         </Card>
@@ -153,10 +159,10 @@ const OpenAnnotationLanding = () => {
     <main className='bg-base-200 flex min-h-dvh flex-col items-center justify-center p-4 sm:p-8'>
       <Card>
         <BrandHeader
-          title={_('Open in Readest')}
+          title={getAboutAppLabel(_('Open in Readest'))}
           subtitle={
             showManualOpen
-              ? _("If Readest didn't open automatically, choose an option below:")
+              ? getAboutAppLabel(_("If Readest didn't open automatically, choose an option below:"))
               : _('Continue reading where you left off.')
           }
           alt={_('Readest logo')}
@@ -171,7 +177,9 @@ const OpenAnnotationLanding = () => {
             aria-live='polite'
           >
             <span className='loading loading-dots loading-md text-primary' aria-hidden='true' />
-            <span className='text-base-content/70 text-sm'>{_('Opening Readest...')}</span>
+            <span className='text-base-content/70 text-sm'>
+              {getAboutAppLabel(_('Opening Readest...'))}
+            </span>
           </div>
         )}
 
@@ -184,13 +192,13 @@ const OpenAnnotationLanding = () => {
         >
           <a href={appUrl} className='btn btn-primary btn-block' rel='noopener'>
             <IoBookOutline className='h-5 w-5' aria-hidden='true' />
-            {_('Open in Readest app')}
+            {getAboutAppLabel(_('Open in Readest app'))}
           </a>
           <a href={webReaderHref} className='btn btn-ghost btn-block' rel='noopener'>
             <IoOpenOutline className='h-5 w-5' aria-hidden='true' />
             {_('Continue in browser')}
           </a>
-          {!isScholarReleaseBundle() && (
+          {!scholarRelease && (
             <p className='text-base-content/60 mt-3 text-center text-xs'>
               {_("Don't have Readest?")}{' '}
               <a

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
-import { getPublicWebBaseUrl, getShareBaseUrl } from '@/services/environment';
+import { getAppDisplayName, getPublicWebBaseUrl, getShareBaseUrl } from '@/services/environment';
 import { resolveActiveShare } from '@/libs/shareServer';
 import ShareLanding from './ShareLanding';
 
@@ -18,6 +18,7 @@ interface PageProps {
 }
 
 export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
+  const appName = getAppDisplayName();
   // The Tauri build runs `output: 'export'`, which forbids `await searchParams`
   // anywhere in collected page data. `process.env.NEXT_PUBLIC_APP_PLATFORM` is
   // replaced at build time, so this early return DCEs the rest of the function
@@ -25,7 +26,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   // keeps the full dynamic implementation below.
   if (process.env['NEXT_PUBLIC_APP_PLATFORM'] !== 'web') {
     return {
-      title: 'Open in Readest',
+      title: `Open in ${appName}`,
       description: 'Open-source ebook reader for everyone, on every device.',
     };
   }
@@ -36,7 +37,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
 
   if (!token) {
     return {
-      title: 'Open in Readest',
+      title: `Open in ${appName}`,
       description: 'Open-source ebook reader for everyone, on every device.',
     };
   }
@@ -44,7 +45,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   const result = await resolveActiveShare(token);
   if (!result.ok) {
     return {
-      title: 'Share link unavailable · Readest',
+      title: `Share link unavailable · ${appName}`,
       description: 'This share link is no longer available.',
     };
   }
@@ -53,25 +54,25 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   const ogImage = `${getPublicWebBaseUrl()}/api/share/${token}/og.png`;
 
   return {
-    title: `${share.bookTitle} · Shared via Readest`,
+    title: `${share.bookTitle} · Shared via ${appName}`,
     description: share.bookAuthor
-      ? `${share.bookAuthor} · Shared via Readest`
-      : 'Shared via Readest',
+      ? `${share.bookAuthor} · Shared via ${appName}`
+      : `Shared via ${appName}`,
     openGraph: {
       type: 'book',
       url: shareUrl,
       title: share.bookTitle,
       description: share.bookAuthor
-        ? `${share.bookAuthor} · Shared via Readest`
-        : 'Shared via Readest',
+        ? `${share.bookAuthor} · Shared via ${appName}`
+        : `Shared via ${appName}`,
       images: [{ url: ogImage, width: 1200, height: 630 }],
     },
     twitter: {
       card: 'summary_large_image',
       title: share.bookTitle,
       description: share.bookAuthor
-        ? `${share.bookAuthor} · Shared via Readest`
-        : 'Shared via Readest',
+        ? `${share.bookAuthor} · Shared via ${appName}`
+        : `Shared via ${appName}`,
       images: [ogImage],
     },
   };
