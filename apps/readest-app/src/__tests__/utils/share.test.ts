@@ -1,11 +1,25 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { buildShareUrl, parseShareDeepLink } from '@/utils/share';
+
+afterEach(() => vi.unstubAllEnvs());
 
 describe('buildShareUrl', () => {
   it('builds the canonical https URL for a token', () => {
     expect(buildShareUrl('aBcDeFgHiJkLmNoPqRsTuV')).toBe(
       'https://web.readest.com/s/aBcDeFgHiJkLmNoPqRsTuV',
     );
+  });
+
+  it('builds and accepts a Scholar self-hosted share URL', () => {
+    vi.stubEnv('NEXT_PUBLIC_SCHOLAR_RELEASE', 'true');
+    vi.stubEnv('NEXT_PUBLIC_SELF_HOSTED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_API_BASE_URL', 'https://scholar.example.test');
+    const token = 'aBcDeFgHiJkLmNoPqRsTuV';
+    const url = buildShareUrl(token);
+    expect(url).toBe(`https://scholar.example.test/s/${token}`);
+    expect(parseShareDeepLink(url)).toEqual({ token });
+    expect(parseShareDeepLink(`https://evil.example.test/s/${token}`)).toBeNull();
+    expect(parseShareDeepLink(`http://scholar.example.test/s/${token}`)).toBeNull();
   });
 });
 

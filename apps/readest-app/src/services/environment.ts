@@ -18,6 +18,7 @@ export const isScholarTestBundle = () =>
   typeof window !== 'undefined' && window.__READEST_SCHOLAR_TEST_BUNDLE === true;
 export const isScholarReleaseBundle = () =>
   process.env['NEXT_PUBLIC_SCHOLAR_RELEASE'] === 'true' ||
+  getRuntimeConfig()?.scholarRelease === true ||
   (typeof window !== 'undefined' && window.__READEST_SCHOLAR_RELEASE_BUNDLE === true);
 export const getAppDisplayName = () => (isScholarReleaseBundle() ? 'Readest Scholar' : 'Readest');
 export const getAppDeepLinkScheme = () =>
@@ -32,6 +33,49 @@ export const getBaseUrl = () =>
   process.env['API_BASE_URL'] ??
   process.env['NEXT_PUBLIC_API_BASE_URL'] ??
   READEST_WEB_BASE_URL;
+export const getPublicWebBaseUrl = () => {
+  const runtime = getRuntimeConfig();
+  const selfHosted =
+    isScholarReleaseBundle() ||
+    runtime?.selfHosted === true ||
+    process.env['NEXT_PUBLIC_SELF_HOSTED'] === 'true' ||
+    process.env['SELF_HOSTED'] === 'true';
+  if (!selfHosted) return READEST_WEB_BASE_URL;
+
+  // SITE_URL is the server's canonical public origin. The desktop bundle has
+  // no server runtime config and uses its explicitly supplied web API origin.
+  const raw =
+    typeof window === 'undefined'
+      ? process.env['NEXT_PUBLIC_APP_PLATFORM'] === 'tauri'
+        ? process.env['NEXT_PUBLIC_API_BASE_URL']
+        : (process.env['SITE_URL'] ??
+          process.env['API_BASE_URL'] ??
+          process.env['NEXT_PUBLIC_API_BASE_URL'])
+      : runtime?.selfHosted && runtime.apiBaseUrl
+        ? runtime.apiBaseUrl
+        : (process.env['NEXT_PUBLIC_API_BASE_URL'] ?? runtime?.apiBaseUrl);
+  let url: URL;
+  try {
+    url = new URL(raw ?? '');
+  } catch {
+    throw new Error('Self-hosted public web URL is not configured');
+  }
+  if (
+    !['http:', 'https:'].includes(url.protocol) ||
+    url.username ||
+    url.password ||
+    url.pathname !== '/' ||
+    url.search ||
+    url.hash ||
+    /(^|\.)readest\.com$/i.test(url.hostname)
+  ) {
+    throw new Error('Self-hosted public web URL must be a separate HTTP(S) origin');
+  }
+  return url.origin;
+};
+export const getShareBaseUrl = () => `${getPublicWebBaseUrl()}/s`;
+export const isKnownWebAppOrigin = (url: URL) =>
+  url.host === new URL(READEST_WEB_BASE_URL).host || url.origin === getPublicWebBaseUrl();
 export const getNodeBaseUrl = () =>
   process.env['NEXT_PUBLIC_NODE_BASE_URL'] ?? READEST_NODE_BASE_URL;
 

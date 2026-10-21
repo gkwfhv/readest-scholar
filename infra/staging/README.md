@@ -76,6 +76,8 @@ bash infra/staging/export-images.sh | gzip -1 | \
 
 新生成的 staging 和独立恢复环境将 `readest://auth-callback` 与 `readest-scholar://auth-callback` 加入 GoTrue 回调白名单。已有 `docker/.env` 不会被覆盖；若要验收正式身份包的 OAuth 回调，先在该私有文件中仅更新 `ADDITIONAL_REDIRECT_URLS`，重建本项目的 `auth` 容器，再实测回调。生成器检查不等于现有运行栈已更新。
 
+分享和批注的 Web 链接使用 `SITE_URL` 作为服务端公开地址；桌面包则使用打包时明确指定的 `NEXT_PUBLIC_API_BASE_URL`。本 staging 的 `SITE_URL` 是 SSH 隧道回环地址，所生成的链接仅供已连接隧道的本机验收。正式外部分发前必须配置可访问的 HTTPS 域名，并重新验收分享、批注落地页和 OAuth 回跳。staging Web 容器的 `SCHOLAR_RELEASE=true` 会通过 `/runtime-config.js` 告诉浏览器使用 `readest-scholar://`，避免落地页唤起上游应用。
+
 本机用以下命令建立三个转发口，保持 SSH 会话开启：
 
 ```bash

@@ -7,6 +7,7 @@ export interface ReadestRuntimeConfig {
   translationFixedQuota?: number;
   fontBaseUrl?: string;
   selfHosted?: boolean;
+  scholarRelease?: boolean;
 }
 
 declare global {
@@ -39,6 +40,9 @@ export const getServerRuntimeConfig = (): ReadestRuntimeConfig => ({
   // funds.
   selfHosted:
     (process.env['SELF_HOSTED'] || process.env['NEXT_PUBLIC_SELF_HOSTED']) === 'true' || undefined,
+  scholarRelease:
+    (process.env['SCHOLAR_RELEASE'] || process.env['NEXT_PUBLIC_SCHOLAR_RELEASE']) === 'true' ||
+    undefined,
   storageFixedQuota: (() => {
     const raw =
       process.env['STORAGE_FIXED_QUOTA'] ?? process.env['NEXT_PUBLIC_STORAGE_FIXED_QUOTA'];

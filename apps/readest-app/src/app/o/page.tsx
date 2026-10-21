@@ -3,7 +3,12 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { IoAlertCircleOutline, IoBookOutline, IoOpenOutline } from 'react-icons/io5';
-import { DOWNLOAD_READEST_URL, READEST_WEB_BASE_URL } from '@/services/constants';
+import { DOWNLOAD_READEST_URL } from '@/services/constants';
+import {
+  getAppDeepLinkScheme,
+  getPublicWebBaseUrl,
+  isScholarReleaseBundle,
+} from '@/services/environment';
 import { useTranslation } from '@/hooks/useTranslation';
 import { buildAnnotationAppUrl } from '@/utils/deeplink';
 import { BrandHeader } from '@/components/landing/BrandHeader';
@@ -31,7 +36,9 @@ const DESKTOP_FALLBACK_DELAY_MS = 1000;
 
 const buildIntentUrl = (path: string, fallbackUrl: string) => {
   const cleanPath = path.replace(/^\//, '');
-  return `intent://${cleanPath}#Intent;scheme=readest;package=${ANDROID_PACKAGE};S.browser_fallback_url=${encodeURIComponent(fallbackUrl)};end`;
+  const scheme = getAppDeepLinkScheme();
+  const packageName = scheme === 'readest' ? `package=${ANDROID_PACKAGE};` : '';
+  return `intent://${cleanPath}#Intent;scheme=${scheme};${packageName}S.browser_fallback_url=${encodeURIComponent(fallbackUrl)};end`;
 };
 
 const buildWebReaderUrl = (bookHash: string, cfi: string | null): string => {
@@ -69,7 +76,7 @@ const OpenAnnotationLanding = () => {
     const path = `book/${bookHash}/annotation/${noteId}${cfi ? `?cfi=${encodeURIComponent(cfi)}` : ''}`;
 
     if (platform === 'android-chromium') {
-      const absoluteFallback = `${READEST_WEB_BASE_URL}${webReaderUrl}`;
+      const absoluteFallback = `${getPublicWebBaseUrl()}${webReaderUrl}`;
       window.location.replace(buildIntentUrl(path, absoluteFallback));
       return;
     }
@@ -183,17 +190,19 @@ const OpenAnnotationLanding = () => {
             <IoOpenOutline className='h-5 w-5' aria-hidden='true' />
             {_('Continue in browser')}
           </a>
-          <p className='text-base-content/60 mt-3 text-center text-xs'>
-            {_("Don't have Readest?")}{' '}
-            <a
-              href={DOWNLOAD_READEST_URL}
-              target='_blank'
-              rel='noopener'
-              className='text-primary font-medium hover:underline'
-            >
-              {_('Download')}
-            </a>
-          </p>
+          {!isScholarReleaseBundle() && (
+            <p className='text-base-content/60 mt-3 text-center text-xs'>
+              {_("Don't have Readest?")}{' '}
+              <a
+                href={DOWNLOAD_READEST_URL}
+                target='_blank'
+                rel='noopener'
+                className='text-primary font-medium hover:underline'
+              >
+                {_('Download')}
+              </a>
+            </p>
+          )}
         </div>
       </Card>
       <PageFooter tagline={_('Open-source ebook reader for everyone, on every device.')} />

@@ -1,6 +1,10 @@
 import { writeTextToClipboard } from '@/utils/clipboard';
-import { READEST_WEB_BASE_URL, SHARE_BASE_URL, SHARE_TOKEN_LENGTH } from '@/services/constants';
-import { isAppDeepLinkProtocol } from '@/services/environment';
+import { SHARE_TOKEN_LENGTH } from '@/services/constants';
+import {
+  getShareBaseUrl,
+  isAppDeepLinkProtocol,
+  isKnownWebAppOrigin,
+} from '@/services/environment';
 
 export interface ShareDeepLink {
   token: string;
@@ -15,7 +19,7 @@ const isValidToken = (raw: unknown): raw is string => typeof raw === 'string' &&
 
 // Canonical share URL embedded in the dialog, share sheet, and any "copy link"
 // affordance. Always points at the public web target.
-export const buildShareUrl = (token: string): string => `${SHARE_BASE_URL}/${token}`;
+export const buildShareUrl = (token: string): string => `${getShareBaseUrl()}/${token}`;
 
 // Parses both the custom-scheme and HTTPS forms used by the deeplink ingress.
 //   readest://share/{token}
@@ -37,7 +41,7 @@ export const parseShareDeepLink = (url: string): ShareDeepLink | null => {
     return isValidToken(token) ? { token } : null;
   }
   if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
-    if (!isWebReadestHost(parsed.host)) return null;
+    if (!isWebReadestHost(parsed)) return null;
     const segments = parsed.pathname.split('/').filter(Boolean);
     if (segments.length !== 2 || segments[0] !== 's') return null;
     const token = segments[1]!;
@@ -112,10 +116,10 @@ export const shareSelectedText = async (
   await writeTextToClipboard(text);
 };
 
-const isWebReadestHost = (host: string): boolean => {
+const isWebReadestHost = (url: URL): boolean => {
   // Matches the production host and any preview domain Readest may serve from.
   // Conservative: accepts only the exact production host or a *.readest.com
   // subdomain so a third-party site cannot impersonate a share URL.
-  if (host === new URL(READEST_WEB_BASE_URL).host) return true;
-  return host.endsWith('.readest.com');
+  if (isKnownWebAppOrigin(url)) return true;
+  return url.host.endsWith('.readest.com');
 };

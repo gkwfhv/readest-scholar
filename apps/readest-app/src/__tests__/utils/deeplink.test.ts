@@ -1,9 +1,13 @@
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import {
   buildAnnotationUrl,
+  parseAnnotationDeepLink,
+  parseBookDeepLink,
   parseWidgetEditShelfDeepLink,
   parseWidgetGroupDeepLink,
 } from '../../utils/deeplink';
+
+afterEach(() => vi.unstubAllEnvs());
 
 describe('buildAnnotationUrl', () => {
   const link = { bookHash: 'abc', noteId: 'n1', cfi: '/6/4!/4/2' };
@@ -34,6 +38,21 @@ describe('buildAnnotationUrl', () => {
     vi.stubEnv('NEXT_PUBLIC_SCHOLAR_RELEASE', 'true');
     expect(buildAnnotationUrl(link, 'app')).toContain('readest-scholar://book/abc/annotation/n1');
     vi.unstubAllEnvs();
+  });
+
+  it('uses the Scholar self-hosted web origin for exported annotation links', () => {
+    vi.stubEnv('NEXT_PUBLIC_SCHOLAR_RELEASE', 'true');
+    vi.stubEnv('NEXT_PUBLIC_SELF_HOSTED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_API_BASE_URL', 'https://scholar.example.test');
+    const url = buildAnnotationUrl(link, 'web');
+    expect(url).toBe('https://scholar.example.test/o/book/abc/annotation/n1?cfi=%2F6%2F4!%2F4%2F2');
+    expect(parseAnnotationDeepLink(url)).toEqual(link);
+    expect(parseBookDeepLink('https://scholar.example.test/o/book/abc')).toEqual({
+      bookHash: 'abc',
+    });
+    expect(
+      parseAnnotationDeepLink('https://evil.example.test/o/book/abc/annotation/n1'),
+    ).toBeNull();
   });
 });
 
