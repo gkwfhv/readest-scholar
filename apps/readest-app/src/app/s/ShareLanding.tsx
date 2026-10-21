@@ -10,7 +10,7 @@ import {
   IoOpenOutline,
 } from 'react-icons/io5';
 import { DOWNLOAD_READEST_URL } from '@/services/constants';
-import { getAppDeepLinkScheme } from '@/services/environment';
+import { getAppDeepLinkScheme, isScholarReleaseBundle } from '@/services/environment';
 import { useTranslation, type TranslationFunc } from '@/hooks/useTranslation';
 import { useAuth } from '@/context/AuthContext';
 import { useEnv } from '@/context/EnvContext';
@@ -144,14 +144,16 @@ const ShareLanding = () => {
             </div>
             <h1 className='text-base-content text-2xl font-semibold'>{heading}</h1>
             <p className='text-base-content/70 mt-2 text-sm'>{body}</p>
-            <a
-              href={DOWNLOAD_READEST_URL}
-              target='_blank'
-              rel='noopener'
-              className='btn btn-ghost btn-block mt-6'
-            >
-              {_('Get Readest')}
-            </a>
+            {!isScholarReleaseBundle() && (
+              <a
+                href={DOWNLOAD_READEST_URL}
+                target='_blank'
+                rel='noopener'
+                className='btn btn-ghost btn-block mt-6'
+              >
+                {_('Get Readest')}
+              </a>
+            )}
           </div>
         </Card>
         <PageFooter tagline={_('Open-source ebook reader for everyone, on every device.')} />
@@ -301,17 +303,19 @@ const ShareLanding = () => {
                     <IoOpenOutline className='h-5 w-5' aria-hidden='true' />
                     {_('Open in app')}
                   </a>
-                  <p className='text-base-content/60 mt-1 text-center text-xs sm:text-left'>
-                    {_("Don't have Readest?")}{' '}
-                    <a
-                      href={DOWNLOAD_READEST_URL}
-                      target='_blank'
-                      rel='noopener'
-                      className='text-primary font-medium hover:underline'
-                    >
-                      {_('Download Readest')}
-                    </a>
-                  </p>
+                  {!isScholarReleaseBundle() && (
+                    <p className='text-base-content/60 mt-1 text-center text-xs sm:text-left'>
+                      {_("Don't have Readest?")}{' '}
+                      <a
+                        href={DOWNLOAD_READEST_URL}
+                        target='_blank'
+                        rel='noopener'
+                        className='text-primary font-medium hover:underline'
+                      >
+                        {_('Download Readest')}
+                      </a>
+                    </p>
+                  )}
                 </>
               )}
             </div>

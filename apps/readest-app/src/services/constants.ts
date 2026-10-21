@@ -958,7 +958,6 @@ export const DOWNLOAD_READEST_URL = 'https://readest.com?utm_source=readest_web'
 export const READEST_WEB_BASE_URL = 'https://web.readest.com';
 export const READEST_NODE_BASE_URL = 'https://node.readest.com';
 
-export const SHARE_BASE_URL = `${READEST_WEB_BASE_URL}/s`;
 export const SHARE_EXPIRATION_DAYS = [1, 3, 7] as const;
 
 // Send to Readest — the domain inbound capture emails are addressed to, the

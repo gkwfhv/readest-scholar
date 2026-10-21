@@ -32,6 +32,7 @@ services:
     ports: !override
       - "127.0.0.1:${SCHOLAR_WEB_PORT:?Generate the staging env}:3000"
     environment:
+      SCHOLAR_RELEASE: "true"
       SUPABASE_PUBLIC_URL: http://127.0.0.1:${SCHOLAR_API_PORT}
       S3_PUBLIC_ENDPOINT: http://127.0.0.1:${SCHOLAR_S3_PORT}
       API_BASE_URL: http://127.0.0.1:${SCHOLAR_WEB_PORT}

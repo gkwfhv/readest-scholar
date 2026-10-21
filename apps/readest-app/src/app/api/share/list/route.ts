@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseAdminClient } from '@/utils/supabase';
 import { validateUserAndToken } from '@/utils/access';
-import { SHARE_BASE_URL } from '@/services/constants';
+import { getShareBaseUrl } from '@/services/environment';
 
 const PAGE_SIZE = 25;
 
@@ -76,6 +76,6 @@ export async function GET(request: Request) {
       createdAt: row.created_at,
     })),
     nextCursor,
-    shareUrlBase: SHARE_BASE_URL,
+    shareUrlBase: getShareBaseUrl(),
   });
 }

@@ -1,5 +1,9 @@
-import { READEST_WEB_BASE_URL } from '@/services/constants';
-import { getAppDeepLinkScheme, isAppDeepLinkProtocol } from '@/services/environment';
+import {
+  getAppDeepLinkScheme,
+  getPublicWebBaseUrl,
+  isAppDeepLinkProtocol,
+  isKnownWebAppOrigin,
+} from '@/services/environment';
 
 export type AnnotationDeepLink = {
   bookHash: string;
@@ -40,7 +44,7 @@ const parseReadestUrl = (
   } else if (
     allowWebHost &&
     (parsed.protocol === 'https:' || parsed.protocol === 'http:') &&
-    parsed.host === 'web.readest.com'
+    isKnownWebAppOrigin(parsed)
   ) {
     segments = parsed.pathname.split('/').filter(Boolean);
 
@@ -61,7 +65,7 @@ const parseReadestUrl = (
  * landing page at /o/book/{hash}/annotation/{id}.
  */
 export const buildAnnotationWebUrl = ({ bookHash, noteId, cfi }: AnnotationDeepLink): string => {
-  const base = `${READEST_WEB_BASE_URL}${ANNOTATION_PATH_PREFIX}${bookHash}/annotation/${noteId}`;
+  const base = `${getPublicWebBaseUrl()}${ANNOTATION_PATH_PREFIX}${bookHash}/annotation/${noteId}`;
   return cfi ? `${base}?cfi=${encodeURIComponent(cfi)}` : base;
 };
 
@@ -149,7 +153,7 @@ export const parseDeviceLinkDeepLink = (url: string): { code: string } | null =>
   const isAppLink = isAppDeepLinkProtocol(parsed.protocol) && parsed.host === 'link' && path === '';
   const isWebLink =
     (parsed.protocol === 'https:' || parsed.protocol === 'http:') &&
-    parsed.host === 'web.readest.com' &&
+    isKnownWebAppOrigin(parsed) &&
     path === '/link';
   if (!isAppLink && !isWebLink) return null;
   return { code: parsed.searchParams.get('code') ?? '' };

@@ -24,7 +24,43 @@ beforeEach(() => {
 });
 
 describe('environment', () => {
+  describe('getPublicWebBaseUrl', () => {
+    test('keeps the upstream origin for ordinary Readest', async () => {
+      const { getPublicWebBaseUrl } = await import('@/services/environment');
+      expect(getPublicWebBaseUrl()).toBe('https://web.readest.com');
+    });
+
+    test('uses the self-hosted runtime origin and rejects the upstream host for Scholar', async () => {
+      env['NEXT_PUBLIC_SCHOLAR_RELEASE'] = 'true';
+      window.__READEST_RUNTIME_CONFIG = {
+        selfHosted: true,
+        apiBaseUrl: 'https://scholar.example.test',
+      };
+      const { getPublicWebBaseUrl } = await import('@/services/environment');
+      expect(getPublicWebBaseUrl()).toBe('https://scholar.example.test');
+      window.__READEST_RUNTIME_CONFIG = {
+        selfHosted: true,
+        apiBaseUrl: 'https://web.readest.com',
+      };
+      expect(getPublicWebBaseUrl).toThrow(/separate HTTP\(S\) origin/);
+    });
+  });
+
   describe('isScholarReleaseBundle', () => {
+    test('uses the self-hosted Web runtime marker for Scholar links', async () => {
+      window.__READEST_RUNTIME_CONFIG = {
+        scholarRelease: true,
+      } as typeof window.__READEST_RUNTIME_CONFIG;
+      const { getAppDeepLinkScheme } = await import('@/services/environment');
+      expect(getAppDeepLinkScheme()).toBe('readest-scholar');
+    });
+
+    test('publishes the staging Scholar marker through runtime config', async () => {
+      env['SCHOLAR_RELEASE'] = 'true';
+      const { getServerRuntimeConfig } = await import('@/services/runtimeConfig');
+      expect(getServerRuntimeConfig().scholarRelease).toBe(true);
+    });
+
     test('recognizes only the formal Scholar bundle marker', async () => {
       const { isScholarReleaseBundle, getAppDisplayName, getAboutAppLabel, getAppDeepLinkScheme } =
         await import('@/services/environment');

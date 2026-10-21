@@ -10,7 +10,8 @@ vi.mock('@tauri-apps/plugin-http', () => ({
   fetch: vi.fn(),
 }));
 
-vi.mock('@/services/environment', () => ({
+vi.mock('@/services/environment', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/services/environment')>()),
   isTauriAppPlatform: vi.fn(() => false),
 }));
 

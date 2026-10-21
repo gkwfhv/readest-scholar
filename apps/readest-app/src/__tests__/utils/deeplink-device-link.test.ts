@@ -1,7 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { parseDeviceLinkDeepLink } from '@/utils/deeplink';
+
+afterEach(() => vi.unstubAllEnvs());
 
 // A CrossPoint reader's sign-in code is approved on the /link page. A phone
 // browser opening that page is usually not signed in to Readest, and on iOS a
@@ -25,6 +27,15 @@ describe('parseDeviceLinkDeepLink', () => {
 
   it('keeps a link without a code, for the user to type it in', () => {
     expect(parseDeviceLinkDeepLink('https://web.readest.com/link')).toEqual({ code: '' });
+  });
+
+  it('accepts a Scholar self-hosted reader link', () => {
+    vi.stubEnv('NEXT_PUBLIC_SCHOLAR_RELEASE', 'true');
+    vi.stubEnv('NEXT_PUBLIC_SELF_HOSTED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_API_BASE_URL', 'https://scholar.example.test');
+    expect(parseDeviceLinkDeepLink('https://scholar.example.test/link?code=RQGF-WDCF')).toEqual({
+      code: 'RQGF-WDCF',
+    });
   });
 
   it('rejects other pages and other hosts', () => {
