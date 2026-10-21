@@ -1,6 +1,11 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
-import { getAppDisplayName, getPublicWebBaseUrl, getShareBaseUrl } from '@/services/environment';
+import {
+  getAppDisplayName,
+  getPublicWebBaseUrl,
+  getShareBaseUrl,
+  isScholarReleaseBundle,
+} from '@/services/environment';
 import { resolveActiveShare } from '@/libs/shareServer';
 import ShareLanding from './ShareLanding';
 
@@ -17,6 +22,12 @@ interface PageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
+// Scholar is selected at server runtime for the generic Docker image, while
+// the root layout title template is baked at build time. An absolute title
+// prevents that upstream template from appending "| Readest" to Scholar links.
+const sharePageTitle = (value: string): Metadata['title'] =>
+  isScholarReleaseBundle() ? { absolute: value } : value;
+
 export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
   const appName = getAppDisplayName();
   // The Tauri build runs `output: 'export'`, which forbids `await searchParams`
@@ -26,7 +37,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   // keeps the full dynamic implementation below.
   if (process.env['NEXT_PUBLIC_APP_PLATFORM'] !== 'web') {
     return {
-      title: `Open in ${appName}`,
+      title: sharePageTitle(`Open in ${appName}`),
       description: 'Open-source ebook reader for everyone, on every device.',
     };
   }
@@ -37,7 +48,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
 
   if (!token) {
     return {
-      title: `Open in ${appName}`,
+      title: sharePageTitle(`Open in ${appName}`),
       description: 'Open-source ebook reader for everyone, on every device.',
     };
   }
@@ -45,7 +56,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   const result = await resolveActiveShare(token);
   if (!result.ok) {
     return {
-      title: `Share link unavailable · ${appName}`,
+      title: sharePageTitle(`Share link unavailable · ${appName}`),
       description: 'This share link is no longer available.',
     };
   }
@@ -54,7 +65,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   const ogImage = `${getPublicWebBaseUrl()}/api/share/${token}/og.png`;
 
   return {
-    title: `${share.bookTitle} · Shared via ${appName}`,
+    title: sharePageTitle(`${share.bookTitle} · Shared via ${appName}`),
     description: share.bookAuthor
       ? `${share.bookAuthor} · Shared via ${appName}`
       : `Shared via ${appName}`,

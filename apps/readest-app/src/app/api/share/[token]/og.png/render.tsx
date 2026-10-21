@@ -126,7 +126,9 @@ const withCoverCard = (
       )}
       <div style={{ flex: 1 }} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <div style={{ fontSize: 22, color: '#0066cc', fontWeight: 500 }}>Shared via {appName}</div>
+        <div style={{ fontSize: 22, color: '#0066cc', fontWeight: 500 }}>
+          {`Shared via ${appName}`}
+        </div>
         <div style={{ fontSize: 18, color: '#a3a3a3' }}>{siteHost}</div>
       </div>
     </div>
@@ -165,7 +167,9 @@ const textOnlyCard = (title: string, author: string | null, appName: string, sit
       )}
     </div>
     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-      <div style={{ fontSize: 26, color: '#0066cc', fontWeight: 500 }}>Shared via {appName}</div>
+      <div style={{ fontSize: 26, color: '#0066cc', fontWeight: 500 }}>
+        {`Shared via ${appName}`}
+      </div>
       <div style={{ fontSize: 20, color: '#a3a3a3' }}>{siteHost}</div>
     </div>
   </div>
