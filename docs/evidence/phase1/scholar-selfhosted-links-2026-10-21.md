@@ -43,8 +43,16 @@
 - 容器内的 OG 取图使用公开的 `127.0.0.1:9130` 签名 URL，而该回环地址从 Web 容器不可达，因此这次 PNG 实际采用文字回退卡片，没有封面。针对自托管 S3 的内部取图回归用例先失败后通过；R2 路径保留原有公开签名 URL。第一次全量命令直接调用 Vitest，绕过仓库的 `dotenv` 包装，触发大量环境缺失错误后已中止；按项目标准命令重跑，Node 24 套件为 **1,175 个文件通过、4 跳过；13,808 项通过、16 跳过、0 失败**。TypeScript、Biome、Webpack Web 生产构建和 Scholar 桌面静态导出通过。新内部取图代码尚未部署，需在下一镜像中验证带封面的实际 OG 图片。
 - 合成分享已撤销（204），公开元数据为 410；令牌文件和 SSH 隧道已清理。主机新备份未做独立冷恢复。
 
+## PR #31 OG 封面内部取图的 staging 实测
+
+- [PR #31](https://github.com/gkwfhv/readest-scholar/pull/31) 的最终 `922ff40fe2d26a9b01aec00cb125c1fb51b09b94` 经 Scholar baseline、完整 PR checks、CodeQL 和精确 SHA 评审通过后合并为 `41d980f25dc2e8bdb816b9dc1393555e6954ff35`。[GHCR 发布运行](https://github.com/gkwfhv/readest-scholar/actions/runs/39559179072)完成双架构镜像与 SBOM；amd64 平台摘要为 `sha256:370e23c219bf94421b219fd8c164cb8abb8ce572501614e2fef84b67ad69040c`，arm64 为 `sha256:3d7c92c39b3c194c2d3dce5ead381bbcf2196d0887f41d645a4d9a9915e15d93`。
+- 主机源码通过 SHA256 `8097961700d8f17761586bdd413632f8dea4e379a07b49e87311d86348074c63` 的增量 Git bundle 快进到合并提交且干净。主机直拉 GHCR 的最后一层持续无进展，改用本机已核对 `linux/amd64` 镜像 ID 的归档；两端归档 SHA256 为 `70e6ed481b26ef13790d119bca0923667bb1ea2f4ec32432d5ef193304b91ec0`，主机 gzip 校验和导入通过。层入库后，主机用 GHCR 固定摘要拉取 manifest 并确认镜像 ID 与架构相符。
+- `deploy-web.sh` 创建 `20261021T072119Z` 完整升级前备份（尚未冷恢复），四路前后健康均通过；仅 Web 容器从 `5aec91d81ceb` 更新为 `77372a7ee3c7`，其余五个服务容器 ID 保持不变。主机源码及静态挂载检查通过。
+- 私有合成账户创建临时分享后，公开页面、元数据和 OG 接口均为 200。新 OG PNG 为 **91,846 字节**，实际像素包含合成 PDF 首页缩略图、书名和 `Shared via Readest Scholar`，不再是上一个镜像的 26,966 字节文字回退卡片。[带封面的 OG 图片](scholar-share-og-cover-2026-10-21.png)。撤销分享得到 204，再查元数据为 410；主机临时令牌及 PNG 文件已清理，仓库仅保存不含令牌的合成图片。
+- 这次进一步核对 `/library` 的 HTML，根布局标题仍是 `Readest — Where You Read, Digest and Get Insight`。原因是 GHCR 工作流只传入 Web 平台标记，没有把 Scholar 发布标记传入 Docker 构建。单独修复根布局的品牌元数据与构建参数；没有公共域名的镜像不应把上游站点写进 Scholar 的 `og:url`。
+
 ## 尚未验收
 
 - 没有测试域名；回环链接只有 SSH 隧道本机可用。正式 HTTPS 分享/批注链接、真实 OAuth 提供方回跳及外部收件人打开分享均未验收。虽然两种 scheme 已加入 Auth 白名单，尚无 OAuth 提供方可发起真实回跳。
-- 分享 OG 的容器内部封面读取修复尚未进入 staging 镜像；分享导入到第二个独立账户尚未实测。根布局其他页面的构建时标题模板仍需单独核对。
+- 分享导入到第二个独立账户尚未实测。根布局首页的构建时品牌元数据仍需部署修复；外部站点的社交预览、分享与 OAuth 回跳需要公共域名后验收。
 - 正式签名安装包与更新分发仍是独立发布门槛。

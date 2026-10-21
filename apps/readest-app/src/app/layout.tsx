@@ -12,29 +12,29 @@ const scholarRelease = process.env['NEXT_PUBLIC_SCHOLAR_RELEASE'] === 'true';
 const title = scholarRelease
   ? 'Readest Scholar'
   : 'Readest — Where You Read, Digest and Get Insight';
-const description =
-  'Discover Readest, the ultimate online ebook reader for immersive and organized reading. ' +
-  'Enjoy seamless access to your digital library, powerful tools for highlighting, bookmarking, ' +
-  'and note-taking, and support for multiple book views. ' +
-  'Perfect for deep reading, analysis, and understanding. Explore now!';
+const description = scholarRelease
+  ? 'Readest Scholar helps you read, annotate, and explore research papers across devices.'
+  : 'Discover Readest, the ultimate online ebook reader for immersive and organized reading. ' +
+    'Enjoy seamless access to your digital library, powerful tools for highlighting, bookmarking, ' +
+    'and note-taking, and support for multiple book views. ' +
+    'Perfect for deep reading, analysis, and understanding. Explore now!';
 const previewImage = 'https://cdn.readest.com/images/open_graph_preview_read_now.png';
 
 export const metadata: Metadata = {
-  metadataBase: new URL(url),
+  // A reusable self-hosted image has no single public origin at build time.
+  // Avoid stamping the upstream domain into Scholar page metadata.
+  metadataBase: scholarRelease ? undefined : new URL(url),
   title: {
     default: title,
     template: scholarRelease ? '%s | Readest Scholar' : '%s | Readest',
   },
   description,
   generator: 'Next.js',
-  manifest: '/manifest.json',
+  manifest: scholarRelease ? '/scholar-manifest.json' : '/manifest.json',
   keywords: ['epub', 'pdf', 'ebook', 'reader', 'readest', 'pwa'],
-  authors: [
-    {
-      name: 'readest',
-      url: 'https://github.com/readest/readest',
-    },
-  ],
+  authors: scholarRelease
+    ? [{ name: 'Readest Scholar', url: 'https://github.com/gkwfhv/readest-scholar' }]
+    : [{ name: 'readest', url: 'https://github.com/readest/readest' }],
   icons: {
     icon: [{ url: '/icon.png' }, { url: '/favicon.ico' }],
     apple: [{ url: '/apple-touch-icon.png', sizes: '180x180' }],
@@ -46,21 +46,19 @@ export const metadata: Metadata = {
   },
   openGraph: {
     type: 'website',
-    url,
     title,
     description,
-    images: [previewImage],
+    ...(scholarRelease ? {} : { url, images: [previewImage] }),
   },
   twitter: {
-    card: 'summary_large_image',
+    card: scholarRelease ? 'summary' : 'summary_large_image',
     title,
     description,
-    images: [previewImage],
+    ...(!scholarRelease && { images: [previewImage] }),
   },
   other: {
     'apple-mobile-web-app-capable': 'yes',
-    'twitter:domain': 'web.readest.com',
-    'twitter:url': url,
+    ...(!scholarRelease && { 'twitter:domain': 'web.readest.com', 'twitter:url': url }),
   },
 };
 

@@ -22,9 +22,8 @@ interface PageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-// Scholar is selected at server runtime for the generic Docker image, while
-// the root layout title template is baked at build time. An absolute title
-// prevents that upstream template from appending "| Readest" to Scholar links.
+// The share page title is absolute so it stays correct even when a Scholar
+// runtime uses an image built without the Scholar root metadata flag.
 const sharePageTitle = (value: string): Metadata['title'] =>
   isScholarReleaseBundle() ? { absolute: value } : value;
 
