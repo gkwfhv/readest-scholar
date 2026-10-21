@@ -80,6 +80,25 @@ describe('createBookFilter', () => {
     expect(filter(book)).toBe(true);
   });
 
+  it('should match a saved DOI and publication year', () => {
+    const book = createMockBook({
+      title: 'A Book',
+      metadata: { doi: '10.1234/scholar-paper', published: '2021-06-15' },
+    });
+    expect(createBookFilter('scholar-paper')(book)).toBe(true);
+    expect(createBookFilter('2021')(book)).toBe(true);
+    expect(createBookFilter('2022')(book)).toBe(false);
+  });
+
+  it('should search DOI and year even when the query is not a valid regex', () => {
+    const book = createMockBook({
+      title: 'A Book',
+      metadata: { doi: '10.1234/[scholar]', published: '[2021]' },
+    });
+    expect(createBookFilter('[scholar')(book)).toBe(true);
+    expect(createBookFilter('[2021')(book)).toBe(true);
+  });
+
   it('should match tags and subjects through regex and invalid-regex paths', () => {
     expect(createBookFilter('favorite')(createMockBook({ tags: ['Favorite'] }))).toBe(true);
     expect(

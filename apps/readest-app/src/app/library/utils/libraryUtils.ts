@@ -298,7 +298,12 @@ export const applyBookTagEdits = (
   });
 
 const getBookValuesText = (book: Book): string =>
-  [...getBookTags(book), ...getBookSubjects(book)].join(' ');
+  [
+    ...getBookTags(book),
+    ...getBookSubjects(book),
+    book.metadata?.doi,
+    book.metadata?.published,
+  ].join(' ');
 
 export const createBookFilter = (queryTerm: string | null) => (item: Book) => {
   if (!queryTerm) return true;

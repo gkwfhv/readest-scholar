@@ -12,7 +12,7 @@
 | 高亮/备注/书签数据 | 已有 | `book_notes` 含 `type`、`cfi`、`text`、`note`、`color`、`page`、`deleted_at`；合成 PDF 第 1/2 页书签在 Web/桌面端双向显示；桌面高亮在 Web 显示，Web 备注在桌面显示，服务端对应记录未删除 | V1 高亮与备注复用该行；离线、并发冲突与几何锚点仍需实测 |
 | 跨设备增量同步 | 已有 | replica cursor、加密、类别开关 | 新实体优先加 replica 类别，不平行再做一套 op-log |
 | 离线 Web | 已有 | `src/sw.ts` Serwist，架构文档第 3.4 节 | 实测仍未做 |
-| 书库搜索 | 已有 | `librarySearchService.ts`、`librarySearchIndex.ts` | 检索字段以后加入 DOI/年份 |
+| 书库搜索 | 已有 | `librarySearchService.ts`、`librarySearchIndex.ts`；书库筛选 `createBookFilter` 已加入 `metadata.doi` 和 `metadata.published`，见 Phase 2 DOI 检索测试 | 200+ 文献下验证筛选速度，后续补结构化字段筛选 |
 | 标签 | 可扩展 | `books.tags text[]`。没有独立标签表，也没有同账户归一化唯一约束 | 先用数组；规范化表放到文献管理阶段 |
 | 分组 / 书架 | 可扩展 | `books.group_id/group_name`。本地 `services/bookshelves/definitions.ts` 是带过滤规则的智能书架（recent、finished 等），`grouping.ts` 只解析分组方式，不是可嵌套的 Zotero 集合 | 层级集合仍要新增或另做映射；不要把 bookshelf 当成文件夹 |
 | 作者/标题 | 已有 | `books.title`、`books.author` | 作者数组可放 `metadata`，不必先拆表 |
