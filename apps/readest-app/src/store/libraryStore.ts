@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { Book, BookGroupType, ReadingStatus } from '@/types/book';
 import { EnvConfigType, isTauriAppPlatform } from '@/services/environment';
 import { BOOK_UNGROUPED_NAME } from '@/services/constants';
+import { useSettingsStore } from '@/store/settingsStore';
 import { md5Fingerprint } from '@/utils/md5';
 import { isMainAppWindow } from '@/utils/window';
 
@@ -236,17 +237,21 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     const { library } = get();
     const groups: Record<string, string> = {};
 
-    library.forEach((book) => {
-      if (book.groupName && book.groupName !== BOOK_UNGROUPED_NAME && !book.deletedAt) {
-        groups[md5Fingerprint(book.groupName)] = book.groupName;
-        let nextSlashIndex = book.groupName.indexOf('/', 0);
-        while (nextSlashIndex > 0) {
-          const groupName = book.groupName.substring(0, nextSlashIndex);
-          groups[md5Fingerprint(groupName)] = groupName;
-          nextSlashIndex = book.groupName.indexOf('/', nextSlashIndex + 1);
-        }
+    const addPath = (path: unknown) => {
+      if (typeof path !== 'string' || !path || path === BOOK_UNGROUPED_NAME) return;
+      groups[md5Fingerprint(path)] = path;
+      let nextSlashIndex = path.indexOf('/', 0);
+      while (nextSlashIndex > 0) {
+        const parent = path.substring(0, nextSlashIndex);
+        groups[md5Fingerprint(parent)] = parent;
+        nextSlashIndex = path.indexOf('/', nextSlashIndex + 1);
       }
+    };
+
+    library.forEach((book) => {
+      if (!book.deletedAt) addPath(book.groupName);
     });
+    useSettingsStore.getState().settings.scholarCollectionPaths?.forEach(addPath);
 
     set({ groups });
   },
@@ -305,3 +310,9 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     return result;
   },
 }));
+
+useSettingsStore.subscribe?.((state, previous) => {
+  if (state.settings?.scholarCollectionPaths !== previous.settings?.scholarCollectionPaths) {
+    useLibraryStore.getState().refreshGroups();
+  }
+});

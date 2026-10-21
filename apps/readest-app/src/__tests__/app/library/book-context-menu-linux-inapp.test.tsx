@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
-import type { Book } from '@/types/book';
+import type { Book, BooksGroup } from '@/types/book';
 
 /**
  * Issue #5360 — on Linux/Wayland the native GTK context menu is popped up
@@ -41,13 +41,20 @@ const appService = vi.hoisted(() => ({
   isAndroidApp: false,
   isMobileApp: false,
 }));
+const collectionSettings = vi.hoisted(() => ({
+  scholarCollectionPaths: ['Research', 'Research/Empty'],
+}));
+const setSettings = vi.hoisted(() => vi.fn());
+const saveSettings = vi.hoisted(() => vi.fn(async () => {}));
 
 vi.mock('@/context/EnvContext', () => ({
   useEnv: () => ({ envConfig: {}, appService }),
 }));
 
 vi.mock('@/store/settingsStore', () => ({
-  useSettingsStore: () => ({ settings: { localBooksDir: '/books' } }),
+  useSettingsStore: Object.assign(() => ({ settings: { localBooksDir: '/books' } }), {
+    getState: () => ({ settings: collectionSettings, setSettings, saveSettings }),
+  }),
 }));
 
 vi.mock('@/hooks/useTranslation', () => ({
@@ -102,8 +109,8 @@ const renderItem = (overrides: Partial<React.ComponentProps<typeof BookshelfItem
   return { ...render(<BookshelfItem {...props} />), props };
 };
 
-const openContextMenu = () =>
-  fireEvent.contextMenu(screen.getByRole('button', { name: 'Test Book' }), {
+const openContextMenu = (name = 'Test Book') =>
+  fireEvent.contextMenu(screen.getByRole('button', { name }), {
     clientX: 10,
     clientY: 20,
   });
@@ -112,6 +119,7 @@ describe('library context menu on Linux desktop (issue #5360)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     appService.isLinuxApp = true;
+    appService.hasContextMenu = true;
   });
 
   afterEach(() => {
@@ -153,6 +161,42 @@ describe('library context menu on Linux desktop (issue #5360)', () => {
 
     expect(props.handleShowDetailsBook).toHaveBeenCalledWith(book);
     expect(screen.queryByRole('menuitem')).toBeNull();
+  });
+
+  it('removes an empty Scholar folder and its empty descendants', async () => {
+    const group: BooksGroup = {
+      id: 'research-id',
+      name: 'Research',
+      displayName: 'Research',
+      books: [],
+      updatedAt: 0,
+    };
+    renderItem({ item: group });
+    openContextMenu('Research');
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }));
+    expect(screen.getByText('Delete empty group?')).toBeTruthy();
+    expect(setSettings).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+
+    expect(setSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ scholarCollectionPaths: [] }),
+    );
+    await vi.waitFor(() => expect(saveSettings).toHaveBeenCalled());
+  });
+
+  it('offers a visible empty-folder delete action without a native context menu', () => {
+    appService.hasContextMenu = false;
+    const group: BooksGroup = {
+      id: 'research-id',
+      name: 'Research',
+      displayName: 'Research',
+      books: [],
+      updatedAt: 0,
+    };
+    renderItem({ item: group });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete empty group' }));
+    expect(screen.getByText('Delete empty group?')).toBeTruthy();
   });
 
   it('reveals the book folder through the app command (issue #6660)', async () => {

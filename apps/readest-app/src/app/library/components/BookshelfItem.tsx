@@ -22,9 +22,12 @@ import {
 } from '@/app/library/utils/libraryUtils';
 import { isTauriAppPlatform } from '@/services/environment';
 import { isLocalSendEnabled } from '@/services/localsend/devicePrefs';
+import { MdDeleteOutline } from 'react-icons/md';
 import BookItem from './BookItem';
 import GroupItem from './GroupItem';
 import BookContextMenuPopup, { type BookContextMenuItem } from './BookContextMenuPopup';
+import DeleteConfirmAlert from '@/components/DeleteConfirmAlert';
+import ModalPortal from '@/components/ModalPortal';
 import { useOpenBook } from '../hooks/useOpenBook';
 
 // A native popup blocks Tauri's main thread until the menu is dismissed and
@@ -128,8 +131,9 @@ const BookshelfItem: React.FC<BookshelfItemProps> = ({
   showSeriesIndex,
 }) => {
   const _ = useTranslation();
-  const { appService } = useEnv();
+  const { appService, envConfig } = useEnv();
   const { settings } = useSettingsStore();
+  const [emptyGroupToDelete, setEmptyGroupToDelete] = useState<string | null>(null);
   const { openBook } = useOpenBook({ setLoading, handleBookDownload });
 
   const showBookDetailsModal = useCallback(async (book: Book) => {
@@ -283,6 +287,14 @@ const BookshelfItem: React.FC<BookshelfItemProps> = ({
   };
 
   const buildGroupMenuItems = (group: BooksGroup): BookContextMenuItem[] => {
+    if (group.books.length === 0) {
+      return [
+        {
+          text: _('Delete'),
+          action: () => setEmptyGroupToDelete(group.name),
+        },
+      ];
+    }
     // Single Menu.new({ items }) call keeps the order deterministic — see the
     // note in bookContextMenuHandler about the Menu.append() IPC race (#4389).
     return [
@@ -453,7 +465,7 @@ const BookshelfItem: React.FC<BookshelfItemProps> = ({
     <div className={clsx(mode === 'grid' ? 'h-full' : 'sm:hover:bg-base-300/50 px-4 sm:px-6')}>
       <div
         className={clsx(
-          'visible-focus-inset-2 group',
+          'visible-focus-inset-2 group relative',
           mode === 'grid' &&
             'sm:hover:bg-base-300/50 flex h-full flex-col px-0 py-2 sm:rounded-md sm:px-4 sm:py-4',
           mode === 'list' && 'border-base-300 flex flex-col border-b py-2',
@@ -506,6 +518,25 @@ const BookshelfItem: React.FC<BookshelfItemProps> = ({
             />
           )}
         </div>
+        {'books' in item && item.books.length === 0 && !appService?.hasContextMenu && (
+          <button
+            type='button'
+            aria-label={_('Delete empty group')}
+            title={_('Delete empty group')}
+            className={clsx(
+              'eink-bordered text-base-content/70 hover:bg-base-300 absolute right-5 z-10 rounded-md bg-base-100/90 p-1.5',
+              mode === 'grid' ? 'top-5' : 'top-2',
+            )}
+            onPointerDown={(event) => event.stopPropagation()}
+            onPointerUp={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              setEmptyGroupToDelete(item.name);
+            }}
+          >
+            <MdDeleteOutline size={18} aria-hidden='true' />
+          </button>
+        )}
       </div>
       {inAppMenuPosition && (
         <BookContextMenuPopup
@@ -513,6 +544,30 @@ const BookshelfItem: React.FC<BookshelfItemProps> = ({
           items={buildMenuItems()}
           onClose={() => setInAppMenuPosition(null)}
         />
+      )}
+      {emptyGroupToDelete && (
+        <ModalPortal>
+          <DeleteConfirmAlert
+            title={_('Delete empty group?')}
+            message={_(
+              'The group and its empty subgroups will be removed. Books stay in the library.',
+            )}
+            onCancel={() => setEmptyGroupToDelete(null)}
+            onConfirm={() => {
+              const store = useSettingsStore.getState();
+              const paths = store.settings.scholarCollectionPaths ?? [];
+              const next = paths.filter(
+                (path) => path !== emptyGroupToDelete && !path.startsWith(emptyGroupToDelete + '/'),
+              );
+              if (next.length !== paths.length) {
+                const updated = { ...store.settings, scholarCollectionPaths: next };
+                store.setSettings(updated);
+                void store.saveSettings(envConfig, updated);
+              }
+              setEmptyGroupToDelete(null);
+            }}
+          />
+        </ModalPortal>
       )}
     </div>
   );

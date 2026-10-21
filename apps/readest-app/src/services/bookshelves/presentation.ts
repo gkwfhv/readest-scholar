@@ -19,6 +19,7 @@ import {
 export const generateBookshelfItems = (
   books: Book[],
   parentGroupName: string,
+  collectionPaths: readonly string[] = [],
 ): (Book | BooksGroup)[] => {
   const groupsMap = new Map<string, BooksGroup>();
 
@@ -64,6 +65,24 @@ export const generateBookshelfItems = (
     }
   }
 
+  for (const path of collectionPaths) {
+    if (typeof path !== 'string' || !path || path === BOOK_UNGROUPED_NAME) continue;
+    if (parentGroupName && !path.startsWith(parentGroupName + '/')) continue;
+    const relativePath = parentGroupName ? path.slice(parentGroupName.length + 1) : path;
+    const immediateChild = relativePath.split('/')[0];
+    if (!immediateChild) continue;
+    const fullGroupName = parentGroupName ? `${parentGroupName}/${immediateChild}` : immediateChild;
+    if (!groupsMap.has(fullGroupName)) {
+      groupsMap.set(fullGroupName, {
+        id: md5Fingerprint(fullGroupName),
+        name: fullGroupName,
+        displayName: immediateChild,
+        books: [],
+        updatedAt: 0,
+      });
+    }
+  }
+
   for (const group of groupsMap.values()) {
     group.books.sort((a, b) => b.updatedAt - a.updatedAt);
   }
@@ -97,7 +116,7 @@ export const presentBookshelf = (
   const books = resolveCurrentShelfBooks(result.books, groupBy, groupId, manualGroupName);
   const currentBookshelfItems =
     groupBy === LibraryGroupByType.Group
-      ? generateBookshelfItems(books, manualGroupName || '')
+      ? generateBookshelfItems(books, manualGroupName || '', settings.scholarCollectionPaths)
       : groupId
         ? books
         : createBookGroups(books, groupBy);

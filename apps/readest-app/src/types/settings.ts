@@ -492,6 +492,8 @@ export interface SystemSettings {
   telemetryEnabled: boolean;
   discordRichPresenceEnabled: boolean;
   bookshelves?: BookshelfState;
+  /** Manual collection paths, including empty groups with no books yet. */
+  scholarCollectionPaths?: string[];
   libraryViewMode: LibraryViewModeType;
   librarySortBy: LibrarySortByType;
   librarySortAscending: boolean;
