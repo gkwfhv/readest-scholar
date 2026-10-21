@@ -10,13 +10,13 @@
 
 [Phase 1 验收记录](docs/evidence/phase1/acceptance-2026-10-21.md)依据计划第 9 节将空栈、升级、备份恢复、CI/SBOM、测试秘密、回环更新和普通阅读列为非生产工程底座通过项；公开服务、真实模型、正式签名分发仍不可发布，也不阻塞 Phase 2 的本地文献管理开发。
 
-Phase 2 已从[手动 DOI 元数据](docs/evidence/phase2/doi-metadata-2026-10-21.md)开始：Scholar 书籍详情可编辑和显示 DOI，沿用现有元数据保存路径。[隔离 staging 的双向同步实测](docs/evidence/phase2/doi-staging-bidirectional-2026-10-21.md)已验证 Web ↔ 服务端 ↔ macOS 的一次 DOI 修改往返，以及现有 `books` 记录的双账户读取隔离；[书库文本检索](docs/evidence/phase2/doi-search-2026-10-21.md)新增 DOI 和出版年份。[文献/文件身份迁移](docs/evidence/phase2/document-file-identity-2026-10-21.md)已在隔离 PostgreSQL 中验证回填、复合外键和双账户 RLS，尚待接入客户端和 staging。集合、去重、200+ 文献规模和更广的隔离/冲突场景尚未完成。
+Phase 2 已从[手动 DOI 元数据](docs/evidence/phase2/doi-metadata-2026-10-21.md)开始：Scholar 书籍详情可编辑和显示 DOI，沿用现有元数据保存路径。[隔离 staging 的双向同步实测](docs/evidence/phase2/doi-staging-bidirectional-2026-10-21.md)已验证 Web ↔ 服务端 ↔ macOS 的一次 DOI 修改往返，以及现有 `books` 记录的双账户读取隔离；[书库文本检索](docs/evidence/phase2/doi-search-2026-10-21.md)新增 DOI 和出版年份。[文献/文件身份迁移](docs/evidence/phase2/document-file-identity-2026-10-21.md)已在隔离 PostgreSQL 与 staging 中验证回填、复合外键、双账户 RLS 和 PostgREST 可见性，尚待接入客户端。集合、去重、200+ 文献规模和更广的隔离/冲突场景尚未完成。
 
 | 阶段 | 状态 | 依赖 | 完成判据 |
 |---|---|---|---|
 | 0 审计与可复现基线 | 已通过限定范围验收 | [验收记录](docs/evidence/phase0/acceptance-2026-10-20.md) | 单机合成数据、Web/独立 macOS/Silo 阅读同步及生产 AI 来源验证通过；跨平台、真实模型质量不在此结论内 |
 | 1 工程底座 | 已通过限定范围验收 | Phase 0 签收 | 镜像/SBOM 发布、staging 摘要升级、健康、备份、冷恢复、回退、桌面→后端新进度写入及 Web→桌面新位置采用已实测；测试环境秘密文件受 CI 保护，独立桌面包已隔离上游更新；正式身份未签名 macOS 包、独立书籍协议、staging Web 合成 AI 和回环分享路径通过烟测，外部 HTTPS 分享、真实 OAuth、真实模型及正式签名更新分发作为后续功能和发布门槛保留 |
-| 2 文献管理 | 进行中，DOI 元数据与双向同步已实测，身份表待客户端接入 | ADR 0001、0002，bookshelves 源码核对 | 文献/文件 ID 分离，200+ 测试文献导入管理，集合和元数据跨 Web/桌面同步，无跨账户数据泄露 |
+| 2 文献管理 | 进行中，DOI 与身份表 staging 已实测，身份表待客户端接入 | ADR 0001、0002，bookshelves 源码核对 | 文献/文件 ID 分离，200+ 测试文献导入管理，集合和元数据跨 Web/桌面同步，无跨账户数据泄露 |
 | 3 同步与离线 | 未开始 | 不新做第二套协议 | 断网、重复提交、冲突都不丢数据 |
 | 4 PDF 笔记 | 未开始 | 客户端坐标结构核对 | 缩放/旋转样本不漂移 |
 | 5 AI 引用 | 未开始 | 现有 `ragService` | 页码可点，无证据拒答 |
