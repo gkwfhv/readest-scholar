@@ -1,0 +1,15 @@
+# Scholar protocol smoke — 2026-10-21
+
+## Scope
+
+The approved `io.github.gkwfhv.readestscholar` macOS smoke bundle registers `readest-scholar://`. This change makes the app's OAuth callback, annotation, share, reader sign-in, and Android media handoff generate that scheme in a Scholar release build. Link parsers continue to accept both `readest://` and `readest-scholar://`, preserving upstream Readest behavior. The file-import listener now skips Scholar links so the book/share listeners can handle them. Newly generated staging and restore environments allow both callback schemes.
+
+## Reproduction and result
+
+1. The new parser/identity tests failed on the old implementation (six focused failures); a live file-import hook test also showed it called `loadSettings` for `readest-scholar://book/abc123`. After the fix, the seven focused files passed **78/78**, the hook test passed, and the auth/car-media test mocks passed **9/9**. The final Node 24 full suite passed **1,167 files / 13,782 tests** with 16 expected skips (`vitest run --maxWorkers=4` under `.env` and `.env.test.local`). TypeScript, Biome, and Python syntax checks passed. Generating isolated staging and restore env files in a temporary directory confirmed both exact OAuth callback URLs; those files were removed automatically.
+2. With Node 24 and a disposable placeholder public anon key, `scripts/build-scholar-macos-smoke.mjs` completed the Next static export (25 app pages, 3 export pages) and unsigned Tauri macOS app bundle. The placeholder cannot sign in and was used only for local reader/protocol verification. Bundle SHA-256: `36cb860682a1a4507b9c8285dcac64111a6edbe4ec3ab2719f55ce066b64b76d`. `Info.plist` lists `io.github.gkwfhv.readestscholar` and the sole `readest-scholar` URL scheme.
+3. The previous local Scholar process resisted normal Quit and was stopped by Activity Monitor; no other Readest process was touched. Launching the new bundle showed the existing synthetic `sample-paper.pdf` in its isolated library. Entering `readest-scholar://book/008e936204282cfdef42acdd3e527740` in Edge displayed the system's “Open Readest Scholar” prompt. After accepting it, the native app opened that PDF at page 1/2, with accessibility title `Readest Scholar - Author Guidelines for 8`. [Native screenshot](scholar-deeplink-reader-2026-10-21.jpg).
+
+## Boundaries
+
+The smoke bundle is unsigned. A real OAuth provider and share token were not exercised; the staging host's *running* GoTrue configuration has not yet been changed, so this documents the generator, not a live OAuth redirect. The test bundle's public placeholder key cannot authenticate. Generated HTTPS annotation/share links still target `web.readest.com`; a self-hosted Scholar Web link contract must be completed before public release. A formal Scholar Web landing page and signed installers/updates remain separate Phase 1 work. The screenshot's local, logged-out reader has no AI footer button; the four-button AI layout was verified in the signed-in staging test client in [Web-to-desktop evidence](web-to-desktop-progress-2026-10-20.md).

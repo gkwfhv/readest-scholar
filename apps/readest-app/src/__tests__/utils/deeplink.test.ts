@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   buildAnnotationUrl,
   parseWidgetEditShelfDeepLink,
@@ -29,9 +29,21 @@ describe('buildAnnotationUrl', () => {
     const url = buildAnnotationUrl({ bookHash: 'abc', noteId: 'n1' }, 'app');
     expect(url).toBe('readest://book/abc/annotation/n1');
   });
+
+  it('uses the registered Scholar scheme in a formal bundle', () => {
+    vi.stubEnv('NEXT_PUBLIC_SCHOLAR_RELEASE', 'true');
+    expect(buildAnnotationUrl(link, 'app')).toContain('readest-scholar://book/abc/annotation/n1');
+    vi.unstubAllEnvs();
+  });
 });
 
 describe('widget group deep link', () => {
+  it('accepts the Scholar scheme', () => {
+    expect(parseWidgetGroupDeepLink('readest-scholar://widget-group/series/a1b2')).toEqual({
+      groupBy: 'series',
+      groupId: 'a1b2',
+    });
+  });
   it('parses a group link into its axis and decoded group id', () => {
     expect(parseWidgetGroupDeepLink('readest://widget-group/series/a1b2%20c3')).toEqual({
       groupBy: 'series',

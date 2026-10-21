@@ -14,6 +14,9 @@ describe('parseShareDeepLink', () => {
 
   it('parses readest://share/{token}', () => {
     expect(parseShareDeepLink(`readest://share/${VALID_TOKEN}`)).toEqual({ token: VALID_TOKEN });
+    expect(parseShareDeepLink(`readest-scholar://share/${VALID_TOKEN}`)).toEqual({
+      token: VALID_TOKEN,
+    });
   });
 
   it('parses https://web.readest.com/s/{token}', () => {

@@ -74,6 +74,8 @@ bash infra/staging/export-images.sh | gzip -1 | \
 
 `prepare-env.py` 仅在目标文件不存在时生成随机测试口令和 JWT，权限为 `0600`，不会覆盖现有配置；该文件受 `.gitignore` 排除。不要将它、数据库转储或对象副本提交到公开仓库。生产凭据、签名密钥和真实用户数据不属于此环境。
 
+新生成的 staging 和独立恢复环境将 `readest://auth-callback` 与 `readest-scholar://auth-callback` 加入 GoTrue 回调白名单。已有 `docker/.env` 不会被覆盖；若要验收正式身份包的 OAuth 回调，先在该私有文件中仅更新 `ADDITIONAL_REDIRECT_URLS`，重建本项目的 `auth` 容器，再实测回调。生成器检查不等于现有运行栈已更新。
+
 本机用以下命令建立三个转发口，保持 SSH 会话开启：
 
 ```bash

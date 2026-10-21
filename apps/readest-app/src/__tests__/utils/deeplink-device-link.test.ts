@@ -18,6 +18,9 @@ describe('parseDeviceLinkDeepLink', () => {
     expect(parseDeviceLinkDeepLink('readest://link?code=RQGF-WDCF')).toEqual({
       code: 'RQGF-WDCF',
     });
+    expect(parseDeviceLinkDeepLink('readest-scholar://link?code=RQGF-WDCF')).toEqual({
+      code: 'RQGF-WDCF',
+    });
   });
 
   it('keeps a link without a code, for the user to type it in', () => {

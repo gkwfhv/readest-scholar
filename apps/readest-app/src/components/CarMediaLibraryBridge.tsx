@@ -5,7 +5,11 @@ import { addPluginListener, invoke, type PluginListener } from '@tauri-apps/api/
 import type { Book } from '@/types/book';
 import { useAppLockStore } from '@/store/appLockStore';
 import { useLibraryStore } from '@/store/libraryStore';
-import { getInitializedAppService, isTauriAppPlatform } from '@/services/environment';
+import {
+  getAppDeepLinkScheme,
+  getInitializedAppService,
+  isTauriAppPlatform,
+} from '@/services/environment';
 import { getOSPlatform } from '@/utils/misc';
 import { isAudiobook } from '@/utils/audiobook';
 import { eventDispatcher } from '@/utils/event';
@@ -227,7 +231,7 @@ const CarMediaLibraryBridge = () => {
         const book = useLibraryStore.getState().getBookByHash(bookHash);
         const autoplay = !book || !isAudiobook(book);
         const query = autoplay ? '?autoplay=tts' : '';
-        const url = `readest://book/${encodeURIComponent(bookHash)}${query}`;
+        const url = `${getAppDeepLinkScheme()}://book/${encodeURIComponent(bookHash)}${query}`;
         eventDispatcher.dispatch('app-incoming-url', { urls: [url] });
       },
     )

@@ -26,16 +26,17 @@ beforeEach(() => {
 describe('environment', () => {
   describe('isScholarReleaseBundle', () => {
     test('recognizes only the formal Scholar bundle marker', async () => {
-      const { isScholarReleaseBundle, getAppDisplayName, getAboutAppLabel } = await import(
-        '@/services/environment'
-      );
+      const { isScholarReleaseBundle, getAppDisplayName, getAboutAppLabel, getAppDeepLinkScheme } =
+        await import('@/services/environment');
       expect(isScholarReleaseBundle()).toBe(false);
       expect(getAppDisplayName()).toBe('Readest');
       expect(getAboutAppLabel('关于 Readest')).toBe('关于 Readest');
+      expect(getAppDeepLinkScheme()).toBe('readest');
       window.__READEST_SCHOLAR_RELEASE_BUNDLE = true;
       expect(isScholarReleaseBundle()).toBe(true);
       expect(getAppDisplayName()).toBe('Readest Scholar');
       expect(getAboutAppLabel('关于 Readest')).toBe('关于 Readest Scholar');
+      expect(getAppDeepLinkScheme()).toBe('readest-scholar');
       delete window.__READEST_SCHOLAR_RELEASE_BUNDLE;
       vi.stubEnv('NEXT_PUBLIC_SCHOLAR_RELEASE', 'true');
       expect(isScholarReleaseBundle()).toBe(true);

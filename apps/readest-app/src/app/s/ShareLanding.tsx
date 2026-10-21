@@ -10,6 +10,7 @@ import {
   IoOpenOutline,
 } from 'react-icons/io5';
 import { DOWNLOAD_READEST_URL } from '@/services/constants';
+import { getAppDeepLinkScheme } from '@/services/environment';
 import { useTranslation, type TranslationFunc } from '@/hooks/useTranslation';
 import { useAuth } from '@/context/AuthContext';
 import { useEnv } from '@/context/EnvContext';
@@ -82,7 +83,7 @@ const ShareLanding = () => {
     };
   }, [token, _]);
 
-  const appHref = `readest://share/${encodeURIComponent(token)}`;
+  const appHref = `${getAppDeepLinkScheme()}://share/${encodeURIComponent(token)}`;
 
   const handleAddToLibrary = async () => {
     if (!token || importing || !appService) return;

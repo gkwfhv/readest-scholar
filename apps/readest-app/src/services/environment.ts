@@ -20,6 +20,10 @@ export const isScholarReleaseBundle = () =>
   process.env['NEXT_PUBLIC_SCHOLAR_RELEASE'] === 'true' ||
   (typeof window !== 'undefined' && window.__READEST_SCHOLAR_RELEASE_BUNDLE === true);
 export const getAppDisplayName = () => (isScholarReleaseBundle() ? 'Readest Scholar' : 'Readest');
+export const getAppDeepLinkScheme = () =>
+  isScholarReleaseBundle() ? 'readest-scholar' : 'readest';
+export const isAppDeepLinkProtocol = (protocol: string) =>
+  protocol === 'readest:' || protocol === 'readest-scholar:';
 export const getAboutAppLabel = (aboutReadest: string) =>
   aboutReadest.replace('Readest', getAppDisplayName());
 export const isPWA = () => window.matchMedia('(display-mode: standalone)').matches;
