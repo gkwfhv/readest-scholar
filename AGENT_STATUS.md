@@ -42,9 +42,10 @@
 - Linux staging 已切换到 Scholar `fe25bd8cf5b4b55bbfe20c9f85b09f77c516f097` 的 amd64 平台摘要 `sha256:141ac3b06f2df2240addeb94006a24c3e81631a2bc257c8d7850058ea38a4151`。升级前完整备份、四路健康、合成账户签名 PDF 上传/下载哈希、Web/桌面 PDF 阅读、Web 故障注入回退及新快照的第二套空项目冷恢复均通过；其余五个 staging 容器 ID 未变。详情见 [Phase 1 执行证据](docs/evidence/phase1/staging-web-rollout-2026-10-20.md)。主机 GHCR DNS 不可用，镜像经校验归档导入并按平台摘要固定。
 - `main` 受保护并要求 Scholar 检查。工作树 `origin` 指向上游 Readest；向用户 fork 推送须显式使用 `git@github.com:gkwfhv/readest-scholar.git`。测试栈端口仅绑回环并通过 SSH 隧道访问，尚无测试域名；个人 SSH 私钥不进入 CI。
 - 独立桌面测试包已做上游更新渠道隔离：测试 Bundle ID 禁用 Tauri 更新，JS 更新检查和上游日志请求被阻断，未签名 macOS 包的关于窗口不再出现更新入口。定向测试 56/56、Node 24 静态导出与 Tauri 打包通过；详见 [Phase 1 更新隔离证据](docs/evidence/phase1/scholar-test-updater-isolation-2026-10-20.md)。这不等于正式签名更新分发验收。
+- 升级后 Web→后端→独立 macOS 测试包的新进度已在同一合成账户通过：Web 将两页 PDF 从第 2 页改到第 1 页，服务端记录更新，桌面端打开时出现“阅读进度已同步”并显示第 1 页，旧本地第 2 页没有覆盖它。桌面实际截图还核对了四个侧栏入口同一行、脑图标在边界内；见 [Web→桌面复验证据](docs/evidence/phase1/web-to-desktop-progress-2026-10-20.md)。
 
 ## 下一动作
 
-1. 测试环境秘密文件防误提交已在 PR #20 建立，独立桌面测试包已隔离上游更新渠道；继续验收正式环境的秘密与构建产物管理、正式签名桌面更新分发，并补测新 Web 镜像后的 Web→桌面进度同步与 Linux staging AI 模型交互。升级后的桌面→后端新翻页写入已在 Phase 1 执行证据中核对。
+1. 测试环境秘密文件防误提交已在 PR #20 建立，独立桌面测试包已隔离上游更新渠道；桌面→后端新进度写入与 Web→桌面新位置采用均已在升级后的合成 staging 验证。继续验收正式环境的秘密与构建产物管理、正式签名桌面更新分发，以及 Linux staging AI 模型交互。
 2. 正式品牌、包名和 Bundle ID 按方案只在用户明确授权后确定；当前独立测试包标识不是正式发布身份。
 3. Phase 1 签收后再按 [ROADMAP](ROADMAP.md)实施 Phase 2 文献管理。生产真实数据、外部 TLS、签名与正式发布仍需单独审批和验收。
