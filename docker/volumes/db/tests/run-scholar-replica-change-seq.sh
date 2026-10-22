@@ -43,6 +43,17 @@ if [ "${SCHOLAR_REPLICA_SEQ_SKIP_MIGRATION:-0}" != 1 ]; then
   fi
 fi
 
+if [ "${SCHOLAR_REPLICA_SEQ_SKIP_MIGRATION:-0}" != 1 ]; then
+  docker cp "$script_dir/../migrations/033_scholar_replica_changes_page.sql" "$container:/tmp/page-migration.sql"
+  docker cp "$script_dir/033_scholar_replica_changes_page_assertions.sql" "$container:/tmp/page-assertions.sql"
+  if [ "${SCHOLAR_REPLICA_SEQ_SKIP_PAGE_MIGRATION:-0}" != 1 ]; then
+    docker exec -e PGPASSWORD=scholar_synthetic_test "$container" psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres -f /tmp/page-migration.sql
+    if [ "${SCHOLAR_REPLICA_SEQ_REPEAT_MIGRATION:-0}" = 1 ]; then
+      docker exec -e PGPASSWORD=scholar_synthetic_test "$container" psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres -f /tmp/page-migration.sql
+    fi
+  fi
+  docker exec "$container" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -f /tmp/page-assertions.sql
+fi
 docker exec "$container" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -f /tmp/assertions.sql
 
 # Writer B must wait for writer A's transaction to commit before receiving
