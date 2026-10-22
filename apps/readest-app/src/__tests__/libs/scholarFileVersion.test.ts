@@ -3,14 +3,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const getAccessToken = vi.fn();
 const sha256File = vi.fn();
 const webUpload = vi.fn();
-vi.mock('@/services/environment', () => ({ getAPIBaseUrl: () => 'https://api.test' }));
+const tauriUpload = vi.fn();
+const isWebAppPlatform = vi.fn();
+vi.mock('@/services/environment', () => ({ getAPIBaseUrl: () => 'https://api.test', isWebAppPlatform: () => isWebAppPlatform() }));
 vi.mock('@/utils/access', () => ({
   getAccessToken: (...args: unknown[]) => getAccessToken(...args),
 }));
 vi.mock('@/services/dictionaries/plugins/integrity', () => ({
   sha256File: (...args: unknown[]) => sha256File(...args),
 }));
-vi.mock('@/utils/transfer', () => ({ webUpload: (...args: unknown[]) => webUpload(...args) }));
+vi.mock('@/utils/transfer', () => ({ webUpload: (...args: unknown[]) => webUpload(...args), tauriUpload: (...args: unknown[]) => tauriUpload(...args) }));
 
 import { uploadScholarFileVersion } from '@/libs/scholarFileVersion';
 
@@ -26,6 +28,8 @@ beforeEach(() => {
   getAccessToken.mockReset().mockResolvedValue('tok');
   sha256File.mockReset().mockResolvedValue('a'.repeat(64));
   webUpload.mockReset().mockResolvedValue(undefined);
+  tauriUpload.mockReset().mockResolvedValue('');
+  isWebAppPlatform.mockReset().mockReturnValue(true);
 });
 afterEach(() => {
   globalThis.fetch = originalFetch;
@@ -59,6 +63,18 @@ describe('uploadScholarFileVersion', () => {
       'X-Scholar-Protocol': '1',
     });
     expect(result).toEqual({ versionId, applied: true, activeVersionId: versionId });
+  });
+
+  it('uses native streaming upload with the same create-only header on desktop', async () => {
+    isWebAppPlatform.mockReturnValue(false);
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce(response(200, { state: 'pending', versionId,
+        uploadUrl: 'https://object.test/put', headers: { 'If-None-Match': '*' } }))
+      .mockResolvedValueOnce(response(200, { versionId, applied: true, activeVersionId: versionId }));
+    await uploadScholarFileVersion(file, fileId, opId, null, undefined, '/managed/paper.pdf');
+    expect(tauriUpload).toHaveBeenCalledWith('https://object.test/put', '/managed/paper.pdf',
+      'PUT', undefined, new Map([['If-None-Match', '*']]));
+    expect(webUpload).not.toHaveBeenCalled();
   });
 
   it('completes after a lost PUT response if the server verifies the object', async () => {

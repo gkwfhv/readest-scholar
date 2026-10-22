@@ -1,7 +1,7 @@
-import { getAPIBaseUrl } from '@/services/environment';
+import { getAPIBaseUrl, isWebAppPlatform } from '@/services/environment';
 import { sha256File } from '@/services/dictionaries/plugins/integrity';
 import { getAccessToken } from '@/utils/access';
-import { webUpload, type ProgressHandler } from '@/utils/transfer';
+import { tauriUpload, webUpload, type ProgressHandler } from '@/utils/transfer';
 
 type PrepareResult = {
   versionId: string;
@@ -26,9 +26,11 @@ export async function uploadScholarFileVersion(
   opId: string,
   expectedVersionId: string | null,
   onProgress?: ProgressHandler,
+  fileFullPath?: string,
 ): Promise<ScholarFileVersionResult> {
   const token = await getAccessToken();
   if (!token) throw new Error('Not authenticated');
+  if (!isWebAppPlatform() && !fileFullPath) throw new Error('Native file path is required');
   const sha256 = await sha256File(file);
   const endpoint = `${getAPIBaseUrl()}/scholar/files`;
   const headers = {
@@ -54,7 +56,14 @@ export async function uploadScholarFileVersion(
       throw new Error('Invalid conditional upload response');
     }
     try {
-      await webUpload(file, prepared.uploadUrl, onProgress, prepared.headers);
+      if (isWebAppPlatform()) {
+        await webUpload(file, prepared.uploadUrl, onProgress, prepared.headers);
+      } else {
+        await tauriUpload(
+          prepared.uploadUrl, fileFullPath!, 'PUT', onProgress,
+          new Map(Object.entries(prepared.headers)),
+        );
+      }
     } catch (error) {
       // A lost 200 response may make the retry return 412. The server reads
       // and hashes the stored object below; only matching bytes can complete.
