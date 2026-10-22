@@ -63,6 +63,6 @@
 
 ## 下一动作
 
-1. 继续 Phase 2：服务器 Linux CEF 桌面候选在 1 GiB `/dev/shm` 隔离容器中已完成本地 201 份 PDF 导入、打开及三栏视觉检查；64 MiB 容器曾触发 CEF compositor `SIGTRAP`，详见 [原生客户端证据](docs/evidence/phase2/linux-native-client-2026-10-22.md)。CEF 登录对回环 API 的 Local Network Access 许可待授权；新版 Linux 桌面连接 staging 的同步仍需复验。201 本浏览器导入/上传、旧独立 macOS 桌面包的集合/标签双向编辑与 DOI 保留、候选 staging 升级/回退均已通过；Phase 2 整体仍待最终验收.
+1. [Phase 2 非生产合成数据验收](docs/evidence/phase2/acceptance-2026-10-22.md)已通过计划判据，开始 Phase 3 的可靠同步与离线开发。新版 Linux CEF 客户端的 Local Network Access 许可及到 staging 的同步仍需补验，并列入 Phase 7 平台门槛；Phase 3 需先补并发/离线/幂等失败测试，再实现 cursor、队列与冲突处理。
 2. 外部 HTTPS 分享、真实 OAuth 提供方回跳及独立收件人导入仍需域名和相应测试配置；真实模型质量留给 Phase 5，正式身份包的签名更新分发留给 Phase 8。测试包不是可发布产物。
 3. 生产真实数据、外部 TLS、签名与正式发布仍需单独审批和验收。

@@ -35,3 +35,7 @@ pnpm tauri build --debug --no-sign --no-bundle --config src-tauri/scholar.releas
 - 保留旧容器为停止状态 `scholar-native-qa-64m`，用相同源码、二进制、网络和数据重新建立 `scholar-native-qa`，仅将 `/dev/shm` 提升到 1 GiB；容器需安装 `zenity` 才能在无桌面 portal 的 Xvfb 环境打开文件夹选择器。导入过程中 `/dev/shm` 曾达到约 497 MiB，201 份导入完成后约 553 MiB，未出现 OOM 或渲染器崩溃。此处是 QA 容器运行参数，不代表已修复代码缺陷或确定产品内存上界。
 - 原生 UI 显示 `Search in 201 books...`；“Research Library”三栏视图显示左侧 `All (201)` 和 `fixtures 201`，中间可滚动论文列表，右侧选中 `Scholar Scale Paper 001` 的标题、作者、PDF 封面、2 页、文件大小、元数据。实际通过 SSH 隧道/noVNC 操作 CEF 桌面界面，截图见 [201 份合成文献的原生三栏界面](linux-native-three-pane-201.jpg)。单份 PDF 可打开并显示两页。
 - 这完成本地导入、基础管理界面和宽屏三栏布局的 Linux 原生验收。登录 CEF 对回环 API 的 Local Network Access 许可仍待明确授权，尚不能声称此新 Linux 客户端已经完成 Web↔桌面同步；此前独立 macOS 测试包的 201 本集合、DOI、标签双向往返另有证据。
+
+## 本地元数据编辑（201 本书库）
+
+- 在服务器原生客户端的 201 本三栏书库中，选中 `Scholar Scale Paper 001`，从右侧 `Edit Metadata` 进入编辑器，设置合成 DOI `10.5555/qa001` 并保存。详情弹窗和关闭后右侧栏均显示该值；截图见 [原生三栏 DOI 编辑结果](linux-native-doi-edit-201.jpg)。这是客户端**本地**写入与视图刷新测试，不代表已经同步到 staging。
