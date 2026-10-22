@@ -70,8 +70,10 @@
 
 - Phase 3 新增[服务端副本变更序号数据库基础](docs/evidence/phase3/replica-change-seq-schema-2026-10-22.md)与[分页 API](docs/evidence/phase3/replica-changes-api-2026-10-22.md)，仅在服务器本地提交。隔离 PostgreSQL 验证同 HLC 的 1,000/1,001 边界、旧 HLC 更新、账户隔离、回滚、并发提交、大整数文本及重复迁移；API 单测、Lint 和 Web 构建通过，最终全量 Vitest 13,875 通过、16 跳过。现有 staging 尚未迁移，客户端仍用旧 HLC 游标，Phase 3 未验收。
 
+- Phase 3 [客户端变更游标接入](docs/evidence/phase3/replica-change-client-2026-10-23.md)已在服务器本地完成：启动先设置、按账户分类型分页、落盘后确认、账户切换和旧端点全量回退。全量 13,891 项通过、16 项跳过；最终边界补丁目标 41/41、Lint 和 Web 构建通过。staging 尚未迁移或部署，长离线提交和冲突恢复未验收；未推送 GitHub/GHCR。
+
 ## 下一动作
 
-1. [Phase 2 非生产合成数据验收](docs/evidence/phase2/acceptance-2026-10-22.md)已通过计划判据，开始 Phase 3 的可靠同步与离线开发。新版 Linux CEF 客户端已在用户授权下接受本地网络许可，合成账户登录、集合拉取及菜单同步状态通过；201 本地文件的跨端读写与故障注入仍列入 Phase 3/7 门槛。Phase 3 已完成本地应用后提交 cursor 的修复，持久队列实现正在全量回归；下一步是服务端变更序号分页、长离线冲突处理、双设备故障注入及同步状态界面。
+1. [Phase 2 非生产合成数据验收](docs/evidence/phase2/acceptance-2026-10-22.md)已通过计划判据，开始 Phase 3 的可靠同步与离线开发。新版 Linux CEF 客户端已在用户授权下接受本地网络许可，合成账户登录、集合拉取及菜单同步状态通过；201 本地文件的跨端读写与故障注入仍列入 Phase 3/7 门槛。Phase 3 的服务端变更序号、分页 API 和客户端落盘后确认已在服务器本地通过回归；下一步是 staging 备份升级与回退、长离线冲突处理、双设备故障注入及同步状态界面。
 2. 外部 HTTPS 分享、真实 OAuth 提供方回跳及独立收件人导入仍需域名和相应测试配置；真实模型质量留给 Phase 5，正式身份包的签名更新分发留给 Phase 8。测试包不是可发布产物。
 3. 生产真实数据、外部 TLS、签名与正式发布仍需单独审批和验收。

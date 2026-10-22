@@ -16,9 +16,9 @@ const replace = (list: CustomTTSService[], service: CustomTTSService) =>
 const markDeleted = (list: CustomTTSService[], id: string) =>
   list.map((s) => (s.id === id ? { ...s, deletedAt: Date.now() } : s));
 
-const persist = () => {
+const persist = async () => {
   const env = getReplicaPersistEnv();
-  if (env) void useCustomTTSStore.getState().saveCustomTTSServices(env);
+  if (env) await useCustomTTSStore.getState().saveCustomTTSServices(env);
 };
 
 interface CustomTTSState {
@@ -30,8 +30,8 @@ interface CustomTTSState {
   removeService(id: string): void;
 
   /** Replica pull: apply without republishing. */
-  applyRemoteService(service: CustomTTSService): void;
-  softDeleteService(id: string): void;
+  applyRemoteService(service: CustomTTSService): Promise<void>;
+  softDeleteService(id: string): Promise<void>;
 
   loadCustomTTSServices(envConfig: EnvConfigType): Promise<void>;
   saveCustomTTSServices(envConfig: EnvConfigType): Promise<void>;
@@ -68,7 +68,7 @@ export const useCustomTTSStore = create<CustomTTSState>((set, get) => ({
     void publishReplicaDelete(CUSTOM_TTS_KIND, id);
   },
 
-  applyRemoteService: (remote) => {
+  applyRemoteService: async (remote) => {
     const old = get().services.find((s) => s.id === remote.id);
     // A row pushed while the publisher's CryptoSession was locked carries no
     // apiKey; keep the local one instead of wiping it.
@@ -79,13 +79,13 @@ export const useCustomTTSStore = create<CustomTTSState>((set, get) => ({
       deletedAt: undefined,
     };
     set((state) => ({ services: replace(state.services, service) }));
-    persist();
+    await persist();
   },
 
-  softDeleteService: (id) => {
+  softDeleteService: async (id) => {
     if (!get().services.some((s) => s.id === id && !s.deletedAt)) return;
     set((state) => ({ services: markDeleted(state.services, id) }));
-    persist();
+    await persist();
   },
 
   loadCustomTTSServices: async () => {

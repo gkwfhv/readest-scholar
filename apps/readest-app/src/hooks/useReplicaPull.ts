@@ -51,7 +51,10 @@ import {
   type ReplicaLocalRecord,
 } from '@/services/sync/replicaPullAndApply';
 import type { ReplicaAdapter } from '@/services/sync/replicaRegistry';
-import { getAccessToken } from '@/utils/access';
+import { getAccessToken, getUserID } from '@/utils/access';
+import { getReplicaPersistEnv } from '@/services/sync/replicaPersist';
+import { LocalStorageChangeCursorStore } from '@/services/sync/replicaChangeCursorStore';
+import { drainReplicaChanges } from '@/services/sync/replicaChangeDrain';
 import { isSyncCategoryEnabled } from '@/services/sync/syncCategories';
 import { uniqueId } from '@/utils/misc';
 import type { EnvConfigType } from '@/services/environment';
@@ -128,6 +131,14 @@ let lastForegroundPullAt = 0;
 // short-circuit when there is no signed-in user (no point hitting
 // /api/sync — it would 401 anyway). Kept in sync by the hook.
 let hasCurrentUser = false;
+let currentUserId: string | null = null;
+let accountEpoch = 0;
+let changeCursorStore: LocalStorageChangeCursorStore | null = null;
+
+const getChangeCursorStore = (): LocalStorageChangeCursorStore => {
+  changeCursorStore ??= new LocalStorageChangeCursorStore();
+  return changeCursorStore;
+};
 // Shared promise for the boot-time settings pull. All other kinds'
 // boot pulls await this so applyRemoteSettings has a chance to seed
 // `lastPublishedFields` with server-authoritative values before
@@ -136,7 +147,7 @@ let hasCurrentUser = false;
 // boot and republish the local default (e.g.
 // `dictionarySettings.providerOrder`) with a fresh HLC, clobbering
 // cross-device state under per-field LWW.
-let settingsBootPullPromise: Promise<void> | null = null;
+let settingsBootPullPromise: Promise<boolean> | null = null;
 
 /**
  * Per-kind config consumed by `buildReplicaPullDeps`. The factory fills
@@ -153,8 +164,8 @@ interface ReplicaPullConfig<T extends ReplicaLocalRecord> {
   adapter: ReplicaAdapter<T>;
   findByContentId: (id: string) => T | undefined;
   hydrateLocalStore?: (envConfig: EnvConfigType) => Promise<void>;
-  applyRemote: (record: T) => void;
-  softDeleteByContentId: (id: string) => void;
+  applyRemote: (record: T) => void | Promise<void>;
+  softDeleteByContentId: (id: string) => void | Promise<void>;
   /** Forwarded to PullAndApplyDeps; see that field for semantics. */
   silentDecrypt?: boolean;
   /** Forwarded to PullAndApplyDeps; see that field for semantics. */
@@ -383,16 +394,23 @@ const runPullForKind = async (
   envConfig: EnvConfigType,
   pullOpts?: { since?: Hlc | null },
   pullOverride?: () => Promise<ReplicaRow[]>,
+  strictApply = false,
 ): Promise<void> => {
   const ctx = getReplicaSync();
-  if (!ctx) return;
+  if (!ctx) {
+    if (strictApply) throw new Error('Replica sync context disappeared before local apply');
+    return;
+  }
   const applyAndAcknowledge = async <T extends ReplicaLocalRecord>(
     deps: PullAndApplyDeps<T>,
   ): Promise<void> => {
     const result = await replicaPullAndApply(deps);
     // A failed local write must be fetched again on the next incremental
     // pull. Advancing the cursor here would silently skip that row.
-    if (result.failedRows.length === 0) {
+    if (result.failedRows.length > 0 && strictApply) {
+      throw new Error(`Replica ${kind} page has ${result.failedRows.length} failed local rows`);
+    }
+    if (result.failedRows.length === 0 && !strictApply) {
       ctx.manager.acknowledgeAppliedRows(kind, result.rows);
     }
   };
@@ -407,7 +425,7 @@ const runPullForKind = async (
         ? pullOverride()
         : ctx.manager.pull('bookshelf', { ...pullOpts, deferCursor: true }));
       await applyRemoteBookshelfRows(envConfig, rows);
-      ctx.manager.acknowledgeAppliedRows(kind, rows);
+      if (!strictApply) ctx.manager.acknowledgeAppliedRows(kind, rows);
       return;
     }
     case 'dictionary':
@@ -521,6 +539,35 @@ const runPullForKind = async (
   }
 };
 
+/** Pull change pages only when the current server exposes the versioned route. */
+const runVersionedPullForKind = async (
+  kind: ReplicaKind,
+  service: AppService,
+  envConfig: EnvConfigType,
+): Promise<boolean> => {
+  const ctx = getReplicaSync();
+  if (!ctx?.changeClient) return false;
+  const userId = currentUserId;
+  if (!userId) throw new Error('Replica account is unavailable');
+  // Acknowledging a page without a registered persistence target would
+  // discard it on restart. EnvProvider registers this before sync starts.
+  if (!getReplicaPersistEnv()) throw new Error('Replica persistence is unavailable');
+  const result = await drainReplicaChanges({
+    client: ctx.changeClient,
+    cursorStore: getChangeCursorStore(),
+    userId,
+    kind,
+    currentUserId: async () => {
+      const sessionUserId = await getUserID();
+      return currentUserId === sessionUserId ? sessionUserId : null;
+    },
+    applyPage: (rows) =>
+      runPullForKind(kind, service, envConfig, undefined, async () => rows, true),
+    pageSize: 1000,
+  });
+  return result.supported;
+};
+
 /**
  * Cursor-based incremental pull. One batched HTTP round-trip for every
  * registered kind that has had its boot pull initiated and whose sync
@@ -549,9 +596,28 @@ const triggerIncrementalPullAll = (): void => {
   if (kindsToPull.length === 0) return;
 
   for (const kind of kindsToPull) pullInFlight.add(kind);
+  const epoch = accountEpoch;
 
   void (async () => {
+    if (epoch !== accountEpoch) return;
     try {
+      if (ctx.changeClient) {
+        await Promise.allSettled(
+          kindsToPull.map(async (kind) => {
+            try {
+              const supported = await runVersionedPullForKind(kind, service, envConfig);
+              if (!supported) {
+                // The old endpoint has no reliable transport sequence.
+                // Re-fetch all rows rather than trusting its HLC cursor.
+                await runPullForKind(kind, service, envConfig, { since: null });
+              }
+            } catch (err) {
+              console.warn(`replica ${kind} change apply failed`, err);
+            }
+          }),
+        );
+        return;
+      }
       // ONE network round-trip for every eligible kind. Per-kind apply
       // runs in parallel below — adapters are independent, and one
       // kind's apply error doesn't poison the others.
@@ -578,7 +644,9 @@ const triggerIncrementalPullAll = (): void => {
         }),
       );
     } finally {
-      for (const kind of kindsToPull) pullInFlight.delete(kind);
+      if (epoch === accountEpoch) {
+        for (const kind of kindsToPull) pullInFlight.delete(kind);
+      }
     }
   })();
 };
@@ -619,18 +687,30 @@ const onPeriodicTick = (): void => {
  * `registeredKinds` so the auto-pull triggers fan it out alongside the
  * caller's requested kinds.
  */
-const ensureSettingsBootPulled = (service: AppService, envConfig: EnvConfigType): Promise<void> => {
+const ensureSettingsBootPulled = (
+  service: AppService,
+  envConfig: EnvConfigType,
+): Promise<boolean> => {
   if (settingsBootPullPromise) return settingsBootPullPromise;
   registeredKinds.add('settings');
   pulledKinds.add('settings');
   pullInFlight.add('settings');
-  settingsBootPullPromise = runPullForKind('settings', service, envConfig, { since: null })
+  const epoch = accountEpoch;
+  settingsBootPullPromise = (async () => {
+    const supported = await runVersionedPullForKind('settings', service, envConfig);
+    if (!supported) await runPullForKind('settings', service, envConfig, { since: null });
+    return true;
+  })()
     .catch((err) => {
       console.warn('replica settings pull failed', err);
-      pulledKinds.delete('settings');
+      if (epoch === accountEpoch) {
+        pulledKinds.delete('settings');
+        settingsBootPullPromise = null;
+      }
+      return false;
     })
     .finally(() => {
-      pullInFlight.delete('settings');
+      if (epoch === accountEpoch) pullInFlight.delete('settings');
     });
   return settingsBootPullPromise;
 };
@@ -693,7 +773,16 @@ export const useReplicaPull = ({
   // change (Supabase TOKEN_REFRESHED reissues the user object on
   // foreground / refresh) doesn't tear down the boot-pull effect.
   useEffect(() => {
+    const nextUserId = user?.id ?? null;
+    if (nextUserId !== currentUserId) {
+      accountEpoch++;
+      pulledKinds.clear();
+      pullInFlight.clear();
+      settingsBootPullPromise = null;
+      lastForegroundPullAt = 0;
+    }
     hasCurrentUser = !!user;
+    currentUserId = nextUserId;
   }, [user]);
 
   useEffect(() => {
@@ -718,12 +807,15 @@ export const useReplicaPull = ({
       const otherPending = kinds.filter((k) => k !== 'settings' && !pulledKinds.has(k));
       const needsSettings = !pulledKinds.has('settings');
       if (otherPending.length === 0 && !needsSettings) return;
+      const epoch = accountEpoch;
       timer = setTimeout(() => {
         void (async () => {
+          if (epoch !== accountEpoch) return;
           // Await the settings boot pull before dispatching the others.
           // Subsequent mounts share `settingsBootPullPromise` so the
           // pull only happens once per session.
-          await ensureSettingsBootPulled(appService, envConfig);
+          const settingsReady = await ensureSettingsBootPulled(appService, envConfig);
+          if (!settingsReady || epoch !== accountEpoch) return;
           // Boot path skips disabled kinds: enabling a category later
           // re-fires `triggerIncrementalPullAll` from a focus event,
           // which will fetch the missed rows. This keeps boot bandwidth
@@ -752,6 +844,25 @@ export const useReplicaPull = ({
               pulledKinds.delete(kind);
               pullInFlight.delete(kind);
             }
+            return;
+          }
+          if (ctx.changeClient) {
+            await Promise.allSettled(
+              eligible.map(async (kind) => {
+                try {
+                  const supported = await runVersionedPullForKind(kind, appService, envConfig);
+                  if (!supported) {
+                    await runPullForKind(kind, appService, envConfig, { since: null });
+                  }
+                } catch (err) {
+                  console.warn(`replica ${kind} boot change apply failed`, err);
+                  // Keep the kind eligible for the next online/focus retry.
+                  // Its sequence cursor did not advance on failed apply.
+                } finally {
+                  if (epoch === accountEpoch) pullInFlight.delete(kind);
+                }
+              }),
+            );
             return;
           }
           let rowsByKind: Map<string, ReplicaRow[]>;
@@ -814,6 +925,9 @@ export const __resetReplicaPullForTests = (): void => {
   pullInFlight.clear();
   registeredKinds.clear();
   autoSyncContext = null;
+  currentUserId = null;
+  accountEpoch = 0;
+  changeCursorStore = null;
   if (typeof document !== 'undefined') {
     document.removeEventListener('visibilitychange', onVisibilityChange);
   }

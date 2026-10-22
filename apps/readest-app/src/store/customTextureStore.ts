@@ -46,9 +46,9 @@ interface TextureStoreState {
    * The placeholder lands with `unavailable: true`; the binary download
    * handler clears the flag on completion.
    */
-  applyRemoteTexture: (texture: CustomTexture) => void;
+  applyRemoteTexture: (texture: CustomTexture) => Promise<void>;
   /** Soft-delete by contentId, skipping the publish call. */
-  softDeleteByContentId: (contentId: string) => void;
+  softDeleteByContentId: (contentId: string) => Promise<void>;
   /** Clear the placeholder unavailable flag once binaries land on disk. */
   markAvailableByContentId: (contentId: string) => void;
   /**
@@ -181,7 +181,7 @@ export const useCustomTextureStore = create<TextureStoreState>((set, get) => ({
   findByContentId: (contentId) =>
     contentId ? get().textures.find((t) => t.contentId === contentId) : undefined,
 
-  applyRemoteTexture: (texture) => {
+  applyRemoteTexture: async (texture) => {
     set((state) => {
       const existingIdx = state.textures.findIndex((t) => t.id === texture.id);
       const textures =
@@ -193,10 +193,10 @@ export const useCustomTextureStore = create<TextureStoreState>((set, get) => ({
       return { textures };
     });
     const env = getReplicaPersistEnv();
-    if (env) void get().saveCustomTextures(env);
+    if (env) await get().saveCustomTextures(env);
   },
 
-  softDeleteByContentId: (contentId) => {
+  softDeleteByContentId: async (contentId) => {
     const target = get().textures.find((t) => t.contentId === contentId && !t.deletedAt);
     if (!target) return;
     set((state) => ({
@@ -206,7 +206,7 @@ export const useCustomTextureStore = create<TextureStoreState>((set, get) => ({
     }));
     if (target.blobUrl) URL.revokeObjectURL(target.blobUrl);
     const env = getReplicaPersistEnv();
-    if (env) void get().saveCustomTextures(env);
+    if (env) await get().saveCustomTextures(env);
   },
 
   markAvailableByContentId: (contentId) => {
@@ -429,7 +429,7 @@ export const useCustomTextureStore = create<TextureStoreState>((set, get) => ({
       settings.customTextures = textures.map(toSettingsTexture);
 
       setSettings(settings);
-      saveSettings(envConfig, settings);
+      await saveSettings(envConfig, settings);
     } catch (error) {
       console.error('Failed to save custom textures settings:', error);
       throw error;

@@ -377,10 +377,10 @@ export const publishSettingsIfChanged = async (settings: SystemSettings): Promis
  * cipher fingerprint the orchestrator captured so the next pull
  * doesn't re-prompt for unchanged ciphers.
  */
-export const applyRemoteSettings = (
+export const applyRemoteSettings = async (
   envConfig: EnvConfigType,
   record: SettingsRemoteRecord,
-): void => {
+): Promise<void> => {
   const { settings, setSettings, saveSettings } = useSettingsStore.getState();
 
   // Persist cipher fingerprint regardless of patch content — the
@@ -416,7 +416,7 @@ export const applyRemoteSettings = (
 
   const merged: SystemSettings = mergeSettings(settings, patch);
   setSettings(merged);
-  saveSettings(envConfig, merged);
+  const persist = saveSettings(envConfig, merged);
 
   // Mirror dictionarySettings into the customDictionaryStore so the
   // dictionary panel + reader popup re-render with the remote values
@@ -425,6 +425,7 @@ export const applyRemoteSettings = (
   if (patch.dictionarySettings) {
     useCustomDictionaryStore.getState().applyRemoteDictionarySettings(patch.dictionarySettings);
   }
+  await persist;
 };
 
 /**

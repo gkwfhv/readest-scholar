@@ -7,6 +7,7 @@ const pullSpy = vi.fn<(...args: unknown[]) => Promise<{ rows: unknown[]; failedR
 );
 const getReplicaSyncSpy = vi.fn();
 const getAccessTokenSpy = vi.fn(async (): Promise<string | null> => 'token');
+const getUserIDSpy = vi.fn(async (): Promise<string | null> => authValue.user?.id ?? null);
 const replayBookshelvesSpy = vi.fn<(...args: unknown[]) => Promise<void>>(async () => {});
 const applyBookshelvesSpy = vi.fn<(...args: unknown[]) => Promise<void>>(async () => {});
 const readyListeners = new Set<() => void>();
@@ -104,6 +105,11 @@ vi.mock('@/store/customOPDSStore', () => ({
 
 vi.mock('@/utils/access', () => ({
   getAccessToken: () => getAccessTokenSpy(),
+  getUserID: () => getUserIDSpy(),
+}));
+
+vi.mock('@/services/sync/replicaPersist', () => ({
+  getReplicaPersistEnv: () => envValue.envConfig,
 }));
 
 vi.mock('@/services/bookshelves/persistence', () => ({
@@ -156,6 +162,8 @@ beforeEach(() => {
   pullSpy.mockResolvedValue(emptyApplyResult);
   getReplicaSyncSpy.mockReset();
   getAccessTokenSpy.mockReset().mockResolvedValue('token');
+  getUserIDSpy.mockReset().mockImplementation(async () => authValue.user?.id ?? null);
+  localStorage.clear();
   replayBookshelvesSpy.mockClear();
   applyBookshelvesSpy.mockClear();
   subscribeReplicaSyncReadySpy.mockClear();
@@ -844,5 +852,162 @@ describe('useReplicaPull — settings boot pull sequencing', () => {
     });
     expect(settingsCalls).toHaveLength(1);
     expect(dictionaryPullCount()).toBe(1);
+  });
+});
+
+describe('useReplicaPull — versioned change pages', () => {
+  test('losing the sync context during a page does not acknowledge it', async () => {
+    const manager = makeManagerMock();
+    const changeClient = {
+      pullChanges: vi.fn(async () => {
+        getReplicaSyncSpy.mockReturnValue(null);
+        return {
+          changes: [
+            { seq: '8', row: { user_id: 'test-user', kind: 'settings', replica_id: 'singleton' } },
+          ],
+          nextCursor: '8',
+          hasMore: false,
+        };
+      }),
+    };
+    getReplicaSyncSpy.mockReturnValue({ manager, changeClient });
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    renderHook(() => useReplicaPull({ kinds: ['settings'], delayMs: 100 }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    expect(localStorage.length).toBe(0);
+  });
+
+  test('a failed settings page prevents dependent kinds from applying', async () => {
+    const manager = makeManagerMock();
+    const changeClient = {
+      pullChanges: vi.fn(async (kind: string) => {
+        if (kind === 'settings') throw new Error('settings disk failure');
+        return { changes: [], nextCursor: '0', hasMore: false };
+      }),
+    };
+    getReplicaSyncSpy.mockReturnValue({ manager, changeClient });
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    renderHook(() => useReplicaPull({ kinds: ['dictionary'], delayMs: 100 }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    expect(changeClient.pullChanges.mock.calls.map(([kind]) => kind)).toEqual(['settings']);
+    expect(dictionaryPullCount()).toBe(0);
+  });
+
+  test('switching accounts starts a fresh account-scoped boot pull', async () => {
+    const manager = makeManagerMock();
+    const seen: string[] = [];
+    const changeClient = {
+      pullChanges: vi.fn(async (kind: string, after: string) => {
+        seen.push(`${authValue.user?.id}:${kind}:${after}`);
+        const row = { user_id: authValue.user?.id, kind, replica_id: `${kind}-1` };
+        return { changes: [{ seq: '1', row }], nextCursor: '1', hasMore: false };
+      }),
+    };
+    getReplicaSyncSpy.mockReturnValue({ manager, changeClient });
+    pullSpy.mockImplementation(async (args) => {
+      const deps = args as { pull: () => Promise<unknown[]> };
+      return { rows: await deps.pull(), failedRows: [] };
+    });
+    const view = renderHook(() => useReplicaPull({ kinds: ['dictionary'], delayMs: 100 }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    authValue = { user: { id: 'other-user' } };
+    view.rerender();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    expect(seen).toEqual([
+      'test-user:settings:0',
+      'test-user:dictionary:0',
+      'other-user:settings:0',
+      'other-user:dictionary:0',
+    ]);
+    expect(localStorage.length).toBe(4);
+  });
+  test('boot applies settings before other kinds and acknowledges each durable page', async () => {
+    const manager = makeManagerMock();
+    const calls: string[] = [];
+    const changeClient = {
+      pullChanges: vi.fn(async (kind: string, after: string) => {
+        calls.push(`${kind}:${after}`);
+        if (after !== '0') return { changes: [], nextCursor: after, hasMore: false };
+        const row = { user_id: 'test-user', kind, replica_id: `${kind}-1` };
+        return {
+          changes: [{ seq: kind === 'settings' ? '1' : '2', row }],
+          nextCursor: kind === 'settings' ? '1' : '2',
+          hasMore: false,
+        };
+      }),
+    };
+    getReplicaSyncSpy.mockReturnValue({ manager, changeClient });
+    pullSpy.mockImplementation(async (args) => {
+      const deps = args as { pull: () => Promise<unknown[]> };
+      const rows = await deps.pull();
+      return { rows, failedRows: [] };
+    });
+    renderHook(() => useReplicaPull({ kinds: ['dictionary'], delayMs: 100 }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    expect(calls).toEqual(['settings:0', 'dictionary:0']);
+    expect(manager.pullMany).not.toHaveBeenCalled();
+    expect(localStorage.length).toBe(2);
+  });
+
+  test('failed local apply leaves the change cursor unacknowledged for replay', async () => {
+    const manager = makeManagerMock();
+    const changeClient = {
+      pullChanges: vi.fn(async (kind: string, after: string) => {
+        if (kind === 'settings') return { changes: [], nextCursor: after, hasMore: false };
+        const row = { user_id: 'test-user', kind, replica_id: 'retry-me' };
+        return { changes: [{ seq: '12', row }], nextCursor: '12', hasMore: false };
+      }),
+    };
+    getReplicaSyncSpy.mockReturnValue({ manager, changeClient });
+    let fail = true;
+    pullSpy.mockImplementation(async (args) => {
+      const deps = args as { adapter: { kind: string }; pull: () => Promise<unknown[]> };
+      const rows = await deps.pull();
+      return { rows, failedRows: deps.adapter.kind === 'dictionary' && fail ? rows : [] };
+    });
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    renderHook(() => useReplicaPull({ kinds: ['dictionary'], delayMs: 100 }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    expect(localStorage.length).toBe(0);
+    fail = false;
+    await act(async () => {
+      window.dispatchEvent(new Event('online'));
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+    });
+    expect(
+      changeClient.pullChanges.mock.calls
+        .filter(([kind]) => kind === 'dictionary')
+        .map(([, after]) => after),
+    ).toEqual(['0', '0']);
+    expect(localStorage.length).toBe(1);
+  });
+
+  test('unsupported versioned endpoint falls back to a full legacy pull', async () => {
+    const manager = makeManagerMock();
+    const changeClient = { pullChanges: vi.fn(async () => null) };
+    getReplicaSyncSpy.mockReturnValue({ manager, changeClient });
+    pullSpy.mockImplementation(async (args) => {
+      const deps = args as { pull: () => Promise<unknown[]> };
+      return { rows: await deps.pull(), failedRows: [] };
+    });
+    renderHook(() => useReplicaPull({ kinds: ['dictionary'], delayMs: 100 }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    expect(changeClient.pullChanges).toHaveBeenCalled();
+    expect(manager.pull).toHaveBeenCalledWith('settings', { since: null, deferCursor: true });
+    expect(manager.pull).toHaveBeenCalledWith('dictionary', { since: null, deferCursor: true });
   });
 });

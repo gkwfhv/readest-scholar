@@ -122,6 +122,25 @@ describe('replicaPullAndApply (dictionary adapter)', () => {
     expect(warning).toHaveBeenCalledOnce();
   });
 
+  test('waits for asynchronous local persistence before accepting a row', async () => {
+    const pending = baseRow({ replica_id: 'pending-disk-write' });
+    const deps = makeDeps();
+    deps.pull.mockResolvedValue([pending]);
+    let rejectSave: (error: Error) => void = () => {};
+    const save = new Promise<void>((_resolve, reject) => {
+      rejectSave = reject;
+    });
+    deps.applyRemote.mockImplementation(() => save);
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const resultPromise = replicaPullAndApply(deps);
+    await vi.waitFor(() => expect(deps.applyRemote).toHaveBeenCalledOnce());
+    rejectSave(new Error('disk unavailable'));
+    const result = await resultPromise;
+    expect(result.failedRows).toEqual([pending]);
+    expect(warning).toHaveBeenCalledOnce();
+  });
+
   test('skips entirely (no pull) when isAuthenticated returns false', async () => {
     const deps = {
       ...makeDeps(),

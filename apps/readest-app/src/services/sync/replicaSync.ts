@@ -13,13 +13,15 @@ export interface ReplicaSyncInitOpts {
   deviceId: string;
   cursorStore: CursorStore;
   hlcStore?: HlcSnapshotStore;
-  client?: Pick<ReplicaSyncClient, 'push' | 'pull' | 'pullBatch'>;
+  client?: Pick<ReplicaSyncClient, 'push' | 'pull' | 'pullBatch'> &
+    Partial<Pick<ReplicaSyncClient, 'pullChanges'>>;
 }
 
 export interface ReplicaSyncContext {
   manager: ReplicaSyncManager;
   hlc: HlcGenerator;
   deviceId: string;
+  changeClient?: Pick<ReplicaSyncClient, 'pullChanges'>;
 }
 
 let instance: ReplicaSyncContext | null = null;
@@ -138,7 +140,12 @@ export const initReplicaSync = (opts: ReplicaSyncInitOpts): ReplicaSyncContext =
     },
   });
 
-  instance = { manager, hlc, deviceId: opts.deviceId };
+  instance = {
+    manager,
+    hlc,
+    deviceId: opts.deviceId,
+    changeClient: client.pullChanges ? { pullChanges: client.pullChanges.bind(client) } : undefined,
+  };
   void markSettled(REPLICA_SYNC_READY_EVENT);
   return instance;
 };

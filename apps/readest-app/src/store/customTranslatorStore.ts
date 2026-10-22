@@ -30,9 +30,9 @@ const replace = <T extends SyncedEntry>(list: T[], entry: T): T[] =>
 const markDeleted = <T extends SyncedEntry>(list: T[], id: string): T[] =>
   list.map((e) => (e.id === id ? { ...e, deletedAt: Date.now() } : e));
 
-const persist = () => {
+const persist = async () => {
   const env = getReplicaPersistEnv();
-  if (env) void useCustomTranslatorStore.getState().saveCustomTranslators(env);
+  if (env) await useCustomTranslatorStore.getState().saveCustomTranslators(env);
 };
 
 type TranslatorInput = Omit<CustomTranslator, 'id' | 'addedAt' | 'updatedAt'>;
@@ -54,10 +54,10 @@ interface CustomTranslatorState {
   removePrompt(id: string): void;
 
   /** Replica pull: apply without republishing. */
-  applyRemoteTranslator(translator: CustomTranslator): void;
-  applyRemotePrompt(prompt: TranslationPrompt): void;
-  softDeleteTranslator(id: string): void;
-  softDeletePrompt(id: string): void;
+  applyRemoteTranslator(translator: CustomTranslator): Promise<void>;
+  applyRemotePrompt(prompt: TranslationPrompt): Promise<void>;
+  softDeleteTranslator(id: string): Promise<void>;
+  softDeletePrompt(id: string): Promise<void>;
 
   loadCustomTranslators(envConfig: EnvConfigType): Promise<void>;
   saveCustomTranslators(envConfig: EnvConfigType): Promise<void>;
@@ -130,7 +130,7 @@ export const useCustomTranslatorStore = create<CustomTranslatorState>((set, get)
     void publishReplicaDelete(TRANSLATION_PROMPT_KIND, id);
   },
 
-  applyRemoteTranslator: (remote) => {
+  applyRemoteTranslator: async (remote) => {
     const old = get().translators.find((t) => t.id === remote.id);
     // A row pushed while the publisher's CryptoSession was locked carries no
     // apiKey; keep the local one instead of wiping it.
@@ -141,24 +141,24 @@ export const useCustomTranslatorStore = create<CustomTranslatorState>((set, get)
       deletedAt: undefined,
     };
     set((state) => ({ translators: replace(state.translators, translator) }));
-    persist();
+    await persist();
   },
 
-  applyRemotePrompt: (remote) => {
+  applyRemotePrompt: async (remote) => {
     set((state) => ({ prompts: replace(state.prompts, { ...remote, deletedAt: undefined }) }));
-    persist();
+    await persist();
   },
 
-  softDeleteTranslator: (id) => {
+  softDeleteTranslator: async (id) => {
     if (!get().translators.some((t) => t.id === id && !t.deletedAt)) return;
     set((state) => ({ translators: markDeleted(state.translators, id) }));
-    persist();
+    await persist();
   },
 
-  softDeletePrompt: (id) => {
+  softDeletePrompt: async (id) => {
     if (!get().prompts.some((p) => p.id === id && !p.deletedAt)) return;
     set((state) => ({ prompts: markDeleted(state.prompts, id) }));
-    persist();
+    await persist();
   },
 
   loadCustomTranslators: async () => {
