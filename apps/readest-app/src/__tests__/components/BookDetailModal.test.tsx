@@ -36,6 +36,10 @@ vi.mock('@/store/settingsStore', () => ({
   }),
 }));
 
+vi.mock('@/store/libraryStore', () => ({
+  useLibraryStore: (selector: (state: { library: Book[] }) => unknown) => selector({ library: [] }),
+}));
+
 vi.mock('@/hooks/useFileSelector', () => ({
   useFileSelector: () => ({ selectFiles: vi.fn() }),
 }));
