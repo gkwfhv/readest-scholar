@@ -1,5 +1,6 @@
 import type { AppService } from '@/types/system';
 import type { Hlc } from '@/types/replica';
+import { hlcCompare } from '@/libs/crdt';
 import type { CursorStore } from './replicaSyncManager';
 
 export interface SettingsCursorStoreOpts {
@@ -32,11 +33,16 @@ export const createSettingsCursorStore = (
   const debounceMs = opts.debounceMs ?? 1000;
   let pending: ReturnType<typeof setTimeout> | null = null;
 
+  const advance = (kind: string, value: Hlc) => {
+    const current = cache.get(kind);
+    if (!current || hlcCompare(value, current) > 0) cache.set(kind, value);
+  };
+
   void (async () => {
     try {
       const settings = await appService.loadSettings();
       for (const [k, v] of Object.entries(settings.lastSyncedAtReplicas ?? {})) {
-        cache.set(k, v as Hlc);
+        advance(k, v as Hlc);
       }
     } catch (err) {
       console.warn('replica cursor hydrate failed', err);
@@ -46,6 +52,11 @@ export const createSettingsCursorStore = (
   const flush = async () => {
     try {
       const settings = await appService.loadSettings();
+      // Another window can advance a kind after our initial hydration. Merge
+      // its persisted cursors before saving this instance's pending updates.
+      for (const [kind, value] of Object.entries(settings.lastSyncedAtReplicas ?? {})) {
+        advance(kind, value as Hlc);
+      }
       settings.lastSyncedAtReplicas = Object.fromEntries(cache);
       await appService.saveSettings(settings);
     } catch (err) {
@@ -64,7 +75,9 @@ export const createSettingsCursorStore = (
   return {
     get: (kind) => cache.get(kind) ?? null,
     set: (kind, hlc) => {
-      cache.set(kind, hlc);
+      const current = cache.get(kind);
+      if (current && hlcCompare(hlc, current) <= 0) return;
+      advance(kind, hlc);
       scheduleFlush();
     },
   };

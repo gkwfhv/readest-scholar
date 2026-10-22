@@ -65,6 +65,8 @@
 
 - Phase 3 第二项[持久副本待发送队列](docs/evidence/phase3/durable-replica-outbox-2026-10-22.md)正在服务器本地分支 `feat/scholar-durable-replica-queue` 验证：非书架行在内存入队前写本地日志，失败保留，重启恢复；账户隔离、跨窗口旧确认、退避重试和凭据关闭后的发送过滤已覆盖。现有行 HLC 与清单/复活冲突顺序及增量游标耦合，超过 30 秒的行暂不发送，等待[ADR 0004](docs/adr/0004-replica-change-cursor.md)中的版本化协议。目标测试 120/120、TypeScript/Biome 和全量回归 13,868/13,868 已通过，Web 候选产物检查通过（构建期间 SSH 断线，原命令退出码未取得）；未推送 GitHub/GHCR，Phase 3 仍未通过。
 
+- Phase 3 第三项[游标加载/保存竞态](docs/evidence/phase3/cursor-hydration-2026-10-22.md)在服务器分支 `fix/scholar-cursor-hydration` 以两条失败回归锁定并修复：迟到的初始设置不会倒退新游标，保存会合并另一窗口先写入的其他类型游标。相关 78/78、TypeScript/Biome 和格式检查通过；旧存储仍未按账户隔离且并发读改写未事务化，交给 ADR 0004 的新版游标协议。未推送 GitHub/GHCR。
+
 ## 下一动作
 
 1. [Phase 2 非生产合成数据验收](docs/evidence/phase2/acceptance-2026-10-22.md)已通过计划判据，开始 Phase 3 的可靠同步与离线开发。新版 Linux CEF 客户端已在用户授权下接受本地网络许可，合成账户登录、集合拉取及菜单同步状态通过；201 本地文件的跨端读写与故障注入仍列入 Phase 3/7 门槛。Phase 3 已完成本地应用后提交 cursor 的修复，持久队列实现正在全量回归；下一步是服务端变更序号分页、长离线冲突处理、双设备故障注入及同步状态界面。
