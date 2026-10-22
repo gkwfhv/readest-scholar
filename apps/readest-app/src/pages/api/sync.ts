@@ -16,7 +16,7 @@ import {
   StatPageRecord,
 } from '@/libs/sync';
 import { validateUserAndToken } from '@/utils/access';
-import { DBBook, DBBookConfig } from '@/types/records';
+import { DBBook, DBBookConfig, DBBookNote } from '@/types/records';
 import {
   getStatsArchiveEnv,
   readSegment,
@@ -238,6 +238,18 @@ type ChangeStamps = {
 };
 const latestChangeMs = (rec: ChangeStamps) => Math.max(ms(rec.updated_at), ms(rec.deleted_at));
 
+// Use the same effective change time as pull-side dedupe and the reader's
+// local merge. Comparing delete and edit clocks independently lets a stale
+// deletion replace a newer live edit (or resurrect an equal-time tombstone).
+export function incomingBookNoteWins(incoming: ChangeStamps, existing: ChangeStamps): boolean {
+  const incomingAt = latestChangeMs(incoming);
+  const existingAt = latestChangeMs(existing);
+  return (
+    incomingAt > existingAt ||
+    (incomingAt === existingAt && !!incoming.deleted_at && !existing.deleted_at)
+  );
+}
+
 /**
  * Collapse rows sharing `keys` down to the one changed most recently, keeping
  * the input order. The same note can exist under two book_hash values when the
@@ -252,19 +264,18 @@ export function dedupeLatest<T extends ChangeStamps>(records: T[], keys: (keyof 
       .map((k) => rec[k])
       .filter(Boolean)
       .join('|');
-  const latest = new Map<string, { rec: T; at: number }>();
+  const latest = new Map<string, T>();
   for (const rec of records) {
     const key = keyOf(rec);
     if (!key) continue;
-    const at = latestChangeMs(rec);
     const best = latest.get(key);
-    if (!best || at > best.at || (at === best.at && !!rec.deleted_at && !best.rec.deleted_at)) {
-      latest.set(key, { rec, at });
+    if (!best || incomingBookNoteWins(rec, best)) {
+      latest.set(key, rec);
     }
   }
   return records.filter((rec) => {
     const key = keyOf(rec);
-    return !key || latest.get(key)?.rec === rec;
+    return !key || latest.get(key) === rec;
   });
 }
 
@@ -721,6 +732,32 @@ export async function POST(req: NextRequest) {
 
       if (fetchError) {
         return { error: fetchError.message };
+      }
+
+      if (table === 'book_notes') {
+        // The database trigger compares under the upsert row lock and archives
+        // both losing and replaced versions. Pre-filtering here would lose
+        // concurrent changes and never record a stale incoming version.
+        const existing = new Set((serverRecords || []).map((row) => `${row.book_hash}|${row.id}`));
+        const noteRows = dbRecords.map(({ db }) => {
+          if (!existing.has(`${db.book_hash}|${(db as DBBookNote).id}`)) {
+            db.updated_at = new Date().toISOString();
+          }
+          return db;
+        });
+        const { error: writeError } = await supabase.from('book_notes').upsert(noteRows, {
+          onConflict: 'user_id,book_hash,id',
+        });
+        if (writeError) return { error: writeError.message };
+        // A losing BEFORE UPDATE returns no row from the upsert. Re-read the
+        // committed winner, as a sync response must match the database state.
+        const { data: authoritative, error: readError } = await supabase
+          .from('book_notes')
+          .select()
+          .or(orConditions);
+        if (readError) return { error: readError.message };
+        allAuthoritativeRecords.push(...(authoritative || []));
+        continue;
       }
 
       // Create lookup map
