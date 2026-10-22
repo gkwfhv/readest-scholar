@@ -72,9 +72,11 @@
 
 - Phase 3 [客户端变更游标接入](docs/evidence/phase3/replica-change-client-2026-10-23.md)已在服务器本地完成：启动先设置、按账户分类型分页、落盘后确认、账户切换和旧端点全量回退。全量 13,891 项通过、16 项跳过；最终边界补丁目标 41/41、Lint 和 Web 构建通过。该提交验收时 staging 尚未迁移或部署，长离线提交和冲突恢复未验收；未推送 GitHub/GHCR。
 
-- Phase 3 [staging 变更协议升级与回退](docs/evidence/phase3/staging-change-protocol-upgrade-2026-10-23.md)已在服务器完成：私有合成快照与迁移前状态恢复、032/033 真正升级、候选 Web 和旧 Web 回退、匿名/合成账户接口实测均通过。数据库现为 033、Web 已恢复原镜像；候选本地镜像保留。无 GitHub/GHCR 推送。
+- Phase 3 [staging 变更协议升级与回退](docs/evidence/phase3/staging-change-protocol-upgrade-2026-10-23.md)已在服务器完成：私有合成快照与迁移前状态恢复、032/033 真正升级、候选 Web 和旧 Web 回退、匿名/合成账户接口实测均通过。该项完成时数据库为 033（后续已升级 035）、Web 已恢复原镜像；候选本地镜像保留。无 GitHub/GHCR 推送。
 
-- Phase 3 [长离线字段重放与冲突历史基础](docs/evidence/phase3/offline-field-conflict-protocol-2026-10-23.md)已在服务器本地验证：原始字段时钟不重写，旧二进制与生命周期操作仍受保护；本地落败字段在清队列前保存，034 历史表在隔离恢复库验证双方版本、重复提交无新游标、账户隔离、旧 RPC 兼容和事务回滚。全量 Vitest 13,904 通过、16 跳过，Lint、格式检查和 Web 构建通过。staging 仍为 DB033/旧 Web，冲突界面、双端故障验收及其余 Phase 3 内容未完成；未推送 GitHub/GHCR。
+- Phase 3 [长离线字段重放与冲突历史基础](docs/evidence/phase3/offline-field-conflict-protocol-2026-10-23.md)已在服务器本地验证：原始字段时钟不重写，旧二进制与生命周期操作仍受保护；本地落败字段在清队列前保存，034 历史表在隔离恢复库验证双方版本、重复提交无新游标、账户隔离、旧 RPC 兼容和事务回滚。全量 Vitest 13,904 通过、16 跳过，Lint、格式检查和 Web 构建通过。该项完成时 staging 为 DB033/旧 Web（后续已升至 DB035），冲突界面、双端故障验收及其余 Phase 3 内容未完成；未推送 GitHub/GHCR。
+
+- Phase 3 [staging 冲突历史升级与回退](docs/evidence/phase3/staging-conflict-archive-rollout-2026-10-23.md)通过受控合成烟测：迁移前服务器私有备份、隔离库恢复与 034/035 验证、直接历史伪造被拒、候选 Web 登录态重复推送及分页拉取、只换镜像的短暂部署与原镜像恢复均完成。staging DB035，正式 Web 保持原镜像，四路健康；未推送 GitHub/GHCR。Phase 3 仍需双端断网/崩溃和冲突恢复界面。
 
 ## 下一动作
 
