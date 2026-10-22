@@ -116,13 +116,13 @@ export async function uploadFileToCloud(
 ): Promise<string | undefined> {
   console.log('Uploading file:', lfp, 'to', cfp);
   const file = await fs.openFile(lfp, base, cfp);
-  const localFullpath = await resolveFilePath(lfp, base);
-  const downloadUrl = await uploadFile(file, localFullpath, handleProgress, hash, temp, media);
-  const f = file as ClosableFile;
-  if (f && f.close) {
-    await f.close();
+  try {
+    const localFullpath = await resolveFilePath(lfp, base);
+    return await uploadFile(file, localFullpath, handleProgress, hash, temp, media);
+  } finally {
+    const opened = file as ClosableFile;
+    if (opened.close) await opened.close();
   }
-  return downloadUrl;
 }
 
 // Upload a single replica binary to the cloud under
@@ -221,7 +221,19 @@ export async function uploadBook(
   if (coverExist) {
     const lfp = getCoverFilename(book);
     const cfp = `${CLOUD_BOOKS_SUBDIR}/${getCoverFilename(book)}`;
-    await uploadFileToCloud(fs, resolveFilePath, lfp, cfp, 'Books', handleProgress, book.hash);
+    try {
+      await uploadFileToCloud(fs, resolveFilePath, lfp, cfp, 'Books', handleProgress, book.hash);
+    } catch (error) {
+      // Older Scholar libraries may already have a cover at this fixed key.
+      // A regenerated local thumbnail can differ in size; keep the existing
+      // remote cover so it cannot block the immutable book-file upload.
+      if (
+        !(isScholarReleaseBundle() || isScholarTestBundle()) ||
+        !(error instanceof Error) ||
+        error.message !== 'File size differs from existing object'
+      ) throw error;
+      console.warn('Scholar cover differs from the stored copy; keeping the remote cover');
+    }
     completedFiles.count++;
   }
 

@@ -33,7 +33,7 @@ vi.mock('@/services/bookContent', () => ({
   resolveBookContentSource: async () => ({ kind: 'managed', path: 'hash/paper.pdf', base: 'Books' }),
   isBookFileContentSource: () => true,
 }));
-import { uploadBook } from '@/services/cloudService';
+import { uploadBook, uploadFileToCloud } from '@/services/cloudService';
 const book = (): Book => ({ hash: 'hash', format: 'PDF', title: 'Paper', author: 'Author',
   createdAt: 1, updatedAt: 1, uploadedAt: null });
 const fs = {
@@ -55,6 +55,35 @@ describe('Scholar book upload', () => {
     expect(legacyUpload).not.toHaveBeenCalled();
     expect(saveBaseline).toHaveBeenCalledWith(accountId, 'Readest/Books/hash/paper.pdf', { fileId, versionId });
     expect(item.uploadedAt).toBeTypeOf('number');
+  });
+  it('continues the immutable PDF upload when an older cover has different bytes', async () => {
+    const coveredFs = {
+      exists: vi.fn(async () => true),
+      openFile: vi.fn(async (name: string) => new File(['new cover bytes'], name)),
+    } as unknown as FileSystem;
+    legacyUpload.mockRejectedValueOnce(new Error('File size differs from existing object'));
+    await uploadBook(coveredFs, path, book(), undefined, { accountId, opId, expectedVersionId: null });
+    expect(legacyUpload).toHaveBeenCalledOnce();
+    expect(versionUpload).toHaveBeenCalledOnce();
+  });
+  it('closes the opened cover file when its upload is rejected', async () => {
+    const close = vi.fn();
+    const file = Object.assign(new File(['cover'], 'cover.png'), { close });
+    const coveredFs = { openFile: vi.fn(async () => file) } as unknown as FileSystem;
+    legacyUpload.mockRejectedValueOnce(new Error('File size differs from existing object'));
+    await expect(uploadFileToCloud(coveredFs, path, 'hash/cover.png',
+      'Readest/Books/hash/cover.png', 'Books', vi.fn(), 'hash')).rejects.toThrow('File size differs');
+    expect(close).toHaveBeenCalledOnce();
+  });
+  it('does not suppress unrelated cover upload errors', async () => {
+    const coveredFs = {
+      exists: vi.fn(async () => true),
+      openFile: vi.fn(async (name: string) => new File(['cover'], name)),
+    } as unknown as FileSystem;
+    legacyUpload.mockRejectedValueOnce(new Error('Insufficient storage quota'));
+    await expect(uploadBook(coveredFs, path, book(), undefined,
+      { accountId, opId, expectedVersionId: null })).rejects.toThrow('Insufficient storage quota');
+    expect(versionUpload).not.toHaveBeenCalled();
   });
   it('keeps local book unstamped and baseline unchanged after losing CAS', async () => {
     versionUpload.mockResolvedValue({ versionId, applied: false, activeVersionId: fileId });
