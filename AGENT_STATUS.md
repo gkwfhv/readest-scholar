@@ -96,6 +96,8 @@
 
 - Phase 3 [旧文件与版本共用配额](docs/evidence/phase3/legacy-file-shared-quota-2026-10-23.md)在服务器本地通过：迁移 043 共用账户锁和实时版本字节汇总，隔离库 SQL 探针、35 项存储测试、Lint、Next standalone 构建及回环候选真实合成 HTTP 往返通过。staging 数据库在本机备份后升级 043，正式 Web 仍为旧镜像；测试数据已清理。未向 GitHub/GHCR 推送，Phase 3 尚未验收。
 
+- Phase 3 [文件版本基线状态接口](docs/evidence/phase3/scholar-file-status-2026-10-23.md)已在服务器本地测试和回环候选真实合成 HTTP 验证，旧文件空基线与完成后的活动版本均正确，测试数据清理为 0。正式 Web 不变；客户端仍须在离线排队时持久记录版本基线和内容快照。未推送 GitHub/GHCR。
+
 ## 下一动作
 
 1. [Phase 2 非生产合成数据验收](docs/evidence/phase2/acceptance-2026-10-22.md)已通过计划判据，开始 Phase 3 的可靠同步与离线开发。新版 Linux CEF 客户端已在用户授权下接受本地网络许可，合成账户登录、集合拉取及菜单同步状态通过；201 本地文件的跨端读写与故障注入仍列入 Phase 3/7 门槛。Phase 3 的服务端变更序号、分页 API 和客户端落盘后确认已在服务器本地通过回归；staging 数据库升级与 Web 候选回退已实测；单字段冲突恢复已在候选界面和数据库验证。笔记冲突恢复界面已验收；下一步是双真实设备并发、二进制冲突、双设备故障注入、按需缓存。
