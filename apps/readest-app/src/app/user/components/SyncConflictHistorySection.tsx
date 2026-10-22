@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from '@/hooks/useTranslation';
 import { createSupabaseClient } from '@/utils/supabase';
 import { getReplicaSync, subscribeReplicaSyncReady } from '@/services/sync/replicaSync';
@@ -12,6 +12,11 @@ import {
 } from '@/services/sync/replicaConflictRecovery';
 import { isOfflineReplayKind } from '@/libs/replicaSchemas';
 import type { ReplicaRow } from '@/types/replica';
+
+type ReviewedVersion =
+  | { status: 'loading' }
+  | { status: 'ready'; row: ReplicaRow }
+  | { status: 'error' };
 
 interface Props {
   userId: string;
@@ -27,10 +32,45 @@ export function SyncConflictHistorySection({ userId, token }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [syncReady, setSyncReady] = useState(() => getReplicaSync() !== null);
+  const [reviewed, setReviewed] = useState<Record<string, ReviewedVersion>>({});
+  const reviewGeneration = useRef(0);
 
   useEffect(() => subscribeReplicaSyncReady(() => setSyncReady(true)), []);
 
+  const fetchCurrent = useCallback(
+    async (account: string, kind: string, replicaId: string): Promise<ReplicaRow> => {
+      const client = createSupabaseClient(token);
+      const { data, error: fetchError } = await client
+        .from('replicas')
+        .select('*')
+        .eq('user_id', account)
+        .eq('kind', kind)
+        .eq('replica_id', replicaId)
+        .single();
+      if (fetchError || !data) throw fetchError ?? new Error('Replica not found');
+      return data as ReplicaRow;
+    },
+    [token],
+  );
+
+  const review = async (version: ReplicaConflictVersion, key: string) => {
+    const generation = reviewGeneration.current;
+    setReviewed((previous) => ({ ...previous, [key]: { status: 'loading' } }));
+    try {
+      const row = await fetchCurrent(userId, version.kind, version.replica_id);
+      if (generation === reviewGeneration.current) {
+        setReviewed((previous) => ({ ...previous, [key]: { status: 'ready', row } }));
+      }
+    } catch {
+      if (generation === reviewGeneration.current) {
+        setReviewed((previous) => ({ ...previous, [key]: { status: 'error' } }));
+      }
+    }
+  };
+
   const load = useCallback(async () => {
+    reviewGeneration.current += 1;
+    setReviewed({});
     setLoading(true);
     setError(null);
     try {
@@ -60,24 +100,22 @@ export function SyncConflictHistorySection({ userId, token }: Props) {
       setError(_('Sync is still starting. Try again in a moment.'));
       return;
     }
+    const versionKey = [
+      version.kind,
+      version.replica_id,
+      version.source,
+      version.version_hash,
+    ].join(':');
+    const snapshot = reviewed[versionKey];
+    if (snapshot?.status !== 'ready') return;
     const key = [version.version_hash, fieldName].join(':');
     setBusy(key);
     setError(null);
     setSuccess(false);
     try {
       const client = createSupabaseClient(token);
-      await restoreReplicaField(version, fieldName, userId, ctx.hlc, {
-        fetchCurrent: async (account, kind, replicaId) => {
-          const { data, error: fetchError } = await client
-            .from('replicas')
-            .select('*')
-            .eq('user_id', account)
-            .eq('kind', kind)
-            .eq('replica_id', replicaId)
-            .single();
-          if (fetchError || !data) throw fetchError ?? new Error('Replica not found');
-          return data as ReplicaRow;
-        },
+      await restoreReplicaField(version, fieldName, userId, snapshot.row, ctx.hlc, {
+        fetchCurrent,
         restore: async (request: RestoreFieldRequest) => {
           const { data, error: restoreError } = await client
             .rpc('restore_replica_field_v1', request)
@@ -155,7 +193,12 @@ export function SyncConflictHistorySection({ userId, token }: Props) {
                 : version.kind + ' / ' + version.replica_id;
             return (
               <li key={key}>
-                <details className='eink-bordered border-base-300 rounded-lg border p-3'>
+                <details
+                  className='eink-bordered border-base-300 rounded-lg border p-3'
+                  onToggle={(event) => {
+                    if (event.currentTarget.open) void review(version, key);
+                  }}
+                >
                   <summary className='text-base-content cursor-pointer text-sm font-medium break-all'>
                     {title}
                     <span className='text-base-content/60 ms-2 font-normal'>
@@ -166,6 +209,16 @@ export function SyncConflictHistorySection({ userId, token }: Props) {
                       {new Date(version.recorded_at).toLocaleString()}
                     </span>
                   </summary>
+                  {reviewed[key]?.status === 'loading' && (
+                    <p className='text-base-content/65 mt-3 text-xs'>
+                      {_('Checking current version...')}
+                    </p>
+                  )}
+                  {reviewed[key]?.status === 'error' && (
+                    <p className='text-error mt-3 text-xs'>
+                      {_('Could not check current version. Reopen this record.')}
+                    </p>
+                  )}
                   <ul className='mt-3 flex flex-col gap-2'>
                     {fields.map((field) => (
                       <li key={field.name} className='bg-base-200 eink-bordered rounded-md p-3'>
@@ -182,7 +235,9 @@ export function SyncConflictHistorySection({ userId, token }: Props) {
                             <button
                               type='button'
                               className='btn btn-contrast btn-sm shrink-0'
-                              disabled={!syncReady || busy !== null}
+                              disabled={
+                                !syncReady || busy !== null || reviewed[key]?.status !== 'ready'
+                              }
                               onClick={() => void restore(version, field.name)}
                             >
                               {busy === [version.version_hash, field.name].join(':')

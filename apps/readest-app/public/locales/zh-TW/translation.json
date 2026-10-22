@@ -2554,6 +2554,8 @@
   "Select a book to view details.": "選擇一篇文獻以查看詳情。",
   "Recoverable sync versions": "可復原的同步版本",
   "Review older metadata values before restoring one field. Recent versions appear first.": "查看較舊的中繼資料值，再選擇要復原的欄位。最近的版本排在前面。",
+  "Checking current version...": "正在核對目前版本…",
+  "Could not check current version. Reopen this record.": "無法核對目前版本。請重新展開此紀錄。",
   "Could not load sync recovery history.": "無法載入同步復原歷史。",
   "Sync is still starting. Try again in a moment.": "同步仍在啟動，請稍後重試。",
   "This field changed on another device. Refresh the history before restoring it.": "此欄位已在另一台裝置上變更。請重新整理歷史記錄後再復原。",

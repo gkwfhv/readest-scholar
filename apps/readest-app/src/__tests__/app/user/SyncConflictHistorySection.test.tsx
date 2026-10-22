@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
 const data = [
@@ -19,19 +19,42 @@ const data = [
 ];
 
 const list = vi.fn(async () => ({ data, error: null }));
+const fetchReplica = vi.fn(async () => ({
+  data: {
+    user_id: 'account-a',
+    kind: 'settings',
+    replica_id: 'singleton',
+    fields_jsonb: { theme: { v: 'light', t: '0000000000200-00000000-b', s: 'b' } },
+    manifest_jsonb: null,
+    deleted_at_ts: null,
+    reincarnation: null,
+  },
+  error: null,
+}));
 vi.mock('@/utils/supabase', () => ({
   createSupabaseClient: () => ({
-    from: () => ({
-      select: () => ({
-        eq: () => ({
-          order: () => ({ limit: list }),
-        }),
-      }),
-    }),
+    from: (table: string) =>
+      table === 'replicas'
+        ? {
+            select: () => ({
+              eq: () => ({
+                eq: () => ({
+                  eq: () => ({ single: fetchReplica }),
+                }),
+              }),
+            }),
+          }
+        : {
+            select: () => ({
+              eq: () => ({
+                order: () => ({ limit: list }),
+              }),
+            }),
+          },
   }),
 }));
 vi.mock('@/services/sync/replicaSync', () => ({
-  getReplicaSync: () => null,
+  getReplicaSync: () => ({ hlc: {} }),
   subscribeReplicaSyncReady: () => () => {},
 }));
 vi.mock('@/hooks/useTranslation', () => {
@@ -54,5 +77,10 @@ describe('SyncConflictHistorySection', () => {
     expect(screen.getByText('Protected value')).toBeTruthy();
     expect(screen.queryByText('private-token')).toBeNull();
     expect(list).toHaveBeenCalled();
+    const restore = screen.getByRole('button', { name: 'Restore this field' });
+    expect(restore.hasAttribute('disabled')).toBe(true);
+    fireEvent.click(screen.getByText('App settings'));
+    await waitFor(() => expect(fetchReplica).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(restore.hasAttribute('disabled')).toBe(false));
   });
 });

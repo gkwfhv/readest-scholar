@@ -59,6 +59,7 @@ export const restoreReplicaField = async (
   version: ReplicaConflictVersion,
   fieldName: string,
   signedInUserId: string,
+  reviewedCurrent: ReplicaRow,
   hlc: HlcGenerator,
   transport: ReplicaConflictTransport,
 ): Promise<ReplicaRow> => {
@@ -68,6 +69,16 @@ export const restoreReplicaField = async (
   const archived = archivedFields(version)[fieldName];
   if (!archived || isProtected(fieldName, archived)) {
     throw new Error('This field cannot be restored here');
+  }
+  if (
+    reviewedCurrent.user_id !== signedInUserId ||
+    reviewedCurrent.kind !== version.kind ||
+    reviewedCurrent.replica_id !== version.replica_id ||
+    reviewedCurrent.manifest_jsonb !== null ||
+    reviewedCurrent.deleted_at_ts !== null ||
+    reviewedCurrent.reincarnation !== null
+  ) {
+    throw new Error('The reviewed replica cannot be restored as metadata');
   }
   const current = await transport.fetchCurrent(signedInUserId, version.kind, version.replica_id);
   if (
@@ -80,7 +91,11 @@ export const restoreReplicaField = async (
   ) {
     throw new Error('The current replica cannot be restored as metadata');
   }
+  const reviewedField = reviewedCurrent.fields_jsonb[fieldName] ?? null;
   const expected = current.fields_jsonb[fieldName] ?? null;
+  if (JSON.stringify(reviewedField) !== JSON.stringify(expected)) {
+    throw Object.assign(new Error('The field changed after review'), { code: '40001' });
+  }
   if (expected) hlc.observe(expected.t);
   const newClock = hlc.next();
   return transport.restore({

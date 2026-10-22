@@ -68,7 +68,7 @@ describe('replica conflict recovery', () => {
     const restore = vi.fn(async (_request: RestoreFieldRequest) => row);
     const fetchCurrent = vi.fn(async () => row);
     const hlc = new HlcGenerator('restore-device', () => 1_700_000_000_050);
-    await restoreReplicaField(version, 'theme', 'account-a', hlc, { fetchCurrent, restore });
+    await restoreReplicaField(version, 'theme', 'account-a', row, hlc, { fetchCurrent, restore });
     expect(fetchCurrent).toHaveBeenCalledWith('account-a', 'settings', 'singleton');
     expect(restore).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -85,20 +85,39 @@ describe('replica conflict recovery', () => {
     expect(request!.p_new_hlc > newer).toBe(true);
   });
 
+  test('rejects a field changed after the user reviewed its version', async () => {
+    const reviewed = current();
+    const changed = current();
+    changed.fields_jsonb = {
+      ...changed.fields_jsonb,
+      theme: { v: 'new edit', t: hlcPack(1_700_000_000_200, 0, 'c'), s: 'c' },
+    };
+    const restore = vi.fn(async () => changed);
+    const fetchCurrent = vi.fn(async () => changed);
+    const hlc = new HlcGenerator('restore-device');
+    await expect(
+      restoreReplicaField(version, 'theme', 'account-a', reviewed, hlc, {
+        fetchCurrent,
+        restore,
+      }),
+    ).rejects.toMatchObject({ code: '40001' });
+    expect(restore).not.toHaveBeenCalled();
+  });
+
   test('rejects another account, protected field, or deleted current row', async () => {
     const restore = vi.fn(async () => current());
     const fetchCurrent = vi.fn(async () => current());
     const hlc = new HlcGenerator('restore-device');
     const transport = { fetchCurrent, restore };
     await expect(
-      restoreReplicaField(version, 'theme', 'account-b', hlc, transport),
+      restoreReplicaField(version, 'theme', 'account-b', current(), hlc, transport),
     ).rejects.toThrow();
     await expect(
-      restoreReplicaField(version, 'readwise.accessToken', 'account-a', hlc, transport),
+      restoreReplicaField(version, 'readwise.accessToken', 'account-a', current(), hlc, transport),
     ).rejects.toThrow();
     expect(fetchCurrent).not.toHaveBeenCalled();
     await expect(
-      restoreReplicaField(version, 'theme', 'account-a', hlc, {
+      restoreReplicaField(version, 'theme', 'account-a', current(), hlc, {
         fetchCurrent: async () => ({ ...current(), deleted_at_ts: newer }),
         restore,
       }),
