@@ -542,6 +542,11 @@ export abstract class BaseAppService implements AppService {
     return CloudSvc.deleteReplicaBundleFromCloud(kind, replicaId, filenames);
   }
 
+  async createScholarUploadSnapshot(book: Book, path: string): Promise<number> {
+    const { createScholarUploadSnapshot } = await import('./scholarUploadSnapshot');
+    return createScholarUploadSnapshot(this.fs, book, path);
+  }
+
   async uploadBook(book: Book, onProgress?: ProgressHandler, scholar?: ScholarFileUploadContext): Promise<void> {
     return CloudSvc.uploadBook(this.fs, this.resolveFilePath.bind(this), book, onProgress, scholar);
   }

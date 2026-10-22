@@ -25,6 +25,7 @@ import {
   TransferItem,
   TransferStatus,
   isFailedLikeTransfer,
+  isRetryableTransfer,
   useTransferStore,
 } from '@/store/transferStore';
 
@@ -137,7 +138,7 @@ const TransferItemRow: React.FC<{
       </div>
 
       <div className='flex items-center gap-1'>
-        {isFailedLikeTransfer(transfer) && (
+        {isRetryableTransfer(transfer) && (
           <button
             onClick={() => onRetry(transfer.id)}
             className='btn btn-ghost btn-sm btn-circle'
@@ -358,7 +359,7 @@ const TransferQueuePanel: React.FC = () => {
 
         {/* Footer actions */}
         <div className='border-base-300 flex flex-wrap items-center justify-evenly gap-2 border-t p-4'>
-          {stats.failed > 0 && (
+          {transfers.some(isRetryableTransfer) && (
             <button onClick={retryAllFailed} className='btn btn-ghost btn-sm gap-1'>
               <MdRefresh size={iconSize - 2} />
               {_('Retry All')}

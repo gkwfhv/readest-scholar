@@ -200,7 +200,9 @@ export async function uploadBook(
   const completedFiles = { count: 0 };
   const coverExist = await fs.exists(getCoverFilename(book), 'Books');
 
-  let bookSource = await resolveBookContentSource(fs, book);
+  let bookSource = scholar?.snapshotPath
+    ? { kind: 'snapshot' as const, path: scholar.snapshotPath, base: 'Cache' as const }
+    : await resolveBookContentSource(fs, book);
   if (bookSource.kind === 'url') {
     const fileobj = await fs.openFile(bookSource.path, bookSource.base);
     await fs.writeFile(getLocalBookFilename(book), 'Books', await fileobj.arrayBuffer());

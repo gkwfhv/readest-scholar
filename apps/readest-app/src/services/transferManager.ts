@@ -4,7 +4,7 @@ import { isScholarReleaseBundle, isScholarTestBundle } from '@/services/environm
 import { getRemoteBookFilename } from '@/utils/book';
 import { CLOUD_BOOKS_SUBDIR } from '@/services/constants';
 import { getScholarAccountId, getScholarFileBaseline } from '@/services/scholarFileBaseline';
-import { useTransferStore, TransferItem, ReplicaTransferFile } from '@/store/transferStore';
+import { useTransferStore, isRetryableTransfer, TransferItem, ReplicaTransferFile } from '@/store/transferStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { isReadestCloudStorageActive } from '@/services/sync/cloudSyncProvider';
 import { isSyncCategoryEnabled } from '@/services/sync/syncCategories';
@@ -103,6 +103,7 @@ class TransferManager {
     gated.forEach((t) => {
       store.setTransferStatus(t.id, 'cancelled', undefined, 'policy');
     });
+    this.cleanupScholarSnapshots(gated);
     console.info(
       `[cloudSync] cancelled ${gated.length} pending Readest Cloud upload(s): Readest Cloud or Books sync is off`,
     );
@@ -130,6 +131,7 @@ class TransferManager {
     this._ = translationFn;
     this.scholarAccountId = (isScholarReleaseBundle() || isScholarTestBundle()) ? await getScholarAccountId() : null;
     await this.loadPersistedQueue();
+    this.failUnstagedScholarTransfers();
     this.reconcileUploadsWithProvider();
     this.isInitialized = true;
     this.readyResolve();
@@ -195,8 +197,59 @@ class TransferManager {
     }
     const transferId = store.addTransfer(book.hash, book.title, 'upload', priority, false, scholar);
     this.persistQueue();
+    if (scholar) void this.stageScholarSnapshot(transferId, book);
     this.processQueue();
     return transferId;
+  }
+
+  private async stageScholarSnapshot(id: string, book: Book): Promise<void> {
+    const task = useTransferStore.getState().transfers[id];
+    if (!task?.scholarOpId || !task.scholarAccountId || !this.appService) return;
+    const path = `scholar-uploads/${task.scholarAccountId}/${task.scholarOpId}`;
+    await (async () => {
+      try {
+        await this.appService!.createScholarUploadSnapshot(book, path);
+        const current = useTransferStore.getState().transfers[id];
+        if (!current || current.status !== 'pending') {
+          await this.appService!.deleteFile(path, 'Cache').catch(() => {});
+          return;
+        }
+        useTransferStore.getState().setScholarSnapshotPath(id, path);
+        this.persistQueue();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Scholar upload snapshot failed';
+        useTransferStore.getState().setTransferStatus(id, 'failed', message);
+        this.persistQueue();
+      } finally {
+        this.processQueue();
+      }
+    })();
+  }
+
+  private failUnstagedScholarTransfers(): void {
+    const store = useTransferStore.getState();
+    for (const task of Object.values(store.transfers)) {
+      if (task.kind === 'book' && task.type === 'upload' && task.scholarAccountId &&
+          task.status === 'pending' && !task.scholarSnapshotPath) {
+        store.setTransferStatus(task.id, 'failed',
+          'Scholar upload snapshot unavailable after restart; requeue');
+        if (task.scholarOpId) {
+          const partial = `scholar-uploads/${task.scholarAccountId}/${task.scholarOpId}`;
+          void this.appService?.deleteFile(partial, 'Cache').catch(() => {});
+        }
+      }
+    }
+    this.persistQueue();
+  }
+
+  private cleanupScholarSnapshots(tasks: TransferItem[]): void {
+    for (const task of tasks) {
+      const path = task.scholarSnapshotPath;
+      if (path) {
+        void this.appService?.deleteFile(path, 'Cache').catch(() => {});
+        useTransferStore.getState().setScholarSnapshotPath(task.id, undefined);
+      }
+    }
   }
 
   queueDownload(book: Book, priority: number = 10, isBackground: boolean = false): string | null {
@@ -372,6 +425,8 @@ class TransferManager {
 
   retryTransfer(transferId: string): void {
     const store = useTransferStore.getState();
+    const task = store.transfers[transferId];
+    if (!task || !isRetryableTransfer(task)) return;
     store.retryTransfer(transferId);
     this.persistQueue();
     this.processQueue();
@@ -381,6 +436,7 @@ class TransferManager {
     const store = useTransferStore.getState();
     const failed = store.getFailedTransfers();
     failed.forEach((transfer) => {
+      if (!isRetryableTransfer(transfer)) return;
       store.retryTransfer(transfer.id);
     });
     this.persistQueue();
@@ -399,22 +455,30 @@ class TransferManager {
   }
 
   clearPending(): void {
+    const tasks = useTransferStore.getState().getPendingTransfers();
     useTransferStore.getState().clearPending();
+    this.cleanupScholarSnapshots(tasks);
     this.persistQueue();
   }
 
   clearCompleted(): void {
+    const tasks = useTransferStore.getState().getCompletedTransfers();
     useTransferStore.getState().clearCompleted();
+    this.cleanupScholarSnapshots(tasks);
     this.persistQueue();
   }
 
   clearFailed(): void {
+    const tasks = useTransferStore.getState().getFailedTransfers();
     useTransferStore.getState().clearFailed();
+    this.cleanupScholarSnapshots(tasks);
     this.persistQueue();
   }
 
   clearAll(): void {
+    const tasks = Object.values(useTransferStore.getState().transfers);
     useTransferStore.getState().clearAll();
+    this.cleanupScholarSnapshots(tasks);
     this.persistQueue();
   }
 
@@ -443,7 +507,8 @@ class TransferManager {
 
     if (store.isQueuePaused) return;
 
-    const pending = store.getPendingTransfers().filter((t) => !this.isDeferredBookUpload(t));
+    const pending = store.getPendingTransfers().filter((t) =>
+      !this.isDeferredBookUpload(t) && (!t.scholarSnapshotRequired || !!t.scholarSnapshotPath));
     const activeCount = store.getActiveTransfers().length;
     const maxConcurrent = store.maxConcurrent;
 
@@ -464,7 +529,8 @@ class TransferManager {
     // not yet hydrated) don't count — re-looping on them every 100ms
     // would busy-wait; the settings subscription wakes them instead.
     const newStore = useTransferStore.getState();
-    const processable = newStore.getPendingTransfers().filter((t) => !this.isDeferredBookUpload(t));
+    const processable = newStore.getPendingTransfers().filter((t) =>
+      !this.isDeferredBookUpload(t) && (!t.scholarSnapshotRequired || !!t.scholarSnapshotPath));
     if (processable.length > 0 && !newStore.isQueuePaused) {
       setTimeout(() => this.processQueue(), 100);
     }
@@ -514,6 +580,7 @@ class TransferManager {
       // Land the final progress value that the throttle may still be holding.
       progressThrottle.flush();
       useTransferStore.getState().setTransferStatus(transfer.id, 'completed');
+      this.cleanupScholarSnapshots([transfer]);
 
       const messages = getTransferMessages(transfer, _);
 
@@ -541,6 +608,7 @@ class TransferManager {
         'Scholar file conflict',
         'Scholar upload account changed',
         'Legacy upload queue needs requeue',
+        'Scholar upload snapshot',
       ].some((message) => errorMessage.includes(message));
 
       if (
@@ -650,15 +718,22 @@ class TransferManager {
       if ((isScholarReleaseBundle() || isScholarTestBundle())) {
         const currentAccount = await getScholarAccountId();
         if (!currentAccount || currentAccount !== transfer.scholarAccountId) {
+          this.cleanupScholarSnapshots([transfer]);
           throw new Error('Scholar upload account changed; requeue under the current account');
         }
-        if (!transfer.scholarOpId || transfer.scholarExpectedVersionId === undefined) {
-          throw new Error('Legacy upload queue needs requeue for Scholar file versions');
+        if (!transfer.scholarOpId || transfer.scholarExpectedVersionId === undefined ||
+            !transfer.scholarSnapshotRequired || !transfer.scholarSnapshotPath) {
+          throw new Error('Legacy upload queue needs requeue for Scholar file versions and snapshot');
+        }
+        if (!(await this.appService!.exists(transfer.scholarSnapshotPath, 'Cache'))) {
+          useTransferStore.getState().setScholarSnapshotPath(transfer.id, undefined);
+          throw new Error('Scholar upload snapshot missing; requeue');
         }
         scholar = {
           accountId: currentAccount,
           opId: transfer.scholarOpId,
           expectedVersionId: transfer.scholarExpectedVersionId,
+          snapshotPath: transfer.scholarSnapshotPath,
         };
       }
       await this.appService!.uploadBook(book, progressHandler, scholar);

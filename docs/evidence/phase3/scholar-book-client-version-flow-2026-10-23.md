@@ -9,3 +9,5 @@
 Linux CEF 未签名 debug 测试包在服务器构建容器以 `pnpm build` 和 `pnpm tauri build --debug --no-sign --no-bundle --config src-tauri/scholar.release.json` 构建成功，二进制 SHA-256 为 `e127ae8ba071ff74dab52fd459faee03082f12038bcc7a627257b4500550cb3b`。静态产物包含回环候选 API `127.0.0.1:3145`；隔离 QA 容器本机代理从该 API 返回匿名 403。重启实际 CEF 应用后，界面显示本地 201 本合成文献，且云同步设置仍为 Readest Scholar Active。此项仅验证启动、加载与网络可达，尚未证明正文上传/下载。构建自动生成的 Turso 插件权限文件已恢复，主仓库工作区干净。
 
 未验收：当前队列只持久保存操作 ID 与版本基线，未在入队时保存不可变的本地正文快照；本地文件在等待期间改变会使重试无法复用同一操作。新账户切换后的队列重建、二进制冲突处理界面、按需缓存/完整镜像、双设备原生客户端故障注入仍需完成。因此 Phase 3 未通过。
+
+后续进展（2026-10-23）：队列正文快照已按 [ADR 0006](../../adr/0006-scholar-upload-snapshot.md)接入；真实 Linux 客户端暂停后修改源文件、重启后恢复上传均通过。见 [快照验收记录](scholar-upload-snapshot-2026-10-23.md)。以上原始段落保留当时的阶段状态。

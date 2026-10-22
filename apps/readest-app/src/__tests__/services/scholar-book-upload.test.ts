@@ -56,6 +56,13 @@ describe('Scholar book upload', () => {
     expect(saveBaseline).toHaveBeenCalledWith(accountId, 'Readest/Books/hash/paper.pdf', { fileId, versionId });
     expect(item.uploadedAt).toBeTypeOf('number');
   });
+  it('opens the staged body from Cache even when the original book source changed', async () => {
+    const item = book();
+    const snapshotPath = 'scholar-uploads/account/op-id';
+    await uploadBook(fs, path, item, undefined, { accountId, opId, expectedVersionId: null, snapshotPath });
+    expect(fs.openFile).toHaveBeenCalledWith(snapshotPath, 'Cache', 'Readest/Books/hash/paper.pdf');
+    expect(path).toHaveBeenCalledWith(snapshotPath, 'Cache');
+  });
   it('continues the immutable PDF upload when an older cover has different bytes', async () => {
     const coveredFs = {
       exists: vi.fn(async () => true),

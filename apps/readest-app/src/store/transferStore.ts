@@ -30,6 +30,8 @@ export interface TransferItem {
   scholarOpId?: string;
   scholarAccountId?: string;
   scholarExpectedVersionId?: string | null;
+  scholarSnapshotPath?: string;
+  scholarSnapshotRequired?: boolean;
   replicaKind?: string;
   replicaId?: string;
   replicaReincarnation?: string;
@@ -85,6 +87,7 @@ interface TransferState {
     },
   ) => string;
   removeTransfer: (transferId: string) => void;
+  setScholarSnapshotPath: (transferId: string, path: string | undefined) => void;
   updateTransferProgress: (
     transferId: string,
     progress: number,
@@ -149,6 +152,9 @@ const generateTransferId = (): string => {
 export const isFailedLikeTransfer = (t: TransferItem): boolean =>
   t.status === 'failed' || (t.status === 'cancelled' && t.cancelReason !== 'policy');
 
+export const isRetryableTransfer = (t: TransferItem): boolean =>
+  isFailedLikeTransfer(t) && (!t.scholarAccountId || !!t.scholarSnapshotPath);
+
 /**
  * Per-book download progress for the covers' transfer overlay, keyed by book
  * hash. Derived on read rather than mirrored into a second state: the queue
@@ -198,6 +204,7 @@ export const useTransferStore = create<TransferState>((set, get) => ({
       scholarOpId: type === 'upload' ? uuidv4() : undefined,
       scholarAccountId: type === 'upload' ? scholar?.accountId : undefined,
       scholarExpectedVersionId: type === 'upload' ? scholar?.expectedVersionId : undefined,
+      scholarSnapshotRequired: type === 'upload' && !!scholar,
       type,
       status: 'pending',
       progress: 0,
@@ -249,6 +256,14 @@ export const useTransferStore = create<TransferState>((set, get) => ({
 
     return id;
   },
+
+  setScholarSnapshotPath: (transferId, path) => set((state) => {
+    const transfer = state.transfers[transferId];
+    if (!transfer || (path && transfer.status !== 'pending')) return state;
+    return { transfers: { ...state.transfers, [transferId]: {
+      ...transfer, scholarSnapshotPath: path,
+    } } };
+  }),
 
   removeTransfer: (transferId) => {
     set((state) => {

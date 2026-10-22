@@ -112,6 +112,9 @@ const booksSyncOff = (): void =>
 function makeAppService(overrides: Record<string, unknown> = {}) {
   return {
     uploadBook: vi.fn().mockResolvedValue(undefined),
+    createScholarUploadSnapshot: vi.fn().mockResolvedValue(3),
+    exists: vi.fn().mockResolvedValue(true),
+    deleteFile: vi.fn().mockResolvedValue(undefined),
     downloadBook: vi.fn().mockResolvedValue(undefined),
     deleteBook: vi.fn().mockResolvedValue(undefined),
     uploadReplicaFile: vi.fn().mockResolvedValue(undefined),
@@ -178,8 +181,97 @@ describe('Scholar file queue baseline', () => {
     await flushAsync();
     expect(service["uploadBook"]).toHaveBeenCalledWith(book, expect.any(Function), {
       accountId: userA, opId: task.scholarOpId, expectedVersionId: versionId,
+      snapshotPath: `scholar-uploads/${userA}/${task.scholarOpId}`,
     });
   });
+  test('stages the body even when paused, and reuses its path after the source changes', async () => {
+    scholarRelease.mockReturnValue(true);
+    scholarAccountId.mockResolvedValue(userA);
+    const book = makeBook();
+    transferManager.pauseQueue();
+    const service = await initManager(makeAppService(), [book]);
+    const id = transferManager.queueUpload(book)!;
+    await flushAsync(0);
+    const task = useTransferStore.getState().transfers[id]!;
+    expect(service['createScholarUploadSnapshot']).toHaveBeenCalledWith(book, task.scholarSnapshotPath);
+    expect(service['uploadBook']).not.toHaveBeenCalled();
+    book.filePath = '/changed-source.pdf';
+    transferManager.resumeQueue();
+    await flushAsync();
+    expect(service['uploadBook']).toHaveBeenCalledWith(book, expect.any(Function),
+      expect.objectContaining({ snapshotPath: task.scholarSnapshotPath, opId: task.scholarOpId }));
+    expect(service['deleteFile']).toHaveBeenCalledWith(task.scholarSnapshotPath, 'Cache');
+  });
+
+  test('a restored Scholar task reads its persisted snapshot and operation ID', async () => {
+    scholarRelease.mockReturnValue(true);
+    scholarAccountId.mockResolvedValue(userA);
+    const book = makeBook();
+    transferManager.pauseQueue();
+    await initManager(makeAppService(), [book]);
+    const id = transferManager.queueUpload(book)!;
+    await flushAsync(0);
+    const task = useTransferStore.getState().transfers[id]!;
+    const saved = localStorage.getItem('readest_transfer_queue')!;
+    resetTransferManager();
+    resetTransferStore();
+    localStorage.setItem('readest_transfer_queue', saved);
+    const service = await initManager(makeAppService(), [book]);
+    expect(service['createScholarUploadSnapshot']).not.toHaveBeenCalled();
+    transferManager.resumeQueue();
+    await flushAsync();
+    expect(service['uploadBook']).toHaveBeenCalledWith(book, expect.any(Function),
+      expect.objectContaining({ snapshotPath: task.scholarSnapshotPath, opId: task.scholarOpId }));
+  });
+
+  test('missing restored snapshot fails without using the operation ID', async () => {
+    scholarRelease.mockReturnValue(true);
+    scholarAccountId.mockResolvedValue(userA);
+    const book = makeBook();
+    transferManager.pauseQueue();
+    await initManager(makeAppService(), [book]);
+    const id = transferManager.queueUpload(book)!;
+    await flushAsync(0);
+    const saved = localStorage.getItem('readest_transfer_queue')!;
+    resetTransferManager();
+    resetTransferStore();
+    localStorage.setItem('readest_transfer_queue', saved);
+    const service = await initManager(makeAppService({ exists: vi.fn().mockResolvedValue(false) }), [book]);
+    transferManager.resumeQueue();
+    await flushAsync();
+    expect(service['uploadBook']).not.toHaveBeenCalled();
+    expect(useTransferStore.getState().transfers[id]?.status).toBe('failed');
+    expect(useTransferStore.getState().transfers[id]?.retryCount).toBe(0);
+  });
+
+  test('staging failure fails the task without a network call', async () => {
+    scholarRelease.mockReturnValue(true);
+    scholarAccountId.mockResolvedValue(userA);
+    const book = makeBook();
+    const service = await initManager(makeAppService({
+      createScholarUploadSnapshot: vi.fn().mockRejectedValue(new Error('disk full')),
+    }), [book]);
+    const id = transferManager.queueUpload(book)!;
+    await flushAsync();
+    expect(service['uploadBook']).not.toHaveBeenCalled();
+    expect(useTransferStore.getState().transfers[id]?.status).toBe('failed');
+    expect(useTransferStore.getState().transfers[id]?.error).toBe('disk full');
+  });
+
+  test('clearing a paused task removes its staged copy', async () => {
+    scholarRelease.mockReturnValue(true);
+    scholarAccountId.mockResolvedValue(userA);
+    const book = makeBook();
+    transferManager.pauseQueue();
+    const service = await initManager(makeAppService(), [book]);
+    const id = transferManager.queueUpload(book)!;
+    await flushAsync(0);
+    const path = useTransferStore.getState().transfers[id]!.scholarSnapshotPath;
+    transferManager.clearPending();
+    expect(service['deleteFile']).toHaveBeenCalledWith(path, 'Cache');
+    expect(useTransferStore.getState().transfers[id]).toBeUndefined();
+  });
+
   test('keeps a CAS conflict failed without repeating the same rejected operation', async () => {
     scholarRelease.mockReturnValue(true);
     scholarAccountId.mockResolvedValue(userA);
