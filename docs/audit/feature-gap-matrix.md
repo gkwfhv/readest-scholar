@@ -18,7 +18,7 @@
 | 作者/标题 | 已有 | `books.title`、`books.author` | 作者数组可放 `metadata`，不必先拆表 |
 | 年份 / DOI | 可扩展 | `schema.sql` 无这两列；有 `metadata json` | 从 metadata 提升为可筛选字段，外部抓取默认关闭 |
 | 文献 ID 与文件 ID 分离 | 需新增 | 主键是 `(user_id, book_hash)`，一份文件一个身份 | 增加稳定 document id，原文/译文挂到同一文献 |
-| 文件去重 | 可扩展 | `bookService.ts` 使用文件的 `partialMD5` 做现有书籍身份与批量导入去重；它不是方案要求的全文件 SHA-256。元数据级“可能重复”提示不存在 | 保留现有导入行为；新增不可变派生文件时另算 SHA-256 |
+| 文件去重 | 可扩展 | `bookService.ts` 使用文件的 `partialMD5` 做现有书籍身份与批量导入去重；它不是方案要求的全文件 SHA-256。Scholar 元数据编辑页新增 DOI 优先、标题/作者/年份次之的非破坏性重复提示，见 [实测记录](../evidence/phase2/duplicate-suggestion-2026-10-22.md) | 保留现有导入行为；新增不可变派生文件时另算 SHA-256，并实测 200+ 文献导入 |
 | 科研笔记回跳 | 可扩展 | `book_notes.note` 与 `page`/`cfi` 在同一行；阅读器有 notebook 状态 | V1 用笔记字段。独立 Markdown 笔记等锚点模型稳定后再拆 |
 | PDF 几何锚点 | 可扩展 | `handwriting/model.ts` 已将手绘点存为 0..1 页内坐标，InkStroke 有 page；文字高亮的标准 quadpoints 尚未证实 | 分别验证手绘与文字批注的缩放、旋转坐标 |
 | 标准 PDF 批注导出 | 需新增 | 已读文档和 schema 都没有导出器。方案将其列为 P1 | 不放进第一阶段 |

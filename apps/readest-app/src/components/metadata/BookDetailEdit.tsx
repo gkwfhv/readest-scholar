@@ -1,6 +1,13 @@
 import clsx from 'clsx';
 import React, { useState } from 'react';
-import { MdEdit, MdDelete, MdLock, MdLockOpen, MdOutlineSearch } from 'react-icons/md';
+import {
+  MdEdit,
+  MdDelete,
+  MdInfoOutline,
+  MdLock,
+  MdLockOpen,
+  MdOutlineSearch,
+} from 'react-icons/md';
 
 import { Book } from '@/types/book';
 import { BookMetadata } from '@/libs/document';
@@ -12,6 +19,8 @@ import { useFileSelector } from '@/hooks/useFileSelector';
 import { FormField } from './FormField';
 import BookCover from '@/components/BookCover';
 import { useDefaultBookshelfCovers } from '@/hooks/useDefaultBookshelfCovers';
+import { useLibraryStore } from '@/store/libraryStore';
+import { findPossibleScholarDuplicate } from '@/services/scholar/duplicateCandidates';
 
 interface BookDetailEditProps {
   book: Book;
@@ -54,6 +63,11 @@ const BookDetailEdit: React.FC<BookDetailEditProps> = ({
   const { appService } = useEnv();
   const { skeuomorphicCovers } = useDefaultBookshelfCovers();
   const { selectFiles } = useFileSelector(appService, _);
+  const libraryBooks = useLibraryStore((state) => state.library);
+  const isScholar = isScholarReleaseBundle();
+  const duplicateCandidate = isScholar
+    ? findPossibleScholarDuplicate(metadata, book.hash, libraryBooks)
+    : null;
 
   const hasLockedFields = Object.values(lockedFields).some((locked) => locked);
   const allFieldsLocked = Object.values(lockedFields).every((locked) => locked);
@@ -112,7 +126,7 @@ const BookDetailEdit: React.FC<BookDetailEditProps> = ({
       value: metadata.isbn || '',
       placeholder: '9780123456789',
     },
-    ...(isScholarReleaseBundle()
+    ...(isScholar
       ? [
           {
             field: 'doi',
@@ -306,6 +320,26 @@ const BookDetailEdit: React.FC<BookDetailEditProps> = ({
             />
           ))}
         </div>
+
+        {duplicateCandidate && (
+          <div
+            role='status'
+            className='eink-bordered border-base-300 bg-base-200/50 text-base-content flex items-start gap-2 rounded-lg border px-3 py-2 text-sm'
+          >
+            <MdInfoOutline aria-hidden='true' className='mt-0.5 size-4 shrink-0' />
+            <p>
+              <span className='font-semibold'>{_('Possible duplicate in your library')}:</span>{' '}
+              <span>{duplicateCandidate.book.title}</span>{' '}
+              <span className='text-base-content/70'>
+                (
+                {_(
+                  duplicateCandidate.reason === 'doi' ? 'Same DOI' : 'Same title, author, and year',
+                )}
+                )
+              </span>
+            </p>
+          </div>
+        )}
 
         {metadataFullwidthFields.map(
           ({ field, label, type = 'input', rows, value, placeholder }) => (

@@ -8,6 +8,7 @@ import { DropdownProvider } from '@/context/DropdownContext';
 
 const mocks = vi.hoisted(() => ({
   toDataUrl: vi.fn(async (url: string) => `data:image/png;base64,${url}`),
+  libraryBooks: [] as Book[],
 }));
 
 vi.mock('@/hooks/useTranslation', () => ({
@@ -29,6 +30,11 @@ vi.mock('@/store/settingsStore', () => {
     selector ? selector(state) : state;
   return { useSettingsStore };
 });
+
+vi.mock('@/store/libraryStore', () => ({
+  useLibraryStore: (selector?: (state: { library: Book[] }) => unknown) =>
+    selector ? selector({ library: mocks.libraryBooks }) : { library: mocks.libraryBooks },
+}));
 
 vi.mock('@/context/EnvContext', () => ({
   useEnv: () => ({ envConfig: {}, appService: null }),
@@ -76,6 +82,7 @@ vi.mock('next/image', () => ({
 afterEach(() => {
   cleanup();
   vi.unstubAllEnvs();
+  mocks.libraryBooks = [];
 });
 
 const makeBook = (overrides?: Partial<Book>): Book =>
@@ -170,6 +177,47 @@ describe('scholarly DOI metadata', () => {
       target: { value: '10.1000/example' },
     });
     expect(onFieldChange).toHaveBeenCalledWith('doi', '10.1000/example');
+  });
+
+  it('warns about an existing DOI match without blocking the metadata save', () => {
+    vi.stubEnv('NEXT_PUBLIC_SCHOLAR_RELEASE', 'true');
+    mocks.libraryBooks = [
+      makeBook({
+        hash: 'existing',
+        title: 'Existing Study',
+        metadata: {
+          title: 'Existing Study',
+          author: 'Researcher',
+          language: 'en',
+          doi: 'https://doi.org/10.1000/example',
+        },
+      }),
+    ];
+    const onSave = vi.fn();
+    const { getByRole, getByText } = render(
+      <BookDetailEdit
+        book={makeBook()}
+        metadata={{ title: 'Paper', author: 'Researcher', language: 'en', doi: '10.1000/EXAMPLE' }}
+        tags={[]}
+        fieldSources={{}}
+        lockedFields={{}}
+        fieldErrors={{}}
+        searchLoading={false}
+        onFieldChange={vi.fn()}
+        onToggleFieldLock={vi.fn()}
+        onAutoRetrieve={vi.fn()}
+        onLockAll={vi.fn()}
+        onUnlockAll={vi.fn()}
+        onCancel={vi.fn()}
+        onReset={vi.fn()}
+        onSave={onSave}
+      />,
+    );
+
+    expect(getByRole('status').textContent).toContain('Existing Study');
+    expect(getByRole('status').textContent).toContain('Same DOI');
+    fireEvent.click(getByText('Save'));
+    expect(onSave).toHaveBeenCalledOnce();
   });
 
   it('keeps the ordinary Readest details free of the Scholar DOI row', () => {
