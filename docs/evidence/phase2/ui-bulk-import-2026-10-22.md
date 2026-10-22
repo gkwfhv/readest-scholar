@@ -17,6 +17,10 @@ Scope: synthetic data on the existing loopback-only staging backend, with a sepa
 - The primary account had 402 `files` records after upload. The signed-download check selected the 201 PDF keys specifically; the other file records were not counted as PDFs.
 - Browser refresh to the visible 203-book library took 744, 490 and 505 ms (median 505 ms) in three local SSH-tunnel samples. This measures visible library readiness on the test Mac; it is not a cross-platform or cold-device benchmark.
 
+## Collection and metadata UI check
+
+Using the same 201-document browser account, Paper 101 was assigned to a new `Phase2 UI Review` collection. The three-pane library showed 203 local books (201 imports plus two existing demo books), the collection count of 1, Paper 101 in the middle pane, and its DOI `10.5555/readest-scholar.phase2.101` and tags `Phase2 UI QA` / `Cross-device` in the right pane. [Three-pane screenshot](phase2-three-pane-201-group.jpg). An authenticated server-side read of the `books` row confirmed `group_name=Phase2 UI Review` and both tags. This is Web → server evidence, not a Web ↔ desktop round trip.
+
 ## Remaining acceptance
 
-The candidate Web is still separate from accepted staging. Phase 2 still requires the updated three-pane desktop client check, a Web/desktop bidirectional collection and metadata edit at this scale, and candidate rollout/rollback verification. The accepted staging Web currently returns 0 signed URLs for this 201-key request; the candidate returns 201. This evidence does not approve Phase 2 or production release.
+The packaged candidate completed a [server-only staging upgrade and rollback exercise](staging-image-upgrade-rollback-2026-10-22.md). Accepted staging was restored to its previous Web image; it still returns 0 signed URLs for this 201-key request, while the separate candidate returns 201. Phase 2 still requires the updated three-pane desktop check and a Web/desktop bidirectional collection and metadata edit at this scale. This evidence does not approve Phase 2 or production release.
