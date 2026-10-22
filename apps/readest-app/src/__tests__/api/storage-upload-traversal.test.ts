@@ -63,7 +63,7 @@ beforeEach(() => {
   const builder: Record<string, unknown> = {};
   for (const m of ['select', 'eq', 'limit', 'insert']) builder[m] = () => builder;
   builder['single'] = single;
-  createSupabaseAdminClientMock.mockReset().mockReturnValue({ from: () => builder });
+  createSupabaseAdminClientMock.mockReset().mockReturnValue({ rpc: vi.fn().mockResolvedValue({ data: null, error: { code: 'PGRST202' } }), from: () => builder });
 });
 
 describe('POST /api/storage/upload — fileName traversal guard', () => {
@@ -113,6 +113,7 @@ describe('POST /api/storage/upload — fileName traversal guard', () => {
       return chain;
     };
     createSupabaseAdminClientMock.mockReturnValue({
+      rpc: vi.fn().mockResolvedValue({ data: null, error: { code: 'PGRST202' } }),
       from: (table: string) =>
         make(table === 'scholar_file_heads' ? headsMaybeSingle : filesSingle),
     });

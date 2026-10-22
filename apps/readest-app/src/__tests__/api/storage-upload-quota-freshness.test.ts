@@ -74,6 +74,7 @@ const stubSupabase = (liveUsageBytes: number | null) => {
     return builder;
   };
   createSupabaseAdminClientMock.mockReset().mockReturnValue({
+    rpc: vi.fn().mockResolvedValue({ data: null, error: { code: 'PGRST202' } }),
     from: (table: string) => (table === 'plans' ? make(plansSingle) : make(filesSingle)),
   });
   return { plansSingle };

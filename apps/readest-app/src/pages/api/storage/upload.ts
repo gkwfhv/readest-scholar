@@ -96,87 +96,109 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'Missing file info' });
     }
 
-    // `quota` is an entitlement — it only moves on purchase or refund, so
-    // reading it from the token is fine. `usage` is a live counter: the claim
-    // is frozen when the access token is minted, so authorising against it
-    // measured every upload in that window against the same stale baseline
-    // and let an account keep uploading past its quota until the token
-    // refreshed. Read the counter the trigger maintains instead, and fall
-    // back to the claim rather than to zero if the row can't be read.
     const { usage: claimUsage, quota } = getStoragePlanData(token);
     const supabase = createSupabaseAdminClient();
-    const { data: planRow } = await supabase
-      .from('plans')
-      .select('storage_usage_bytes')
-      .eq('id', user.id)
-      .single();
-    const usage = planRow?.storage_usage_bytes ?? claimUsage;
-
-    if (usage + fileSize > quota + STORAGE_QUOTA_GRACE_BYTES) {
-      return res.status(403).json({ error: 'Insufficient storage quota', usage });
-    }
-
     const fileKey = `${user.id}/${fileName}`;
-    const { data: existingRecord, error: fetchError } = await supabase
-      .from('files')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('file_key', fileKey)
-      .limit(1)
-      .single();
+    let usage: number;
+    let objSize: number;
+    let fileId: string | undefined;
 
-    if (fetchError && fetchError.code !== 'PGRST116') {
-      return res.status(500).json({ error: fetchError.message });
-    }
-
-    // Once a Scholar book has an active immutable version, an old client must
-    // not silently overwrite the compatibility key and believe its edit won.
-    if (existingRecord?.id && fileName.startsWith('Readest/Books/')) {
-      const { data: head, error: headError } = await supabase
-        .from('scholar_file_heads')
-        .select('version_id')
-        .eq('user_id', user.id)
-        .eq('file_id', existingRecord.id)
-        .maybeSingle();
-      if (headError && !['PGRST205', '42P01'].includes(headError.code)) {
-        console.error('Scholar file head lookup failed:', headError);
-        return res.status(500).json({ error: 'Could not check file version' });
+    // The DB function serializes legacy uploads with Scholar reservations and
+    // counts both object types. Older self-hosted DBs use the pre-migration path.
+    const reservation = await supabase.rpc('reserve_storage_file_v1', {
+      p_user_id: user.id,
+      p_file_key: fileKey,
+      p_file_size: fileSize,
+      p_quota_bytes: quota + STORAGE_QUOTA_GRACE_BYTES,
+      p_book_hash: bookHash ?? null,
+      p_replica_kind: replicaKind ?? null,
+      p_replica_id: replicaId ?? null,
+    });
+    if (reservation.error && !['PGRST202', '42883'].includes(reservation.error.code)) {
+      if (reservation.error.code === 'PT413') {
+        return res.status(403).json({ error: 'Insufficient storage quota' });
       }
-      if (head) {
-        return res
-          .status(409)
-          .json({ error: 'File has a newer Scholar version; update this client' });
+      if (reservation.error.code === 'PT409') {
+        return res.status(409).json({ error: 'File size differs from existing object' });
       }
+      if (reservation.error.code === 'PT410') {
+        return res.status(410).json({ error: 'File is deleted' });
+      }
+      console.error('File reservation failed:', reservation.error);
+      return res.status(500).json({ error: 'Could not reserve storage' });
     }
-    let objSize = fileSize;
-    if (existingRecord) {
-      objSize = existingRecord.file_size;
+    if (!reservation.error) {
+      const row = reservation.data?.[0];
+      if (!row) return res.status(500).json({ error: 'Empty storage reservation' });
+      fileId = row.file_id;
+      objSize = row.object_size;
+      usage = row.usage_bytes;
     } else {
-      const { data: inserted, error: insertError } = await supabase
+      // Compatibility path for self-hosted deployments before migration 043.
+      const { data: planRow } = await supabase
+        .from('plans')
+        .select('storage_usage_bytes')
+        .eq('id', user.id)
+        .single();
+      const liveUsage = planRow?.storage_usage_bytes ?? claimUsage;
+      if (liveUsage + fileSize > quota + STORAGE_QUOTA_GRACE_BYTES) {
+        return res.status(403).json({ error: 'Insufficient storage quota', usage: liveUsage });
+      }
+      const { data: existingRecord, error: fetchError } = await supabase
         .from('files')
-        .insert([
-          {
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('file_key', fileKey)
+        .limit(1)
+        .single();
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        return res.status(500).json({ error: fetchError.message });
+      }
+      fileId = existingRecord?.id;
+      objSize = existingRecord?.file_size ?? fileSize;
+      usage = liveUsage + fileSize;
+      if (!existingRecord) {
+        const { data: inserted, error: insertError } = await supabase
+          .from('files')
+          .insert([{
             user_id: user.id,
             book_hash: bookHash ?? null,
             replica_kind: replicaKind ?? null,
             replica_id: replicaId ?? null,
             file_key: fileKey,
             file_size: fileSize,
-          },
-        ])
-        .select()
-        .single();
-      console.log('Inserted record:', inserted);
-      if (insertError) return res.status(500).json({ error: insertError.message });
+          }])
+          .select()
+          .single();
+        if (insertError) return res.status(500).json({ error: insertError.message });
+        fileId = inserted?.id;
+      }
     }
 
+    // A legacy client may read the active version through its old key, but
+    // cannot overwrite that key after an immutable version becomes active.
+    if (fileId && fileName.startsWith('Readest/Books/')) {
+      const { data: head, error: headError } = await supabase
+        .from('scholar_file_heads')
+        .select('version_id')
+        .eq('user_id', user.id)
+        .eq('file_id', fileId)
+        .maybeSingle();
+      if (headError && !['PGRST205', '42P01'].includes(headError.code)) {
+        console.error('Scholar file head lookup failed:', headError);
+        return res.status(500).json({ error: 'Could not check file version' });
+      }
+      if (head) {
+        return res.status(409).json({ error: 'File has a newer Scholar version; update this client' });
+      }
+    }
     try {
       const uploadUrl = await getUploadSignedUrl(fileKey, objSize, 1800);
 
       res.status(200).json({
         uploadUrl,
         fileKey,
-        usage: usage + fileSize,
+        usage,
         quota,
       });
     } catch (error) {
