@@ -69,25 +69,43 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 }
 
-async function processFileKeys(
+export async function processFileKeys(
   fileKeys: string[],
   userId: string,
 ): Promise<Record<string, string | undefined>> {
   const supabase = createSupabaseAdminClient();
 
-  const { data: fileRecords, error: fileError } = await supabase
-    .from('files')
-    .select('user_id, file_key, book_hash')
-    .eq('user_id', userId)
-    .in('file_key', fileKeys)
-    .is('deleted_at', null);
+  // PostgREST encodes .in() values in the URL. A 100-cover sync can exceed
+  // the proxy URL limit even though this API receives the keys in a POST body.
+  const queryBatches = <T>(values: T[]): T[][] => {
+    const batches: T[][] = [];
+    for (let index = 0; index < values.length; index += 50) {
+      batches.push(values.slice(index, index + 50));
+    }
+    return batches;
+  };
+  const fileQueryResults = await Promise.all(
+    queryBatches(fileKeys).map((batch) =>
+      supabase
+        .from('files')
+        .select('user_id, file_key, book_hash')
+        .eq('user_id', userId)
+        .in('file_key', batch)
+        .is('deleted_at', null),
+    ),
+  );
 
+  const fileError = fileQueryResults.find((result) => result.error)?.error;
   if (fileError) {
     console.error('Error querying files:', fileError);
     return Object.fromEntries(fileKeys.map((key) => [key, undefined]));
   }
 
-  const fileRecordMap = new Map((fileRecords || []).map((record) => [record.file_key, record]));
+  const fileRecordMap = new Map(
+    fileQueryResults
+      .flatMap((result) => result.data || [])
+      .map((record) => [record.file_key, record]),
+  );
 
   const missingFileKeys = fileKeys.filter((key) => !fileRecordMap.has(key));
 
@@ -109,14 +127,21 @@ async function processFileKeys(
     if (fallbackCandidates.length > 0) {
       const bookHashes = [...new Set(fallbackCandidates.map((c) => c.bookHash))];
 
-      const { data: fallbackRecords, error: fallbackError } = await supabase
-        .from('files')
-        .select('user_id, file_key, book_hash')
-        .eq('user_id', userId)
-        .in('book_hash', bookHashes)
-        .is('deleted_at', null);
+      const fallbackQueryResults = await Promise.all(
+        queryBatches(bookHashes).map((batch) =>
+          supabase
+            .from('files')
+            .select('user_id, file_key, book_hash')
+            .eq('user_id', userId)
+            .in('book_hash', batch)
+            .is('deleted_at', null),
+        ),
+      );
+      const fallbackRecords = fallbackQueryResults.flatMap((result) =>
+        result.error ? [] : result.data || [],
+      );
 
-      if (!fallbackError && fallbackRecords) {
+      if (fallbackRecords.length > 0) {
         for (const candidate of fallbackCandidates) {
           const matchedFile = fallbackRecords.find(
             (f) =>
