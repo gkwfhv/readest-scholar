@@ -99,7 +99,7 @@ export async function processFileKeys(
     queryBatches(fileKeys).map((batch) =>
       supabase
         .from('files')
-        .select('user_id, file_key, book_hash')
+        .select('id, user_id, file_key, book_hash')
         .eq('user_id', userId)
         .in('file_key', batch)
         .is('deleted_at', null),
@@ -142,7 +142,7 @@ export async function processFileKeys(
         queryBatches(bookHashes).map((batch) =>
           supabase
             .from('files')
-            .select('user_id, file_key, book_hash')
+            .select('id, user_id, file_key, book_hash')
             .eq('user_id', userId)
             .in('book_hash', batch)
             .is('deleted_at', null),
@@ -167,6 +167,68 @@ export async function processFileKeys(
     }
   }
 
+  // The old file key remains the public lookup alias. If Scholar has an
+  // active head, serve only its verified immutable object under that alias.
+  const fileIds = [
+    ...new Set(
+      [...fileRecordMap.values()]
+        .filter(
+          (record) =>
+            typeof record.id === 'string' &&
+            typeof record.book_hash === 'string' &&
+            record.file_key.startsWith(`${userId}/Readest/Books/${record.book_hash}/`) &&
+            !record.file_key.endsWith('/cover.png'),
+        )
+        .map((record) => record.id as string),
+    ),
+  ];
+  const headByFileId = new Map<string, string>();
+  const activeObjectByFileId = new Map<string, string>();
+  if (fileIds.length > 0) {
+    const headResults = await Promise.all(
+      queryBatches(fileIds).map((batch) =>
+        supabase
+          .from('scholar_file_heads')
+          .select('file_id,version_id')
+          .eq('user_id', userId)
+          .in('file_id', batch),
+      ),
+    );
+    const headError = headResults.find((result) => result.error)?.error;
+    if (headError && !['PGRST205', '42P01'].includes(headError.code)) {
+      console.error('Error querying Scholar file heads:', headError);
+      return Object.fromEntries(fileKeys.map((key) => [key, undefined]));
+    }
+    if (!headError) {
+      for (const head of headResults.flatMap((result) => result.data || [])) {
+        headByFileId.set(head.file_id, head.version_id);
+      }
+      const versionIds = [...new Set(headByFileId.values())];
+      if (versionIds.length > 0) {
+        const versionResults = await Promise.all(
+          queryBatches(versionIds).map((batch) =>
+            supabase
+              .from('scholar_file_versions')
+              .select('file_id,version_id,object_key')
+              .eq('user_id', userId)
+              .eq('state', 'ready')
+              .in('version_id', batch),
+          ),
+        );
+        const versionError = versionResults.find((result) => result.error)?.error;
+        if (versionError) {
+          console.error('Error querying Scholar file versions:', versionError);
+          return Object.fromEntries(fileKeys.map((key) => [key, undefined]));
+        }
+        for (const version of versionResults.flatMap((result) => result.data || [])) {
+          if (headByFileId.get(version.file_id) === version.version_id) {
+            activeObjectByFileId.set(version.file_id, version.object_key);
+          }
+        }
+      }
+    }
+  }
+
   const results = await Promise.allSettled(
     fileKeys.map(async (fileKey) => {
       const fileRecord = fileRecordMap.get(fileKey);
@@ -179,8 +241,12 @@ export async function processFileKeys(
         return { fileKey, downloadUrl: undefined };
       }
 
+      const hasHead = headByFileId.has(fileRecord.id);
+      const objectKey = hasHead ? activeObjectByFileId.get(fileRecord.id) : fileRecord.file_key;
+      if (!objectKey) return { fileKey, downloadUrl: undefined };
+
       try {
-        const downloadUrl = await getDownloadSignedUrl(fileRecord.file_key, 1800);
+        const downloadUrl = await getDownloadSignedUrl(objectKey, 1800);
         return { fileKey, downloadUrl };
       } catch (error) {
         console.error('Error creating signed URL for %s:', fileKey, error);

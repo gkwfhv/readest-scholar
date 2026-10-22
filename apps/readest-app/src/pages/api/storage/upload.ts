@@ -128,6 +128,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (fetchError && fetchError.code !== 'PGRST116') {
       return res.status(500).json({ error: fetchError.message });
     }
+
+    // Once a Scholar book has an active immutable version, an old client must
+    // not silently overwrite the compatibility key and believe its edit won.
+    if (existingRecord?.id && fileName.startsWith('Readest/Books/')) {
+      const { data: head, error: headError } = await supabase
+        .from('scholar_file_heads')
+        .select('version_id')
+        .eq('user_id', user.id)
+        .eq('file_id', existingRecord.id)
+        .maybeSingle();
+      if (headError && !['PGRST205', '42P01'].includes(headError.code)) {
+        console.error('Scholar file head lookup failed:', headError);
+        return res.status(500).json({ error: 'Could not check file version' });
+      }
+      if (head) {
+        return res
+          .status(409)
+          .json({ error: 'File has a newer Scholar version; update this client' });
+      }
+    }
     let objSize = fileSize;
     if (existingRecord) {
       objSize = existingRecord.file_size;

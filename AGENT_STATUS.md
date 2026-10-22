@@ -105,3 +105,5 @@
 服务器本地提交 `cad33382d` 加入不可变文件额度原子预留，`7ed712cd2` 加入可信上传准备/完成 API，并封住旧上传与删除接口对版本对象的直接操作。服务器容器中定向单测、TypeScript/Biome、Web 构建通过；隔离库和合成 staging 的 SQL 探针通过。候选 Web 的两版本签名 PUT、重复写入拒绝、SHA-256 完成、CAS 落败保留、账户恢复和 CORS 预检均完成真实合成往返，测试对象与行已清理。详见 [staging 证据](docs/evidence/phase3/immutable-file-upload-staging-2026-10-23.md)。正式 staging Web 仍为旧镜像，客户端和双设备故障验收待继续；未向 GitHub/GHCR 推送。
 
 [不可变文件活动/历史下载](docs/evidence/phase3/immutable-file-download-2026-10-23.md)新增账户隔离的版本下载 API；回环候选对两个不同字节版本、CAS 落败、指定历史下载、恢复后活动下载和第二账户 404 完成真实合成往返，测试数据已清理。正式 Web 与客户端仍未接入。
+
+[文件版本旧接口兼容](docs/evidence/phase3/immutable-file-legacy-compat-2026-10-23.md)在合成 staging 候选版实测：旧上传原件与下载可用，新版本发布后旧下载返回活动版字节，旧覆盖上传返回 409。[客户端传输基础](docs/evidence/phase3/scholar-file-client-transfer-2026-10-23.md)已分块计算 SHA-256 并用同一操作 ID 处理丢失响应；尚无持久离线队列和书库接入。

@@ -98,6 +98,34 @@ describe('POST /api/storage/upload — fileName traversal guard', () => {
     expect(getUploadSignedUrlMock).not.toHaveBeenCalled();
   });
 
+  it('refuses a legacy overwrite after a Scholar version becomes active', async () => {
+    const filesSingle = vi.fn().mockResolvedValue({
+      data: { id: 'file-id', file_size: 11, file_key: 'attacker-id/Readest/Books/hash.epub' },
+      error: null,
+    });
+    const headsMaybeSingle = vi.fn().mockResolvedValue({
+      data: { version_id: 'version-id' },
+      error: null,
+    });
+    const make = (terminal: unknown) => {
+      const chain: Record<string, unknown> = { single: terminal, maybeSingle: terminal };
+      for (const name of ['select', 'eq', 'limit']) chain[name] = () => chain;
+      return chain;
+    };
+    createSupabaseAdminClientMock.mockReturnValue({
+      from: (table: string) =>
+        make(table === 'scholar_file_heads' ? headsMaybeSingle : filesSingle),
+    });
+    const { req, res } = makeReqRes({
+      fileName: 'Readest/Books/hash.epub',
+      fileSize: 11,
+      bookHash: 'hash',
+    });
+    await handler(req, res);
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(getUploadSignedUrlMock).not.toHaveBeenCalled();
+  });
+
   it('allows a normal book key through to presigning', async () => {
     const { req, res } = makeReqRes({
       fileName: 'Readest/Books/hash.epub',
