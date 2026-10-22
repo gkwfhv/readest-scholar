@@ -233,7 +233,10 @@ export class ReplicaSyncManager {
     if (deferred) throw deferred;
   }
 
-  async pull(kind: string, opts?: { since?: Hlc | null }): Promise<ReplicaRow[]> {
+  async pull(
+    kind: string,
+    opts?: { since?: Hlc | null; deferCursor?: boolean },
+  ): Promise<ReplicaRow[]> {
     // The boot orchestrator passes `{ since: null }` to do a full pull
     // that ignores the persisted cursor — this lets us recover when a
     // previous boot advanced the cursor past rows that never made it
@@ -241,7 +244,8 @@ export class ReplicaSyncManager {
     // sync (visibility / online) keeps using the cursor.
     const since = opts && 'since' in opts ? (opts.since ?? null) : this.opts.cursorStore.get(kind);
     const rows = await this.opts.client.pull(kind, since);
-    this.observeAndAdvanceCursor(kind, rows);
+    this.observeRows(rows);
+    if (!opts?.deferCursor) this.acknowledgeAppliedRows(kind, rows);
     return rows;
   }
 
@@ -263,7 +267,7 @@ export class ReplicaSyncManager {
    */
   async pullMany(
     kinds: string[],
-    opts?: { since?: Hlc | null },
+    opts?: { since?: Hlc | null; deferCursor?: boolean },
   ): Promise<Map<string, ReplicaRow[]>> {
     const out = new Map<string, ReplicaRow[]>();
     const wanted = kinds.filter((kind) => !this.unsupportedKinds.has(kind));
@@ -302,20 +306,28 @@ export class ReplicaSyncManager {
       });
     }
     for (const { kind, rows } of results) {
-      this.observeAndAdvanceCursor(kind, rows);
+      this.observeRows(rows);
+      if (!opts?.deferCursor) this.acknowledgeAppliedRows(kind, rows);
       out.set(kind, rows);
     }
     return out;
   }
 
-  private observeAndAdvanceCursor(kind: string, rows: ReplicaRow[]): void {
+  private observeRows(rows: ReplicaRow[]): void {
+    for (const row of rows) this.opts.hlc.observe(row.updated_at_ts);
+  }
+
+  /** Commit a fetched kind only after every row has been applied locally. */
+  acknowledgeAppliedRows(kind: string, rows: ReplicaRow[]): void {
     if (rows.length === 0) return;
     let maxHlc: Hlc = rows[0]!.updated_at_ts;
     for (const row of rows) {
       if (hlcCompare(row.updated_at_ts, maxHlc) > 0) maxHlc = row.updated_at_ts;
-      this.opts.hlc.observe(row.updated_at_ts);
     }
-    this.opts.cursorStore.set(kind, maxHlc);
+    const current = this.opts.cursorStore.get(kind);
+    if (!current || hlcCompare(maxHlc, current) > 0) {
+      this.opts.cursorStore.set(kind, maxHlc);
+    }
   }
 
   startAutoSync(): void {

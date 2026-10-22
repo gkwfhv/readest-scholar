@@ -13,7 +13,7 @@
 
 ## 验收边界与后续工作
 
-- 新 Linux CEF 客户端访问回环 Auth/API 时弹出 Local Network Access 许可；测试尚未接受此许可，因此**新版 Linux 客户端到 staging 的同步未被证明**。本阶段的跨端同步判定依赖已验收的独立 macOS 客户端。该 Linux 平台缺口进入 Phase 7 平台矩阵，并在任何 Linux 正式发布前解决；若未来产品把 Linux 作为 Phase 3 双设备组合，也须先复验。不能通过关闭网络安全机制来掩盖。
+- 用户明确授权后，隔离 Linux CEF 客户端接受了 http://tauri.localhost 的 Local Network Access 许可，使用既有 staging 合成账户登录成功。客户端菜单显示 Logged in 与 Synced a few seconds ago，服务端已有的 Phase2 UI Review 集合出现，本地 201 本 PDF 保持可见；见[Linux 登录截图](linux-native-login-201.jpg)。这证明该测试容器的认证和集合拉取可达；**尚未证明新版 Linux 客户端对 201 个本地文件的上传及双向编辑**。Phase 3 若使用此客户端作为双设备组合仍需单独的读写往返与故障注入；Linux 正式发布前还需 Phase 7 平台矩阵复验。
 - Docker 默认 64 MiB `/dev/shm` 下导入约 53 份时 CEF compositor 触发 `SIGTRAP`；1 GiB QA 容器完成 201 份导入。详见[原生运行记录](linux-native-client-2026-10-22.md)。这定义测试环境要求，不推导用户设备的内存上界。
 - 本次 5 个测试文件第一次在构建容器继承 `NODE_ENV=production` 时有 4 个 React `act` 运行时错误；以测试环境 `NODE_ENV=test` 重跑 28/28 通过。失败来自测试运行配置，未被计入功能通过。
 - Phase 3 的并发编辑、断网恢复、幂等重试、增量 cursor 与冲突 UI 尚未验收；Phase 4–8 仍未完成。本验收不授权生产部署、正式签名、公开发布或 GitHub 推送。

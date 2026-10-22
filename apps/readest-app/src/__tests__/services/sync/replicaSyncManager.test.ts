@@ -423,6 +423,17 @@ describe('ReplicaSyncManager.pull', () => {
     expect(cursors.get('dictionary')).toBe(r2.updated_at_ts);
   });
 
+  test('deferred pull keeps its cursor until rows are applied', async () => {
+    const row = makeRow('r1', hlcPack(NOW + 100, 0, DEV) as Hlc);
+    const client = { ...makeFakeClient(), pull: vi.fn(async () => [row]) };
+    const { manager, cursors } = makeManager(client);
+
+    await manager.pull('dictionary', { deferCursor: true });
+    expect(cursors.get('dictionary')).toBeUndefined();
+    manager.acknowledgeAppliedRows('dictionary', [row]);
+    expect(cursors.get('dictionary')).toBe(row.updated_at_ts);
+  });
+
   test('subsequent pull uses advanced cursor', async () => {
     const r1 = makeRow('r1', hlcPack(NOW + 100, 0, DEV) as Hlc);
     const client = {
@@ -507,6 +518,25 @@ describe('ReplicaSyncManager.pullMany (batched incremental)', () => {
       { kind: 'font', since: fontCursor },
       { kind: 'texture', since: null },
     ]);
+  });
+
+  test('deferred batch leaves each cursor untouched until its kind is applied', async () => {
+    const dict = makeRow('d1', hlcPack(NOW + 100, 0, DEV) as Hlc);
+    const font = { ...makeRow('f1', hlcPack(NOW + 200, 0, DEV) as Hlc), kind: 'font' };
+    const client = {
+      ...makeFakeClient(),
+      pullBatch: vi.fn(async () => [
+        { kind: 'dictionary', rows: [dict] },
+        { kind: 'font', rows: [font] },
+      ]),
+    };
+    const { manager, cursors } = makeManager(client);
+
+    await manager.pullMany(['dictionary', 'font'], { deferCursor: true });
+    expect(cursors.size).toBe(0);
+    manager.acknowledgeAppliedRows('dictionary', [dict]);
+    expect(cursors.get('dictionary')).toBe(dict.updated_at_ts);
+    expect(cursors.get('font')).toBeUndefined();
   });
 
   test("advances each kind's cursor independently from its own rows", async () => {

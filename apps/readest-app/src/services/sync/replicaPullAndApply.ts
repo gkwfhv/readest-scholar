@@ -303,19 +303,29 @@ const applyRow = async <T extends ReplicaLocalRecord>(
  * this orchestrator; per-kind translation lives entirely in the
  * adapter's unpackRow + binary capability.
  */
+export interface PullAndApplyResult {
+  rows: ReplicaRow[];
+  failedRows: ReplicaRow[];
+}
+
 export const replicaPullAndApply = async <T extends ReplicaLocalRecord>(
   deps: PullAndApplyDeps<T>,
-): Promise<void> => {
-  if (deps.isAuthenticated && !(await deps.isAuthenticated())) return;
+): Promise<PullAndApplyResult> => {
+  if (deps.isAuthenticated && !(await deps.isAuthenticated())) {
+    return { rows: [], failedRows: [] };
+  }
   if (deps.hydrateLocalStore) {
     await deps.hydrateLocalStore();
   }
   const rows = await deps.pull();
+  const failedRows: ReplicaRow[] = [];
   for (const row of rows) {
     try {
       await applyRow(row, deps);
     } catch (err) {
+      failedRows.push(row);
       console.warn('replica pull row apply failed', { replicaId: row.replica_id, err });
     }
   }
+  return { rows, failedRows };
 };

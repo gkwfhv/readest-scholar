@@ -61,8 +61,10 @@
 
 - [201 本 Web ↔ 独立 macOS 测试包的集合与元数据双向往返](docs/evidence/phase2/cross-device-201-collections-2026-10-22.md)已实测：新本地身份登录后显示 201 本，Web 建分组与两标签到达桌面；桌面将 Paper 101 移入新分组、追加第三标签，服务端与 Web 均采用新值，旧客户端未抹除 DOI。第二合成账号仍为 0 签名链接。该桌面包早于三栏新布局，不能作为新版桌面视觉验收；Phase 2 仍未通过。
 
+- [Phase 3 副本游标修复](docs/evidence/phase3/replica-apply-cursor-2026-10-22.md)在服务器以先红后绿的回归测试完成：本地应用失败时不再提前提交单类或批量增量游标，online 重试后才确认；目标 87/87、全量 13,849 通过，TypeScript/Biome 通过。Linux CEF 测试容器已在用户授权下接受本地网络许可并登录 staging，服务端集合可见；本地 201 PDF 跨端上传尚未证明。
+
 ## 下一动作
 
-1. [Phase 2 非生产合成数据验收](docs/evidence/phase2/acceptance-2026-10-22.md)已通过计划判据，开始 Phase 3 的可靠同步与离线开发。新版 Linux CEF 客户端的 Local Network Access 许可及到 staging 的同步仍需补验，并列入 Phase 7 平台门槛；Phase 3 需先补并发/离线/幂等失败测试，再实现 cursor、队列与冲突处理。
+1. [Phase 2 非生产合成数据验收](docs/evidence/phase2/acceptance-2026-10-22.md)已通过计划判据，开始 Phase 3 的可靠同步与离线开发。新版 Linux CEF 客户端已在用户授权下接受本地网络许可，合成账户登录、集合拉取及菜单同步状态通过；201 本地文件的跨端读写与故障注入仍列入 Phase 3/7 门槛。Phase 3 已开始修复本地应用失败时增量 cursor 提前前进的问题，后续还需并发/离线/幂等失败测试、持久队列与冲突处理。
 2. 外部 HTTPS 分享、真实 OAuth 提供方回跳及独立收件人导入仍需域名和相应测试配置；真实模型质量留给 Phase 5，正式身份包的签名更新分发留给 Phase 8。测试包不是可发布产物。
 3. 生产真实数据、外部 TLS、签名与正式发布仍需单独审批和验收。

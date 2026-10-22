@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { act, cleanup, renderHook } from '@testing-library/react';
 
-const pullSpy = vi.fn<(...args: unknown[]) => Promise<void>>(async () => {});
+const emptyApplyResult = { rows: [], failedRows: [] };
+const pullSpy = vi.fn<(...args: unknown[]) => Promise<{ rows: unknown[]; failedRows: unknown[] }>>(
+  async () => emptyApplyResult,
+);
 const getReplicaSyncSpy = vi.fn();
 const getAccessTokenSpy = vi.fn(async (): Promise<string | null> => 'token');
 const replayBookshelvesSpy = vi.fn<(...args: unknown[]) => Promise<void>>(async () => {});
@@ -122,8 +125,12 @@ const fakeService = { createDir: vi.fn(), name: 'fake' };
 // recreates these so individual call counts don't bleed across cases.
 const makeManagerMock = () => ({
   pull: vi.fn<(...args: unknown[]) => Promise<unknown[]>>(async () => []),
+  acknowledgeAppliedRows: vi.fn(),
   pullMany: vi.fn<
-    (kinds: string[], opts?: { since?: string | null }) => Promise<Map<string, unknown[]>>
+    (
+      kinds: string[],
+      opts?: { since?: string | null; deferCursor?: boolean },
+    ) => Promise<Map<string, unknown[]>>
   >(async (kinds) => {
     const out = new Map<string, unknown[]>();
     for (const k of kinds) out.set(k, []);
@@ -146,7 +153,7 @@ const dictionaryPullCount = (): number =>
 beforeEach(() => {
   vi.useFakeTimers();
   pullSpy.mockClear();
-  pullSpy.mockResolvedValue(undefined);
+  pullSpy.mockResolvedValue(emptyApplyResult);
   getReplicaSyncSpy.mockReset();
   getAccessTokenSpy.mockReset().mockResolvedValue('token');
   replayBookshelvesSpy.mockClear();
@@ -229,11 +236,45 @@ describe('useReplicaPull', () => {
     expect(managerMock.pullMany).toHaveBeenCalledTimes(1);
     const [batchedKinds, batchedOpts] = managerMock.pullMany.mock.calls[0]!;
     expect([...batchedKinds].sort()).toEqual(['dictionary', 'font', 'texture']);
-    expect(batchedOpts).toEqual({ since: null });
+    expect(batchedOpts).toEqual({ since: null, deferCursor: true });
     // pullSpy is `replicaPullAndApply`; expect 1 invocation per kind
     // (settings + the three from the batch) all running through the
     // apply path.
     expect(pullSpy).toHaveBeenCalledTimes(4);
+  });
+
+  test('retries a locally failed row before acknowledging its cursor', async () => {
+    const row = { kind: 'dictionary', replica_id: 'retry-me' };
+    const managerMock = makeManagerMock();
+    managerMock.pullMany.mockImplementation(async (kinds) => {
+      const out = new Map<string, unknown[]>();
+      for (const kind of kinds) out.set(kind, kind === 'dictionary' ? [row] : []);
+      return out;
+    });
+    getReplicaSyncSpy.mockReturnValue({ manager: managerMock });
+    let localWriteFails = true;
+    pullSpy.mockImplementation(async (args) => {
+      const deps = args as { adapter: { kind: string }; pull: () => Promise<unknown[]> };
+      const rows = await deps.pull();
+      return {
+        rows,
+        failedRows: deps.adapter.kind === 'dictionary' && localWriteFails ? rows : [],
+      };
+    });
+    renderHook(() => useReplicaPull({ kinds: ['dictionary'], delayMs: 100 }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    expect(managerMock.acknowledgeAppliedRows).not.toHaveBeenCalledWith('dictionary', [row]);
+
+    localWriteFails = false;
+    await act(async () => {
+      window.dispatchEvent(new Event('online'));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(managerMock.pullMany).toHaveBeenCalledTimes(2);
+    expect(managerMock.acknowledgeAppliedRows).toHaveBeenCalledWith('dictionary', [row]);
   });
 
   test('skips when appService is null', () => {
@@ -311,7 +352,7 @@ describe('useReplicaPull', () => {
   test('failed pull releases the dedup slot so a later navigation can retry', async () => {
     getReplicaSyncSpy.mockReturnValue({ manager: makeManagerMock() });
     // Settings pull resolves; dictionary apply (the second call) rejects.
-    pullSpy.mockResolvedValueOnce(undefined);
+    pullSpy.mockResolvedValueOnce(emptyApplyResult);
     pullSpy.mockRejectedValueOnce(new Error('flaky'));
     vi.spyOn(console, 'warn').mockImplementation(() => {});
 
@@ -426,10 +467,10 @@ describe('useReplicaPull — incremental auto-pull (visibility / online / interv
     // with cursor-based defaults.
     const bootArgs = managerMock.pullMany.mock.calls[0]!;
     expect(bootArgs[0]).toEqual(['dictionary']);
-    expect(bootArgs[1]).toEqual({ since: null });
+    expect(bootArgs[1]).toEqual({ since: null, deferCursor: true });
     const focusArgs = managerMock.pullMany.mock.calls[1]!;
     expect([...focusArgs[0]].sort()).toEqual(['dictionary', 'settings']);
-    expect(focusArgs[1]).toBeUndefined();
+    expect(focusArgs[1]).toEqual({ deferCursor: true });
   });
 
   test('focus is throttled to collapse iOS focus-fires-twice bursts', async () => {
@@ -629,8 +670,8 @@ describe('useReplicaPull — incremental auto-pull (visibility / online / interv
     let resolvePull: (() => void) | null = null;
     pullSpy.mockImplementation(
       () =>
-        new Promise<void>((resolve) => {
-          resolvePull = () => resolve();
+        new Promise<{ rows: unknown[]; failedRows: unknown[] }>((resolve) => {
+          resolvePull = () => resolve(emptyApplyResult);
         }),
     );
     getReplicaSyncSpy.mockReturnValue({
@@ -742,11 +783,11 @@ describe('useReplicaPull — settings boot pull sequencing', () => {
     pullSpy.mockImplementation((deps: unknown) => {
       const kind = (deps as { adapter?: { kind?: string } } | undefined)?.adapter?.kind;
       if (kind === 'settings') {
-        return new Promise<void>((resolve) => {
-          resolveSettings = () => resolve();
+        return new Promise<{ rows: unknown[]; failedRows: unknown[] }>((resolve) => {
+          resolveSettings = () => resolve(emptyApplyResult);
         });
       }
-      return Promise.resolve();
+      return Promise.resolve(emptyApplyResult);
     });
     getReplicaSyncSpy.mockReturnValue({ manager: makeManagerMock() });
     renderHook(() => useReplicaPull({ kinds: ['dictionary'], delayMs: 100 }));

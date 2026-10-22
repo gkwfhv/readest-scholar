@@ -105,6 +105,23 @@ describe('replicaPullAndApply (dictionary adapter)', () => {
     expect(deps.queueReplicaDownload).not.toHaveBeenCalled();
   });
 
+  test('reports rows whose local apply failed so their cursor cannot advance', async () => {
+    const bad = baseRow({ replica_id: 'failed-row' });
+    const good = baseRow({ replica_id: 'applied-row' });
+    const deps = makeDeps();
+    deps.pull.mockResolvedValue([bad, good]);
+    deps.applyRemote.mockImplementation((record) => {
+      if (record.contentId === 'failed-row') throw new Error('disk unavailable');
+    });
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await replicaPullAndApply(deps);
+
+    expect(result).toEqual({ rows: [bad, good], failedRows: [bad] });
+    expect(deps.applyRemote).toHaveBeenCalledTimes(2);
+    expect(warning).toHaveBeenCalledOnce();
+  });
+
   test('skips entirely (no pull) when isAuthenticated returns false', async () => {
     const deps = {
       ...makeDeps(),

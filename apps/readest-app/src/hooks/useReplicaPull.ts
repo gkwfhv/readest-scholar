@@ -186,7 +186,7 @@ const buildReplicaPullDeps = <T extends ReplicaLocalRecord>(
   // locally, ignoring any previously-advanced cursor. The incremental
   // path passes pullOverride so a single batched `manager.pullMany`
   // result is fanned out to per-kind apply without re-hitting the wire.
-  pull: pullOverride ?? (() => manager.pull(config.kind, pullOpts)),
+  pull: pullOverride ?? (() => manager.pull(config.kind, { ...pullOpts, deferCursor: true })),
   findByContentId: config.findByContentId,
   hydrateLocalStore: config.hydrateLocalStore
     ? () => config.hydrateLocalStore!(envConfig)
@@ -386,19 +386,32 @@ const runPullForKind = async (
 ): Promise<void> => {
   const ctx = getReplicaSync();
   if (!ctx) return;
+  const applyAndAcknowledge = async <T extends ReplicaLocalRecord>(
+    deps: PullAndApplyDeps<T>,
+  ): Promise<void> => {
+    const result = await replicaPullAndApply(deps);
+    // A failed local write must be fetched again on the next incremental
+    // pull. Advancing the cursor here would silently skip that row.
+    if (result.failedRows.length === 0) {
+      ctx.manager.acknowledgeAppliedRows(kind, result.rows);
+    }
+  };
   switch (kind) {
     case 'bookshelf': {
       await replayBookshelfOperations(envConfig);
-      // Batched rows already passed the category/auth gates and advanced the
-      // cursor, so apply them even if those gates change after the fetch.
+      // Batched rows already passed the category/auth gates, so apply them
+      // even if those gates change after the fetch.
       if (!pullOverride && (!isSyncCategoryEnabled('bookshelf') || !(await getAccessToken())))
         return;
-      const rows = await (pullOverride ? pullOverride() : ctx.manager.pull('bookshelf', pullOpts));
+      const rows = await (pullOverride
+        ? pullOverride()
+        : ctx.manager.pull('bookshelf', { ...pullOpts, deferCursor: true }));
       await applyRemoteBookshelfRows(envConfig, rows);
+      ctx.manager.acknowledgeAppliedRows(kind, rows);
       return;
     }
     case 'dictionary':
-      await replicaPullAndApply(
+      await applyAndAcknowledge(
         buildReplicaPullDeps(
           ctx.manager,
           service,
@@ -410,7 +423,7 @@ const runPullForKind = async (
       );
       return;
     case 'font':
-      await replicaPullAndApply(
+      await applyAndAcknowledge(
         buildReplicaPullDeps(
           ctx.manager,
           service,
@@ -422,7 +435,7 @@ const runPullForKind = async (
       );
       return;
     case 'texture':
-      await replicaPullAndApply(
+      await applyAndAcknowledge(
         buildReplicaPullDeps(
           ctx.manager,
           service,
@@ -434,7 +447,7 @@ const runPullForKind = async (
       );
       return;
     case 'opds_catalog':
-      await replicaPullAndApply(
+      await applyAndAcknowledge(
         buildReplicaPullDeps(
           ctx.manager,
           service,
@@ -446,7 +459,7 @@ const runPullForKind = async (
       );
       return;
     case 'abs_server':
-      await replicaPullAndApply(
+      await applyAndAcknowledge(
         buildReplicaPullDeps(
           ctx.manager,
           service,
@@ -458,7 +471,7 @@ const runPullForKind = async (
       );
       return;
     case 'custom_translator':
-      await replicaPullAndApply(
+      await applyAndAcknowledge(
         buildReplicaPullDeps(
           ctx.manager,
           service,
@@ -470,7 +483,7 @@ const runPullForKind = async (
       );
       return;
     case 'translation_prompt':
-      await replicaPullAndApply(
+      await applyAndAcknowledge(
         buildReplicaPullDeps(
           ctx.manager,
           service,
@@ -482,7 +495,7 @@ const runPullForKind = async (
       );
       return;
     case 'custom_tts':
-      await replicaPullAndApply(
+      await applyAndAcknowledge(
         buildReplicaPullDeps(
           ctx.manager,
           service,
@@ -494,7 +507,7 @@ const runPullForKind = async (
       );
       return;
     case 'settings':
-      await replicaPullAndApply(
+      await applyAndAcknowledge(
         buildReplicaPullDeps(
           ctx.manager,
           service,
@@ -544,7 +557,7 @@ const triggerIncrementalPullAll = (): void => {
       // kind's apply error doesn't poison the others.
       let rowsByKind: Map<string, ReplicaRow[]>;
       try {
-        rowsByKind = await ctx.manager.pullMany(kindsToPull);
+        rowsByKind = await ctx.manager.pullMany(kindsToPull, { deferCursor: true });
       } catch (err) {
         console.warn('replica batch pull failed', err);
         return;
@@ -743,7 +756,7 @@ export const useReplicaPull = ({
           }
           let rowsByKind: Map<string, ReplicaRow[]>;
           try {
-            rowsByKind = await ctx.manager.pullMany(eligible, { since: null });
+            rowsByKind = await ctx.manager.pullMany(eligible, { since: null, deferCursor: true });
           } catch (err) {
             console.warn('replica boot batch pull failed', err);
             for (const kind of eligible) {
