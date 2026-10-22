@@ -23,3 +23,8 @@ pnpm tauri build --debug --no-sign --no-bundle --config src-tauri/scholar.releas
 - 容器内用 Xvfb、x11vnc、noVNC 显示客户端；回环 TCP 代理将 `127.0.0.1:8130` 转至 staging Kong，将 `127.0.0.1:3132` 转至独立候选 Web。两个代理目标的 GET 健康检查均返回 200；宿主机没有 LocalSend 53318 监听。
 - 原生进程以非 root 用户启动，CEF 子进程、登录界面与正式产品名均实际显示。首次运行因镜像中遗留的 Chromium SingletonLock 退出；确认旧进程已结束后，仅在新测试容器删除过期锁并重启，第二次保持运行。
 - 登录测试时 CEF 显示“Access other apps and services on this device”许可，测试已停在该弹窗，等待本次容器范围的授权。**尚未证明新版 Linux 桌面端载入 201 篇文献或三栏布局；Phase 2 仍未验收。**
+
+## 登录许可诊断
+
+- CEF 弹窗请求的来源是 `http://tauri.localhost`，文案为“Access other apps and services on this device”。测试时关闭弹窗后，登录表单显示 `Failed to fetch`；同一时段 GoTrue Auth 没有收到对应登录请求，而容器内直接 GET `127.0.0.1:8130/auth/v1/health` 返回 200。因此失败位于 CEF 页面发起回环请求的许可环节，而不是 Auth 服务不可用。这里的因果关系是根据请求缺失和浏览器行为推断，待允许后用成功登录验证。
+- [Chrome 的 Local Network Access 说明](https://developer.chrome.com/blog/local-network-access)指出网页请求本地网络/回环服务可能触发来源级许可提示；当前 CEF 151 的实际弹窗与这一机制一致。没有关闭安全检查或预授予许可。产品 Linux 客户端对自托管回环服务的首次登录体验仍需评估，不能把本次容器许可当作正式产品的解决方案。
