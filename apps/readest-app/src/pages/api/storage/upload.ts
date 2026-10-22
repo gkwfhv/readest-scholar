@@ -92,11 +92,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    if (!fileName || !fileSize) {
-      return res.status(400).json({ error: 'Missing file info' });
+    if (!fileName || !Number.isSafeInteger(fileSize) || fileSize <= 0) {
+      return res.status(400).json({ error: 'Invalid file info' });
     }
 
     const { usage: claimUsage, quota } = getStoragePlanData(token);
+    const quotaBytes = quota + STORAGE_QUOTA_GRACE_BYTES;
+    if (!Number.isSafeInteger(quotaBytes) || quotaBytes < 0) {
+      return res.status(500).json({ error: 'Invalid storage entitlement' });
+    }
     const supabase = createSupabaseAdminClient();
     const fileKey = `${user.id}/${fileName}`;
     let usage: number;
@@ -109,7 +113,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       p_user_id: user.id,
       p_file_key: fileKey,
       p_file_size: fileSize,
-      p_quota_bytes: quota + STORAGE_QUOTA_GRACE_BYTES,
+      p_quota_bytes: quotaBytes,
       p_book_hash: bookHash ?? null,
       p_replica_kind: replicaKind ?? null,
       p_replica_id: replicaId ?? null,
@@ -141,7 +145,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .eq('id', user.id)
         .single();
       const liveUsage = planRow?.storage_usage_bytes ?? claimUsage;
-      if (liveUsage + fileSize > quota + STORAGE_QUOTA_GRACE_BYTES) {
+      if (liveUsage + fileSize > quotaBytes) {
         return res.status(403).json({ error: 'Insufficient storage quota', usage: liveUsage });
       }
       const { data: existingRecord, error: fetchError } = await supabase

@@ -33,6 +33,12 @@ beforeEach(() => {
 });
 
 describe('legacy upload shared quota reservation', () => {
+  it.each([-1, '11', Number.MAX_SAFE_INTEGER + 1])('rejects invalid file size %s before reserving', async (fileSize) => {
+    const { req, res } = request(); req.body.fileSize = fileSize;
+    await handler(req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(rpc).not.toHaveBeenCalled();
+  });
   it('uses atomic database quota including immutable versions', async () => {
     rpc.mockResolvedValue({ data: [{ file_id: 'file-1', object_size: 11, usage_bytes: 99 }], error: null });
     const { req, res } = request(); await handler(req, res);
