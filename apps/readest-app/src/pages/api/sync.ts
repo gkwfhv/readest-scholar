@@ -673,7 +673,9 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const { books = [], configs = [], notes = [], statBooks = [], statPages = [] } = body as SyncData;
 
-  const BATCH_SIZE = 100;
+  // Each row adds user and primary-key filters to a PostgREST URL.
+  // Keep lookup requests below common proxy URI limits for 200+ book pushes.
+  const BATCH_SIZE = 25;
   const upsertRecords = async (
     table: TableName,
     primaryKeys: (keyof BookDataRecord)[],
