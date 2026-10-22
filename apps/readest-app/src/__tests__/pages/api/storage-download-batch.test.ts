@@ -5,6 +5,15 @@ const queryBatches = vi.hoisted(() => [] as string[][]);
 const queryColumns = vi.hoisted(() => [] as string[]);
 const fallbackMode = vi.hoisted(() => ({ enabled: false }));
 
+const encodedQueryLength = (batch: string[], column: string) =>
+  '/rest/v1/files?'.length +
+  new URLSearchParams({
+    select: 'user_id,file_key,book_hash',
+    user_id: 'eq.synthetic-user',
+    [column]: `in.(${batch.map((value) => `"${value}"`).join(',')})`,
+    deleted_at: 'is.null',
+  }).toString().length;
+
 vi.mock('@/utils/supabase', () => ({
   createSupabaseAdminClient: () => ({
     from: () => {
@@ -54,7 +63,10 @@ describe('storage download authorization queries', () => {
     const urls = await processFileKeys(keys, 'synthetic-user');
 
     expect(queryBatches.length).toBeGreaterThan(1);
-    expect(queryBatches.every((batch) => batch.length <= 50)).toBe(true);
+    expect(queryBatches.every((batch) => batch.length <= 25)).toBe(true);
+    expect(
+      queryBatches.every((batch, index) => encodedQueryLength(batch, queryColumns[index]!) < 3200),
+    ).toBe(true);
     expect(Object.keys(urls)).toHaveLength(keys.length);
     expect(urls[keys[200]!]).toContain(keys[200]!);
   });
@@ -70,8 +82,29 @@ describe('storage download authorization queries', () => {
     const urls = await processFileKeys(keys, 'synthetic-user');
 
     expect(queryColumns.filter((column) => column === 'book_hash').length).toBeGreaterThan(1);
-    expect(queryBatches.every((batch) => batch.length <= 50)).toBe(true);
+    expect(queryBatches.every((batch) => batch.length <= 25)).toBe(true);
+    expect(
+      queryBatches.every((batch, index) => encodedQueryLength(batch, queryColumns[index]!) < 3200),
+    ).toBe(true);
     expect(urls[keys[200]!]).toContain(keys[200]!);
     fallbackMode.enabled = false;
+  });
+
+  it('keeps long but valid file paths below the proxy URL budget', async () => {
+    queryBatches.length = 0;
+    queryColumns.length = 0;
+    fallbackMode.enabled = false;
+    const keys = Array.from(
+      { length: 201 },
+      (_, index) =>
+        `synthetic-user/Readest/Books/${String(index).padStart(32, '0')}/${'x'.repeat(180)}-${index}.pdf`,
+    );
+    const urls = await processFileKeys(keys, 'synthetic-user');
+
+    expect(queryBatches.length).toBeGreaterThan(10);
+    expect(
+      queryBatches.every((batch, index) => encodedQueryLength(batch, queryColumns[index]!) < 3200),
+    ).toBe(true);
+    expect(Object.keys(urls)).toHaveLength(keys.length);
   });
 });

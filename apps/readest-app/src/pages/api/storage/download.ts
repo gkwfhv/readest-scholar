@@ -75,13 +75,24 @@ export async function processFileKeys(
 ): Promise<Record<string, string | undefined>> {
   const supabase = createSupabaseAdminClient();
 
-  // PostgREST encodes .in() values in the URL. A 100-cover sync can exceed
-  // the proxy URL limit even though this API receives the keys in a POST body.
-  const queryBatches = <T>(values: T[]): T[][] => {
-    const batches: T[][] = [];
-    for (let index = 0; index < values.length; index += 50) {
-      batches.push(values.slice(index, index + 50));
+  // PostgREST puts .in() filters in the URL even when this API receives a
+  // POST body. The proxy rejected 50 real file paths (about 7 KB), so bound
+  // both the number of values and their encoded length before making requests.
+  const queryBatches = (values: string[]): string[][] => {
+    const batches: string[][] = [];
+    let batch: string[] = [];
+    let encodedLength = 0;
+    for (const value of values) {
+      const itemLength = encodeURIComponent(`"${value}"`).length + (batch.length ? 3 : 0);
+      if (batch.length && (batch.length >= 25 || encodedLength + itemLength > 2800)) {
+        batches.push(batch);
+        batch = [];
+        encodedLength = 0;
+      }
+      batch.push(value);
+      encodedLength += itemLength;
     }
+    if (batch.length) batches.push(batch);
     return batches;
   };
   const fileQueryResults = await Promise.all(
