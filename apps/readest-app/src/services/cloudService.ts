@@ -1,4 +1,4 @@
-import { AppService, FileSystem, BaseDir, DeleteAction } from '@/types/system';
+import { AppService, FileSystem, BaseDir, DeleteAction, ScholarFileUploadContext } from '@/types/system';
 import { Book } from '@/types/book';
 import {
   getDir,
@@ -19,6 +19,11 @@ import { ProgressHandler } from '@/utils/transfer';
 import { CLOUD_BOOKS_SUBDIR, CLOUD_REPLICAS_SUBDIR } from './constants';
 import { isBookFileContentSource, resolveBookContentSource } from './bookContent';
 import { getAbsOfflineDir } from '@/utils/audiobook';
+import { isScholarReleaseBundle, isScholarTestBundle, getAPIBaseUrl } from '@/services/environment';
+import { fetchWithAuth } from '@/utils/fetch';
+import { uploadScholarFileVersion } from '@/libs/scholarFileVersion';
+import { sha256File } from '@/services/dictionaries/plugins/integrity';
+import { getScholarAccountId, getScholarFileBaseline, saveScholarFileBaseline } from './scholarFileBaseline';
 
 export async function deleteBook(
   fs: FileSystem,
@@ -190,6 +195,7 @@ export async function uploadBook(
   resolveFilePath: (path: string, base: BaseDir) => Promise<string>,
   book: Book,
   onProgress?: ProgressHandler,
+  scholar?: ScholarFileUploadContext,
 ): Promise<void> {
   const completedFiles = { count: 0 };
   const coverExist = await fs.exists(getCoverFilename(book), 'Books');
@@ -220,15 +226,44 @@ export async function uploadBook(
   }
 
   const cfp = `${CLOUD_BOOKS_SUBDIR}/${getRemoteBookFilename(book)}`;
-  await uploadFileToCloud(
-    fs,
-    resolveFilePath,
-    bookSource.path,
-    cfp,
-    bookSource.base,
-    handleProgress,
-    book.hash,
-  );
+  if ((isScholarReleaseBundle() || isScholarTestBundle())) {
+    const accountId = await getScholarAccountId();
+    if (!accountId) throw new Error('Not authenticated');
+    if (scholar && scholar.accountId !== accountId) throw new Error('Scholar upload account changed');
+    const expectedVersionId = scholar
+      ? scholar.expectedVersionId
+      : (getScholarFileBaseline(accountId, cfp)?.versionId ?? null);
+    const opId = scholar?.opId ?? crypto.randomUUID();
+    const file = await fs.openFile(bookSource.path, bookSource.base, cfp);
+    try {
+      const fullPath = await resolveFilePath(bookSource.path, bookSource.base);
+      const response = await fetchWithAuth(`${getAPIBaseUrl()}/scholar/files/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileName: cfp, bookHash: book.hash }),
+      });
+      const { fileId } = (await response.json()) as { fileId: string };
+      if (!fileId) throw new Error('Invalid Scholar file registration');
+      const result = await uploadScholarFileVersion(
+        file, fileId, opId, expectedVersionId, handleProgress, fullPath,
+      );
+      if (!result.applied) throw new Error('Scholar file conflict; local version retained');
+      saveScholarFileBaseline(accountId, cfp, { fileId, versionId: result.versionId });
+    } finally {
+      const opened = file as ClosableFile;
+      if (opened.close) await opened.close();
+    }
+  } else {
+    await uploadFileToCloud(
+      fs,
+      resolveFilePath,
+      bookSource.path,
+      cfp,
+      bookSource.base,
+      handleProgress,
+      book.hash,
+    );
+  }
   completedFiles.count++;
 
   book.deletedAt = null;
@@ -268,6 +303,73 @@ export async function downloadCloudFile(
   console.log('Downloading file:', cfp, 'to', lfp);
   const dstPath = `${localBooksDir}/${lfp}`;
   await downloadFile({ appService, cfp, dst: dstPath, onProgress });
+}
+
+/**
+ * A pinned version URL and a temporary destination keep a failed or racing
+ * download from changing the library copy. The baseline advances only after
+ * the downloaded bytes match the immutable version's size and SHA-256.
+ */
+async function downloadVerifiedScholarBookFile(
+  appService: AppService,
+  fs: FileSystem,
+  dst: string,
+  cfp: string,
+  onProgress: ProgressHandler,
+): Promise<void> {
+  const accountId = await getScholarAccountId();
+  if (!accountId) throw new Error('Not authenticated');
+  const endpoint = `${getAPIBaseUrl()}/scholar/files`;
+  const fileKey = `${accountId}/${cfp}`;
+  const statusResponse = await fetchWithAuth(
+    `${endpoint}/status?fileKey=${encodeURIComponent(fileKey)}`, { method: 'GET' },
+  );
+  const status = (await statusResponse.json()) as {
+    fileId?: string;
+    activeVersionId?: string | null;
+  };
+  if (!status.fileId || !status.activeVersionId) {
+    throw new Error('Scholar book has no active file version');
+  }
+  const versionResponse = await fetchWithAuth(
+    `${endpoint}/download?fileId=${encodeURIComponent(status.fileId)}&versionId=${encodeURIComponent(status.activeVersionId)}`,
+    { method: 'GET' },
+  );
+  const version = (await versionResponse.json()) as {
+    versionId?: string;
+    downloadUrl?: string;
+    sha256?: string;
+    fileSize?: number;
+  };
+  if (
+    version.versionId !== status.activeVersionId || !version.downloadUrl ||
+    !/^[0-9a-f]{64}$/i.test(version.sha256 ?? '') ||
+    !Number.isSafeInteger(version.fileSize) || (version.fileSize ?? -1) < 0
+  ) throw new Error('Invalid Scholar file version response');
+
+  const temporaryPath = `${dst}.scholar-${crypto.randomUUID()}.part`;
+  try {
+    await downloadFile({ appService, dst: temporaryPath, cfp, url: version.downloadUrl, onProgress });
+    const staged = await fs.openFile(temporaryPath, 'None');
+    try {
+      if (staged.size !== version.fileSize || await sha256File(staged) !== version.sha256?.toLowerCase()) {
+        throw new Error('Scholar file hash mismatch');
+      }
+    } finally {
+      const opened = staged as ClosableFile;
+      if (opened.close) await opened.close();
+    }
+    if (await getScholarAccountId() !== accountId) {
+      throw new Error('Scholar upload account changed');
+    }
+    await fs.copyFile(temporaryPath, 'None', dst, 'None');
+    saveScholarFileBaseline(accountId, cfp, {
+      fileId: status.fileId,
+      versionId: status.activeVersionId,
+    });
+  } finally {
+    if (await fs.exists(temporaryPath, 'None')) await fs.removeFile(temporaryPath, 'None');
+  }
 }
 
 export async function downloadBookCovers(
@@ -359,8 +461,12 @@ export async function downloadBook(
   if (needDownBook) {
     const lfp = getLocalBookFilename(book);
     const cfp = `${CLOUD_BOOKS_SUBDIR}/${getRemoteBookFilename(book)}`;
-    await downloadCloudFile(appService, localBooksDir, lfp, cfp, handleProgress);
     const localFullpath = `${localBooksDir}/${lfp}`;
+    if (isScholarReleaseBundle() || isScholarTestBundle()) {
+      await downloadVerifiedScholarBookFile(appService, fs, localFullpath, cfp, handleProgress);
+    } else {
+      await downloadCloudFile(appService, localBooksDir, lfp, cfp, handleProgress);
+    }
     bookDownloaded = await fs.exists(localFullpath, 'None');
     completedFiles.count++;
   }

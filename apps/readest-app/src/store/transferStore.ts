@@ -28,6 +28,8 @@ export interface TransferItem {
   bookHash: string;
   bookTitle: string;
   scholarOpId?: string;
+  scholarAccountId?: string;
+  scholarExpectedVersionId?: string | null;
   replicaKind?: string;
   replicaId?: string;
   replicaReincarnation?: string;
@@ -67,6 +69,7 @@ interface TransferState {
     type: TransferType,
     priority?: number,
     isBackground?: boolean,
+    scholar?: { accountId: string; expectedVersionId: string | null },
   ) => string;
   addReplicaTransfer: (
     replicaKind: string,
@@ -185,7 +188,7 @@ export const useTransferStore = create<TransferState>((set, get) => ({
 
   setIsTransferQueueOpen: (isOpen) => set({ isTransferQueueOpen: isOpen }),
 
-  addTransfer: (bookHash, bookTitle, type, priority = 10, isBackground = false) => {
+  addTransfer: (bookHash, bookTitle, type, priority = 10, isBackground = false, scholar) => {
     const id = generateTransferId();
     const transfer: TransferItem = {
       id,
@@ -193,6 +196,8 @@ export const useTransferStore = create<TransferState>((set, get) => ({
       bookHash,
       bookTitle,
       scholarOpId: type === 'upload' ? uuidv4() : undefined,
+      scholarAccountId: type === 'upload' ? scholar?.accountId : undefined,
+      scholarExpectedVersionId: type === 'upload' ? scholar?.expectedVersionId : undefined,
       type,
       status: 'pending',
       progress: 0,

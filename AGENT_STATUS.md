@@ -100,6 +100,8 @@
 
 - Phase 3 [不可变文件原子登记](docs/evidence/phase3/immutable-file-registration-2026-10-23.md)在服务器完成隔离数据库回滚测试、接口单测、Lint/构建与回环候选真实对象往返。staging 数据库在备份后升级 044，正式 Web 原镜像不变；测试对象与行已清理。客户端仍须接入登记、版本基线和持久内容快照，Phase 3 未验收；未推送 GitHub/GHCR。
 
+- Phase 3 [书籍版本客户端接入](docs/evidence/phase3/scholar-book-client-version-flow-2026-10-23.md)已在服务器容器完成单测、Lint、Web 候选构建与合成账户指定版本下载；正式 staging Web 未切换。持久正文快照、冲突处理界面及双设备故障验收待完成。未推送 GitHub/GHCR。
+
 ## 下一动作
 
 1. [Phase 2 非生产合成数据验收](docs/evidence/phase2/acceptance-2026-10-22.md)已通过计划判据，开始 Phase 3 的可靠同步与离线开发。新版 Linux CEF 客户端已在用户授权下接受本地网络许可，合成账户登录、集合拉取及菜单同步状态通过；201 本地文件的跨端读写与故障注入仍列入 Phase 3/7 门槛。Phase 3 的服务端变更序号、分页 API 和客户端落盘后确认已在服务器本地通过回归；staging 数据库升级与 Web 候选回退已实测；单字段冲突恢复已在候选界面和数据库验证。笔记冲突恢复界面已验收；下一步是双真实设备并发、二进制冲突、双设备故障注入、按需缓存。

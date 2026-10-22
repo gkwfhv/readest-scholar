@@ -13,6 +13,7 @@ import {
   OsPlatform,
   ResolvedPath,
   SaveLibraryBooksOptions,
+  ScholarFileUploadContext,
   SelectDirectoryMode,
 } from '@/types/system';
 import { DatabaseOpts, DatabaseService } from '@/types/database';
@@ -541,8 +542,8 @@ export abstract class BaseAppService implements AppService {
     return CloudSvc.deleteReplicaBundleFromCloud(kind, replicaId, filenames);
   }
 
-  async uploadBook(book: Book, onProgress?: ProgressHandler): Promise<void> {
-    return CloudSvc.uploadBook(this.fs, this.resolveFilePath.bind(this), book, onProgress);
+  async uploadBook(book: Book, onProgress?: ProgressHandler, scholar?: ScholarFileUploadContext): Promise<void> {
+    return CloudSvc.uploadBook(this.fs, this.resolveFilePath.bind(this), book, onProgress, scholar);
   }
 
   async uploadBookCover(book: Book, onProgress?: ProgressHandler): Promise<void> {

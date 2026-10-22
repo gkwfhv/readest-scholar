@@ -51,6 +51,18 @@ describe('transferStore', () => {
       expect(useTransferStore.getState().transfers[downloadId]!.scholarOpId).toBeUndefined();
     });
 
+    test('freezes the account and local version baseline for a Scholar upload', () => {
+      const userId = '00000000-0000-4000-8000-000000000001';
+      const versionId = '00000000-0000-4000-8000-000000000002';
+      const id = useTransferStore.getState().addTransfer('hash', 'Paper', 'upload', 10, false,
+        { accountId: userId, expectedVersionId: versionId });
+      const item = useTransferStore.getState().transfers[id]!;
+      expect(item.scholarAccountId).toBe(userId);
+      expect(item.scholarExpectedVersionId).toBe(versionId);
+      useTransferStore.getState().retryTransfer(id);
+      expect(useTransferStore.getState().transfers[id]!.scholarExpectedVersionId).toBe(versionId);
+    });
+
     test('accepts custom priority and isBackground', () => {
       const id = useTransferStore.getState().addTransfer('hash2', 'Book Two', 'download', 1, true);
       const transfer = useTransferStore.getState().transfers[id]!;

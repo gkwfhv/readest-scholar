@@ -3,6 +3,18 @@ import { useTransferStore, TransferItem } from '@/store/transferStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import type { SystemSettings } from '@/types/settings';
 
+const scholarRelease = vi.fn();
+const scholarAccountId = vi.fn();
+const scholarBaseline = vi.fn();
+vi.mock('@/services/environment', async (original) => ({
+  ...(await original<typeof import('@/services/environment')>()),
+  isScholarReleaseBundle: () => scholarRelease(),
+}));
+vi.mock('@/services/scholarFileBaseline', () => ({
+  getScholarAccountId: () => scholarAccountId(),
+  getScholarFileBaseline: (...args: unknown[]) => scholarBaseline(...args),
+}));
+
 vi.mock('@/utils/event', () => ({
   eventDispatcher: {
     dispatch: vi.fn(),
@@ -51,7 +63,9 @@ const resetTransferManager = () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test-only introspection
   const mgr = transferManager as unknown as Record<string, unknown>;
   mgr['isInitialized'] = false;
+  mgr['scholarAccountId'] = null;
   mgr['isProcessing'] = false;
+  mgr['processRequested'] = false;
   mgr['appService'] = null;
   mgr['getLibrary'] = null;
   mgr['updateBook'] = null;
@@ -129,6 +143,9 @@ beforeEach(() => {
   resetTransferStore();
   resetTransferManager();
   vi.clearAllMocks();
+  scholarRelease.mockReturnValue(false);
+  scholarAccountId.mockResolvedValue(null);
+  scholarBaseline.mockReturnValue(undefined);
   localStorage.clear();
   settingsLoaded();
   vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -138,6 +155,61 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+describe('Scholar file queue baseline', () => {
+  const userA = '00000000-0000-4000-8000-000000000001';
+  const userB = '00000000-0000-4000-8000-000000000002';
+  const versionId = '00000000-0000-4000-8000-000000000003';
+  test('captures the device-known version when the upload is queued', async () => {
+    scholarRelease.mockReturnValue(true);
+    scholarAccountId.mockResolvedValue(userA);
+    scholarBaseline.mockReturnValue({ fileId: 'file-id', versionId });
+    const book = makeBook();
+    transferManager.pauseQueue();
+    const service = await initManager(makeAppService(), [book]);
+    await flushAsync(0);
+    const id = transferManager.queueUpload(book)!;
+    const task = useTransferStore.getState().transfers[id]!;
+    expect(task.scholarAccountId).toBe(userA);
+    expect(task.scholarExpectedVersionId).toBe(versionId);
+    expect(scholarBaseline).toHaveBeenCalledWith(userA, expect.stringContaining('Readest/Books/'));
+    transferManager.resumeQueue();
+    await flushAsync();
+    expect(service["uploadBook"]).toHaveBeenCalledWith(book, expect.any(Function), {
+      accountId: userA, opId: task.scholarOpId, expectedVersionId: versionId,
+    });
+  });
+  test('keeps a CAS conflict failed without repeating the same rejected operation', async () => {
+    scholarRelease.mockReturnValue(true);
+    scholarAccountId.mockResolvedValue(userA);
+    const book = makeBook();
+    transferManager.pauseQueue();
+    const service = await initManager(makeAppService({
+      uploadBook: vi.fn().mockRejectedValue(new Error('Scholar file conflict; local version retained')),
+    }), [book]);
+    await flushAsync(0);
+    const id = transferManager.queueUpload(book)!;
+    transferManager.resumeQueue();
+    await flushAsync();
+    expect(service['uploadBook']).toHaveBeenCalledTimes(1);
+    expect(useTransferStore.getState().transfers[id]?.status).toBe('failed');
+    expect(useTransferStore.getState().transfers[id]?.retryCount).toBe(0);
+  });
+
+  test('does not send an old account queued book under a new account', async () => {
+    scholarRelease.mockReturnValue(true);
+    scholarAccountId.mockResolvedValue(userA);
+    const book = makeBook();
+    transferManager.pauseQueue();
+    const service = await initManager(makeAppService(), [book]);
+    await flushAsync(0);
+    transferManager.queueUpload(book);
+    scholarAccountId.mockResolvedValue(userB);
+    transferManager.resumeQueue();
+    await flushAsync();
+    expect(service["uploadBook"]).not.toHaveBeenCalled();
+  });
 });
 
 describe('provider gating of book uploads', () => {

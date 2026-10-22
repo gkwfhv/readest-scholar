@@ -1,5 +1,9 @@
 import { Book } from '@/types/book';
-import { AppService, BaseDir } from '@/types/system';
+import { AppService, BaseDir, type ScholarFileUploadContext } from '@/types/system';
+import { isScholarReleaseBundle, isScholarTestBundle } from '@/services/environment';
+import { getRemoteBookFilename } from '@/utils/book';
+import { CLOUD_BOOKS_SUBDIR } from '@/services/constants';
+import { getScholarAccountId, getScholarFileBaseline } from '@/services/scholarFileBaseline';
 import { useTransferStore, TransferItem, ReplicaTransferFile } from '@/store/transferStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { isReadestCloudStorageActive } from '@/services/sync/cloudSyncProvider';
@@ -34,8 +38,10 @@ class TransferManager {
   private static instance: TransferManager;
   private appService: AppService | null = null;
   private isProcessing = false;
+  private processRequested = false;
   private abortControllers: Map<string, AbortController> = new Map();
   private isInitialized = false;
+  private scholarAccountId: string | null = null;
   private getLibrary: (() => Book[]) | null = null;
   private updateBook: ((book: Book) => Promise<void>) | null = null;
   private _: TranslationFunc | null = null;
@@ -122,6 +128,7 @@ class TransferManager {
     this.getLibrary = getLibrary;
     this.updateBook = updateBook;
     this._ = translationFn;
+    this.scholarAccountId = (isScholarReleaseBundle() || isScholarTestBundle()) ? await getScholarAccountId() : null;
     await this.loadPersistedQueue();
     this.reconcileUploadsWithProvider();
     this.isInitialized = true;
@@ -177,7 +184,16 @@ class TransferManager {
       return existing.id;
     }
 
-    const transferId = store.addTransfer(book.hash, book.title, 'upload', priority);
+    let scholar: { accountId: string; expectedVersionId: string | null } | undefined;
+    if ((isScholarReleaseBundle() || isScholarTestBundle())) {
+      if (!this.scholarAccountId) return null;
+      const cfp = `${CLOUD_BOOKS_SUBDIR}/${getRemoteBookFilename(book)}`;
+      scholar = {
+        accountId: this.scholarAccountId,
+        expectedVersionId: getScholarFileBaseline(this.scholarAccountId, cfp)?.versionId ?? null,
+      };
+    }
+    const transferId = store.addTransfer(book.hash, book.title, 'upload', priority, false, scholar);
     this.persistQueue();
     this.processQueue();
     return transferId;
@@ -403,14 +419,20 @@ class TransferManager {
   }
 
   private async processQueue(): Promise<void> {
-    if (this.isProcessing) return;
+    if (this.isProcessing) {
+      this.processRequested = true;
+      return;
+    }
 
     this.isProcessing = true;
-
     try {
       await this._processQueueInternal();
     } finally {
       this.isProcessing = false;
+      if (this.processRequested) {
+        this.processRequested = false;
+        queueMicrotask(() => this.processQueue());
+      }
     }
   }
 
@@ -515,9 +537,14 @@ class TransferManager {
       // Quota exhaustion is permanent for this account state; retrying
       // burns three backoff rounds per book for the same 403.
       const isQuotaError = errorMessage.includes('Insufficient storage quota');
+      const isPermanentError = isQuotaError || [
+        'Scholar file conflict',
+        'Scholar upload account changed',
+        'Legacy upload queue needs requeue',
+      ].some((message) => errorMessage.includes(message));
 
       if (
-        !isQuotaError &&
+        !isPermanentError &&
         currentTransfer &&
         currentTransfer.retryCount < currentTransfer.maxRetries
       ) {
@@ -619,7 +646,22 @@ class TransferManager {
     }
 
     if (transfer.type === 'upload') {
-      await this.appService!.uploadBook(book, progressHandler);
+      let scholar: ScholarFileUploadContext | undefined;
+      if ((isScholarReleaseBundle() || isScholarTestBundle())) {
+        const currentAccount = await getScholarAccountId();
+        if (!currentAccount || currentAccount !== transfer.scholarAccountId) {
+          throw new Error('Scholar upload account changed; requeue under the current account');
+        }
+        if (!transfer.scholarOpId || transfer.scholarExpectedVersionId === undefined) {
+          throw new Error('Legacy upload queue needs requeue for Scholar file versions');
+        }
+        scholar = {
+          accountId: currentAccount,
+          opId: transfer.scholarOpId,
+          expectedVersionId: transfer.scholarExpectedVersionId,
+        };
+      }
+      await this.appService!.uploadBook(book, progressHandler, scholar);
       book.uploadedAt = Date.now();
       await this.updateBook!(book);
     } else if (transfer.type === 'download') {
