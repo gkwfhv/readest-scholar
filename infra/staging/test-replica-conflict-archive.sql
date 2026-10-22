@@ -1,4 +1,4 @@
--- Run only against an isolated database with migrations through 034.
+-- Run only against an isolated database with migrations through 035.
 -- The transaction rolls back all synthetic writes and JWT context.
 BEGIN;
 DO $$
@@ -28,6 +28,19 @@ DECLARE
   incoming_count integer;
   winner_seq bigint;
 BEGIN
+  IF has_table_privilege('authenticated', 'public.replica_conflict_versions', 'INSERT') THEN
+    RAISE EXCEPTION 'authenticated can forge conflict history';
+  END IF;
+  BEGIN
+    INSERT INTO public.replica_conflict_versions
+      (user_id, kind, replica_id, source, version_hash, row_data)
+    VALUES
+      (uid, 'settings', rid, 'incoming', 'forged',
+       jsonb_build_object('user_id', uid, 'kind', 'settings'));
+    RAISE EXCEPTION 'direct history insert unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
   SELECT * INTO merged FROM public.crdt_merge_replica_v2(
     uid, 'settings', rid,
     jsonb_build_object('theme', jsonb_build_object('v', 'A', 't', a, 's', 'device-a')),
