@@ -2547,5 +2547,9 @@
   "{{count}} voices available_other": "可用语音 {{count}} 个",
   "Multilingual": "多语言",
   "Expressive": "富有表现力",
-  "Show Page Thumbnails": "显示页面缩略图"
+  "Show Page Thumbnails": "显示页面缩略图",
+  "Research Library": "科研书库",
+  "Collections": "文献集",
+  "No books in this collection.": "此文献集暂无书籍。",
+  "Select a book to view details.": "选择一本文献以查看详情。"
 }

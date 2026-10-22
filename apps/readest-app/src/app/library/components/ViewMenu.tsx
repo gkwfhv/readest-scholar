@@ -3,9 +3,11 @@ import { BOOKSHELF_GROUP_LABELS, BOOKSHELF_SORT_LABELS } from '@/services/booksh
 import { getGlobalBookshelfSort } from '@/services/bookshelves/sorting';
 import React from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useMediaQuery } from 'react-responsive';
 import { useEnv } from '@/context/EnvContext';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useTranslation } from '@/hooks/useTranslation';
+import { isScholarReleaseBundle } from '@/services/environment';
 import {
   LibraryViewModeType,
   LibraryGroupByType,
@@ -38,12 +40,15 @@ const SORT_BY_ORDER: LibrarySortByType[] = [
 
 const ViewMenu: React.FC<ViewMenuProps> = ({ setIsDropdownOpen }) => {
   const _ = useTranslation();
+  const isWideLibrary = useMediaQuery({ minWidth: 1024 });
   const router = useRouter();
   const searchParams = useSearchParams();
   const { envConfig, appService } = useEnv();
   const { settings } = useSettingsStore();
 
   const viewMode = searchParams?.get('view') || settings.libraryViewMode;
+  const researchLayout =
+    isScholarReleaseBundle() && isWideLibrary && searchParams?.get('layout') === 'research';
   const autoColumns = settings.libraryAutoColumns;
   const columns = settings.libraryColumns;
   const groupBy = ensureLibraryGroupByType(searchParams?.get('groupBy'), settings.libraryGroupBy);
@@ -94,7 +99,16 @@ const ViewMenu: React.FC<ViewMenuProps> = ({ setIsDropdownOpen }) => {
 
     const params = new URLSearchParams(window.location.search);
     params.set('view', value);
+    params.delete('layout');
     navigateToLibrary(router, `${params.toString()}`);
+  };
+
+  const handleSetResearchLayout = () => {
+    const params = new URLSearchParams(window.location.search);
+    params.set('layout', 'research');
+    params.delete('group');
+    params.delete('shelf');
+    navigateToLibrary(router, params.toString());
   };
 
   const handleToggleAutoColumns = async () => {
@@ -183,11 +197,20 @@ const ViewMenu: React.FC<ViewMenuProps> = ({ setIsDropdownOpen }) => {
           key={option.value}
           label={option.label}
           buttonClass='min-h-8 py-1!'
-          toggled={viewMode === option.value}
+          toggled={!researchLayout && viewMode === option.value}
           onClick={() => handleSetViewMode(option.value as LibraryViewModeType)}
           transient
         />
       ))}
+      {isScholarReleaseBundle() && isWideLibrary && (
+        <MenuItem
+          label={_('Research Library')}
+          buttonClass='min-h-8 py-1!'
+          toggled={researchLayout}
+          onClick={handleSetResearchLayout}
+          transient
+        />
+      )}
 
       {/* Columns */}
       <hr aria-hidden='true' className='border-base-200 my-1' />
