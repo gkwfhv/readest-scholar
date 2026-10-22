@@ -34,6 +34,9 @@ export const SETTINGS_REPLICA_ID = 'singleton';
  *     (see `SETTINGS_DICTIONARY_FIELDS`).
  */
 export const SETTINGS_WHITELIST = [
+  // Keep manually created empty Scholar groups across devices. Books with
+  // members continue to sync their group fields through the existing library.
+  'scholarCollectionPaths',
   'globalViewSettings.userStylesheet',
   'globalViewSettings.userUIStylesheet',
   // Library-scope proofread (find/replace) rules. Whole-field LWW like the

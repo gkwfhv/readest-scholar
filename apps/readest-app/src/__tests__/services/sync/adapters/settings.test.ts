@@ -92,6 +92,20 @@ describe('settingsAdapter', () => {
     expect(fields['kosync.serverUrl']).toBe('https://kosync.example');
   });
 
+  test('round-trips empty Scholar collection paths through settings sync', () => {
+    const paths = ['Research', 'Research/Papers'];
+    const fields = settingsAdapter.pack({
+      name: 'singleton',
+      patch: { scholarCollectionPaths: paths } as Partial<SystemSettings>,
+    });
+    expect(fields['scholarCollectionPaths']).toEqual(paths);
+    expect(
+      settingsAdapter.unpackRow(makeRow({ scholarCollectionPaths: env(paths) }), '')?.patch,
+    ).toMatchObject({
+      scholarCollectionPaths: paths,
+    });
+  });
+
   test('pack/unpack round-trips Notion connection fields and drops local sync state', () => {
     const record: SettingsRemoteRecord = {
       name: 'singleton',

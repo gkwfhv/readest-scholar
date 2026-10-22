@@ -9,6 +9,7 @@ vi.mock('@/utils/md5', () => ({
 }));
 
 import { useLibraryStore } from '@/store/libraryStore';
+import { useSettingsStore } from '@/store/settingsStore';
 import type { Book } from '@/types/book';
 import type { EnvConfigType } from '@/services/environment';
 import type { AppService } from '@/types/system';
@@ -33,6 +34,9 @@ function makeBook(overrides: Partial<Book> = {}): Book {
 
 describe('libraryStore', () => {
   beforeEach(() => {
+    useSettingsStore.setState({
+      settings: {} as ReturnType<typeof useSettingsStore.getState>['settings'],
+    });
     useLibraryStore.setState({
       library: [],
       libraryLoaded: false,
@@ -417,6 +421,36 @@ describe('libraryStore', () => {
   });
 
   describe('refreshGroups', () => {
+    test('shows an empty Scholar group when synced settings arrive after library load', () => {
+      useLibraryStore.getState().setLibrary([]);
+      useSettingsStore.getState().setSettings({
+        scholarCollectionPaths: ['Synced/Empty'],
+      } as ReturnType<typeof useSettingsStore.getState>['settings']);
+
+      expect(
+        useLibraryStore
+          .getState()
+          .getGroups()
+          .map((group) => group.name),
+      ).toEqual(['Synced', 'Synced/Empty']);
+    });
+
+    test('keeps an empty Scholar group and its parent after a library reload', () => {
+      useSettingsStore.setState({
+        settings: { scholarCollectionPaths: ['Research/Papers'] } as ReturnType<
+          typeof useSettingsStore.getState
+        >['settings'],
+      });
+      useLibraryStore.getState().setLibrary([]);
+
+      expect(
+        useLibraryStore
+          .getState()
+          .getGroups()
+          .map((group) => group.name),
+      ).toEqual(['Research', 'Research/Papers']);
+    });
+
     test('extracts groups from library books', () => {
       const books = [
         makeBook({ hash: 'a', groupName: 'Fiction' }),

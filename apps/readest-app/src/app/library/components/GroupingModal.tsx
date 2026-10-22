@@ -10,6 +10,7 @@ import { setBookGroup } from '@/utils/book';
 import { useEnv } from '@/context/EnvContext';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useLibraryStore } from '@/store/libraryStore';
+import { useSettingsStore } from '@/store/settingsStore';
 import { useResponsiveSize } from '@/hooks/useResponsiveSize';
 import { useKeyDownActions } from '@/hooks/useKeyDownActions';
 import { BOOK_UNGROUPED_ID, BOOK_UNGROUPED_NAME } from '@/services/constants';
@@ -34,7 +35,7 @@ const GroupingModal: React.FC<GroupingModalProps> = ({
   onConfirm,
 }) => {
   const _ = useTranslation();
-  const { appService } = useEnv();
+  const { appService, envConfig } = useEnv();
   const {
     setLibrary,
     addGroup,
@@ -77,6 +78,18 @@ const GroupingModal: React.FC<GroupingModalProps> = ({
       .some((group) => group && group !== BOOK_UNGROUPED_NAME);
 
   const canRenameGroup = !!renameGroupName;
+
+  const persistCollectionPaths = (update: (paths: string[]) => string[]) => {
+    const store = useSettingsStore.getState();
+    const current = store.settings.scholarCollectionPaths ?? [];
+    const next = update(current);
+    if (next.length === current.length && next.every((path, index) => path === current[index])) {
+      return;
+    }
+    const settings = { ...store.settings, scholarCollectionPaths: next };
+    store.setSettings(settings);
+    void store.saveSettings(envConfig, settings);
+  };
 
   const generateNextUntitledGroupName = () => {
     const baseName = _('Untitled Group');
@@ -155,6 +168,16 @@ const GroupingModal: React.FC<GroupingModalProps> = ({
           }
         });
 
+        persistCollectionPaths((paths) => [
+          ...new Set(
+            paths.map((path) =>
+              path === oldGroupName || path.startsWith(oldGroupName + '/')
+                ? groupName + path.slice(oldGroupName.length)
+                : path,
+            ),
+          ),
+        ]);
+
         setLibrary([...libraryBooks]);
         appService?.saveLibraryBooks(libraryBooks);
 
@@ -169,6 +192,7 @@ const GroupingModal: React.FC<GroupingModalProps> = ({
         }
 
         const newGroup = addGroup(groupName);
+        persistCollectionPaths((paths) => [...new Set([...paths, groupName])]);
         setNewGroup(newGroup);
         setSelectedGroup(newGroup);
         setShowInput(false);

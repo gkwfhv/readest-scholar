@@ -13,6 +13,27 @@ const books: Book[] = Array.from({ length: 30 }, (_, index) => ({
   updatedAt: index,
 }));
 describe('bookshelf presentation parity', () => {
+  it('shows empty Scholar folders at the root and inside their parent', () => {
+    const definition = createBookshelf('', 'default');
+    const result = evaluateBookshelves([], [definition])[0]!;
+    const settings = {
+      libraryGroupBy: 'group' as const,
+      scholarCollectionPaths: ['Research/Papers', 'Archive'],
+    };
+
+    const root = presentBookshelf(result, settings, 'en');
+    expect(root.map((item) => ('books' in item ? item.name : item.title)).sort()).toEqual([
+      'Archive',
+      'Research',
+    ]);
+    expect(root.every((item) => 'books' in item && item.books.length === 0)).toBe(true);
+
+    const research = presentBookshelf(result, settings, 'en', undefined, 'group-id', 'Research');
+    expect(research.map((item) => ('books' in item ? item.name : item.title))).toEqual([
+      'Research/Papers',
+    ]);
+  });
+
   it.each([
     true,
     false,

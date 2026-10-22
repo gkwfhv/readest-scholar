@@ -1,6 +1,12 @@
 import clsx from 'clsx';
 import { useEffect, useRef, useState } from 'react';
-import { MdCheckCircle, MdCheckCircleOutline, MdChevronRight, MdChevronLeft } from 'react-icons/md';
+import {
+  MdCheckCircle,
+  MdCheckCircleOutline,
+  MdChevronRight,
+  MdChevronLeft,
+  MdOutlineFolder,
+} from 'react-icons/md';
 import { useEnv } from '@/context/EnvContext';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useResponsiveSize } from '@/hooks/useResponsiveSize';
@@ -164,6 +170,16 @@ const GroupItem: React.FC<GroupItemProps> = ({
                 />
               </div>
             ))}
+            {group.books.length === 0 && (
+              <div
+                className={clsx(
+                  'text-base-content/50 flex h-full w-full items-center justify-center',
+                  mode === 'grid' && 'col-span-2 row-span-2',
+                )}
+              >
+                <MdOutlineFolder size={mode === 'grid' ? 56 : 44} aria-hidden='true' />
+              </div>
+            )}
           </div>
           {mode === 'list' && showLeftArrow && (
             <div className='absolute left-[-0.5px] top-0 h-full w-12'>
@@ -213,7 +229,12 @@ const GroupItem: React.FC<GroupItemProps> = ({
         {mode === 'list' && (
           <div
             title={groupLabel}
-            className='text-base-content/75 w-28 min-w-24 max-w-40 overflow-hidden text-ellipsis text-base font-semibold'
+            className={clsx(
+              'text-base-content/75 overflow-hidden text-ellipsis text-base font-semibold',
+              group.books.length === 0
+                ? 'min-w-0 max-w-full whitespace-nowrap'
+                : 'w-28 min-w-24 max-w-40',
+            )}
           >
             {groupLabel}
           </div>

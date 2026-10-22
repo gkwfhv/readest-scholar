@@ -346,7 +346,13 @@ const Bookshelf: React.FC<BookshelfProps> = ({
           hideHeading: definition.id === 'default',
           items: presentBookshelf(
             { ...result, definition },
-            { libraryGroupBy: globalGroupBy },
+            {
+              libraryGroupBy: globalGroupBy,
+              scholarCollectionPaths:
+                !queryTerm && definition.id === 'default'
+                  ? settings.scholarCollectionPaths
+                  : undefined,
+            },
             uiLanguage,
             pageDurations,
             groupId,
@@ -371,6 +377,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({
     uiLanguage,
     pageDurations,
     manualGroupName,
+    settings.scholarCollectionPaths,
     _,
   ]);
   const sortedBookshelfItems = useMemo(
@@ -391,7 +398,10 @@ const Bookshelf: React.FC<BookshelfProps> = ({
     // A search with no hits filters the group down to nothing; that must not
     // throw the user back to the library root.
     if (!groupId || queryTerm) return;
-    if ((!unscopedGroup && !activeShelf?.enabled) || currentShelfBooks.length === 0)
+    if (
+      (!unscopedGroup && !activeShelf?.enabled) ||
+      (currentShelfBooks.length === 0 && !manualGroupName)
+    )
       updateUrlParams({ group: null, shelf: null });
   }, [
     groupId,
@@ -399,6 +409,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({
     unscopedGroup,
     activeShelf?.enabled,
     currentShelfBooks.length,
+    manualGroupName,
     updateUrlParams,
   ]);
 
@@ -873,7 +884,8 @@ const Bookshelf: React.FC<BookshelfProps> = ({
         itemSelected={
           'hash' in item
             ? selectedBookSet.has(item.hash)
-            : item.books.every((book) => selectedBookSet.has(book.hash)) ||
+            : (item.books.length > 0 &&
+                item.books.every((book) => selectedBookSet.has(book.hash))) ||
               selectedBookSet.has(item.id)
         }
         setLoading={setLoading}
