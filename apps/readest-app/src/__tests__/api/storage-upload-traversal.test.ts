@@ -88,6 +88,16 @@ describe('POST /api/storage/upload — fileName traversal guard', () => {
     expect(getUploadSignedUrlMock).not.toHaveBeenCalled();
   });
 
+  it('never signs a legacy overwrite for immutable Scholar versions', async () => {
+    const { req, res } = makeReqRes({
+      fileName: 'Scholar/versions/00000000-0000-4000-8000-000000000001',
+      fileSize: 11,
+    });
+    await handler(req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(getUploadSignedUrlMock).not.toHaveBeenCalled();
+  });
+
   it('allows a normal book key through to presigning', async () => {
     const { req, res } = makeReqRes({
       fileName: 'Readest/Books/hash.epub',

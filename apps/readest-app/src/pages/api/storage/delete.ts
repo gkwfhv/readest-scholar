@@ -23,6 +23,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'Missing or invalid fileKey' });
     }
 
+    if (fileKey.startsWith(`${user.id}/Scholar/versions/`)) {
+      return res.status(400).json({ error: 'Protected file version' });
+    }
+
     const supabase = createSupabaseAdminClient();
     const { data: fileRecord, error: fileError } = await supabase
       .from('files')

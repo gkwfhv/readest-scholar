@@ -42,6 +42,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'All fileKeys must be strings' });
     }
 
+    if (fileKeys.some((key) => key.startsWith(`${user.id}/Scholar/versions/`))) {
+      return res.status(400).json({ error: 'Protected file version' });
+    }
+
     const supabase = createSupabaseAdminClient();
 
     // Fetch all files that match the provided keys and belong to the user

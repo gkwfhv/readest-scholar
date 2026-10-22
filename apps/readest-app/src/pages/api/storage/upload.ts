@@ -39,6 +39,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Invalid fileName' });
   }
 
+  // Scholar versions are immutable. The generic legacy signer permits overwrite,
+  // so it must never issue a URL for the reserved Scholar namespace.
+  if (decodeURIComponent(fileName).startsWith('Scholar/')) {
+    return res.status(400).json({ error: 'Reserved fileName' });
+  }
+
   if (media) {
     if (!PUBLIC_MEDIA_KINDS.includes(media)) {
       return res.status(400).json({ error: 'Invalid media' });
