@@ -223,6 +223,27 @@ describe('replicaSync durable outbox wiring', () => {
     expect(new LocalStoragePendingRowStore().load()).toEqual([stale]);
   });
 
+  test('replays an old metadata field edit with its original content clock', async () => {
+    const stale = makePendingRow('account-a');
+    const old = hlcPack(Date.now() - 120_000, 0, 'dev-a') as Hlc;
+    stale.kind = 'settings';
+    stale.updated_at_ts = old;
+    stale.fields_jsonb['name']!.t = old;
+    new LocalStoragePendingRowStore().put(stale);
+    const client = makeFakeClient();
+    const ctx = initReplicaSync({
+      deviceId: 'dev-a',
+      cursorStore: makeMemoryCursorStore(),
+      hlcStore: new InMemoryHlcStore(),
+      client: client as never,
+    });
+
+    await ctx.manager.flush();
+
+    expect(client.push).toHaveBeenCalledWith([stale]);
+    expect(new LocalStoragePendingRowStore().load()).toEqual([]);
+  });
+
   test('does not restamp a stale deletion past a later reincarnation', async () => {
     const stale = makePendingRow('account-a');
     const old = hlcPack(Date.now() - 120_000, 0, 'dev-a') as Hlc;

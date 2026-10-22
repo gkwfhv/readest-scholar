@@ -115,6 +115,58 @@ describe('validatePushBatch', () => {
     }
   });
 
+  test('version 2 accepts an old field-only settings edit without restamping it', () => {
+    const old = hlcPack(NOW - 120_000, 0, 'dev-a') as Hlc;
+    const row = baseRow({
+      kind: 'settings',
+      manifest_jsonb: null,
+      updated_at_ts: old,
+      fields_jsonb: { theme: { v: 'dark', t: old, s: 'dev-a' } },
+    });
+    expect(validatePushBatch({ protocolVersion: 2, rows: [row] }, USER, NOW)).toEqual({
+      ok: true,
+      rows: [row],
+    });
+    expect(validatePushBatch({ rows: [row] }, USER, NOW).ok).toBe(false);
+  });
+
+  test('version 2 still blocks old binary, tombstone and reincarnation operations', () => {
+    const old = hlcPack(NOW - 120_000, 0, 'dev-a') as Hlc;
+    const row = baseRow({ updated_at_ts: old });
+    expect(validatePushBatch({ protocolVersion: 2, rows: [row] }, USER, NOW).ok).toBe(false);
+    for (const changes of [
+      { deleted_at_ts: old },
+      { reincarnation: 'new-life' },
+      { manifest_jsonb: { files: [], schemaVersion: 1 } },
+    ]) {
+      const metadataRow = baseRow({ kind: 'settings', updated_at_ts: old, ...changes });
+      expect(validatePushBatch({ protocolVersion: 2, rows: [metadataRow] }, USER, NOW).ok).toBe(
+        false,
+      );
+    }
+  });
+
+  test('version 2 rejects a future field clock even when row time is current', () => {
+    const future = hlcPack(NOW + HLC_SKEW_TOLERANCE_MS + 1, 0, 'dev-a') as Hlc;
+    const row = baseRow({
+      kind: 'settings',
+      fields_jsonb: { theme: { v: 'dark', t: future, s: 'dev-a' } },
+    });
+    const result = validatePushBatch({ protocolVersion: 2, rows: [row] }, USER, NOW);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe('CLOCK_SKEW');
+  });
+
+  test('version 2 rejects malformed field clocks as validation errors', () => {
+    const row = baseRow({
+      kind: 'settings',
+      fields_jsonb: { theme: { v: 'dark', t: 'broken' as Hlc, s: 'dev-a' } },
+    });
+    const result = validatePushBatch({ protocolVersion: 2, rows: [row] }, USER, NOW);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.status).toBe(422);
+  });
+
   test('reports the offending index for downstream telemetry', () => {
     const rows = [
       baseRow({ replica_id: 'r0' }),

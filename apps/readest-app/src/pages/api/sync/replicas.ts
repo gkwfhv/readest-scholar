@@ -84,10 +84,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const mergeRpc =
+    (body as { protocolVersion?: unknown }).protocolVersion === 2
+      ? 'crdt_merge_replica_v2'
+      : 'crdt_merge_replica';
   const merged: ReplicaRow[] = [];
   for (const row of validation.rows) {
     const { data, error } = await supabase
-      .rpc('crdt_merge_replica', {
+      .rpc(mergeRpc, {
         p_user_id: row.user_id,
         p_kind: row.kind,
         p_replica_id: row.replica_id,

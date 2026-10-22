@@ -74,6 +74,8 @@
 
 - Phase 3 [staging 变更协议升级与回退](docs/evidence/phase3/staging-change-protocol-upgrade-2026-10-23.md)已在服务器完成：私有合成快照与迁移前状态恢复、032/033 真正升级、候选 Web 和旧 Web 回退、匿名/合成账户接口实测均通过。数据库现为 033、Web 已恢复原镜像；候选本地镜像保留。无 GitHub/GHCR 推送。
 
+- Phase 3 [长离线字段重放与冲突历史基础](docs/evidence/phase3/offline-field-conflict-protocol-2026-10-23.md)已在服务器本地验证：原始字段时钟不重写，旧二进制与生命周期操作仍受保护；本地落败字段在清队列前保存，034 历史表在隔离恢复库验证双方版本、重复提交无新游标、账户隔离、旧 RPC 兼容和事务回滚。全量 Vitest 13,904 通过、16 跳过，Lint、格式检查和 Web 构建通过。staging 仍为 DB033/旧 Web，冲突界面、双端故障验收及其余 Phase 3 内容未完成；未推送 GitHub/GHCR。
+
 ## 下一动作
 
 1. [Phase 2 非生产合成数据验收](docs/evidence/phase2/acceptance-2026-10-22.md)已通过计划判据，开始 Phase 3 的可靠同步与离线开发。新版 Linux CEF 客户端已在用户授权下接受本地网络许可，合成账户登录、集合拉取及菜单同步状态通过；201 本地文件的跨端读写与故障注入仍列入 Phase 3/7 门槛。Phase 3 的服务端变更序号、分页 API 和客户端落盘后确认已在服务器本地通过回归；staging 数据库升级与 Web 候选回退已实测；下一步是长离线冲突处理、双设备故障注入及同步状态界面。

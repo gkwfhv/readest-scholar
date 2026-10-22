@@ -731,6 +731,46 @@ describe('ReplicaSyncManager durable pending rows', () => {
     resumed.stopAutoSync();
   });
 
+  test('records a losing field before clearing the durable outbox', async () => {
+    const pendingStore = makePendingStore();
+    const old = makeRow('conflict', hlcPack(NOW - 120_000, 0, DEV) as Hlc);
+    old.kind = 'settings';
+    const winner = makeRow('conflict', hlcPack(NOW, 0, 'dev-b') as Hlc);
+    winner.kind = 'settings';
+    const onMergeConflict = vi.fn(() => {
+      expect(pendingStore.rows.get(keyOf(old))).toEqual(old);
+    });
+    const manager = new ReplicaSyncManager({
+      hlc: new HlcGenerator(DEV, () => NOW),
+      client: { ...makeFakeClient(), push: vi.fn(async () => [winner]) },
+      cursorStore: { get: () => null, set: () => {} },
+      pendingStore,
+      onMergeConflict,
+    });
+    manager.markDirty(old);
+    await manager.flush();
+    expect(onMergeConflict).toHaveBeenCalledWith(old, winner);
+    expect(pendingStore.rows.size).toBe(0);
+  });
+
+  test('keeps the outbox when conflict archiving fails', async () => {
+    const pendingStore = makePendingStore();
+    const old = makeRow('conflict');
+    const winner = makeRow('conflict', hlcPack(NOW + 1, 0, 'dev-b') as Hlc);
+    const manager = new ReplicaSyncManager({
+      hlc: new HlcGenerator(DEV, () => NOW),
+      client: { ...makeFakeClient(), push: vi.fn(async () => [winner]) },
+      cursorStore: { get: () => null, set: () => {} },
+      pendingStore,
+      onMergeConflict: () => {
+        throw new Error('archive unavailable');
+      },
+    });
+    manager.markDirty(old);
+    await expect(manager.flush()).rejects.toThrow('archive unavailable');
+    expect(pendingStore.rows.get(keyOf(old))).toEqual(old);
+  });
+
   test('an acknowledgement cannot remove a newer edit made during the request', async () => {
     const pendingStore = makePendingStore();
     const original = makeRow('concurrent');

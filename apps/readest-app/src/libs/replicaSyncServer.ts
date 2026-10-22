@@ -1,6 +1,6 @@
 import { MAX_PUSH_BATCH } from '@/types/replica';
 import { hlcParse } from '@/libs/crdt';
-import { isAllowedKind, validateRow } from '@/libs/replicaSchemas';
+import { isAllowedKind, isOfflineReplayKind, validateRow } from '@/libs/replicaSchemas';
 import type { Hlc, ReplicaRow } from '@/types/replica';
 import type { SyncErrorCode } from '@/libs/errors';
 
@@ -14,11 +14,15 @@ export const MAX_PULL_BATCH = 50;
 
 export interface PushReplicasBody {
   rows: ReplicaRow[];
+  protocolVersion?: number;
 }
 
 export type PushValidation =
   | { ok: true; rows: ReplicaRow[] }
   | { ok: false; status: number; code: SyncErrorCode; message: string; offendingIndex?: number };
+
+const isWellFormedHlc = (value: unknown): value is Hlc =>
+  typeof value === 'string' && /^[0-9a-f]{13}-[0-9a-f]{8}-.+$/u.test(value);
 
 export const clampHlcSkew = (hlc: Hlc, nowMs: number): boolean => {
   const { physicalMs } = hlcParse(hlc);
@@ -29,7 +33,7 @@ export const validatePushBatch = (body: unknown, userId: string, nowMs: number):
   if (typeof body !== 'object' || body === null) {
     return { ok: false, status: 400, code: 'VALIDATION', message: 'body must be an object' };
   }
-  const rows = (body as PushReplicasBody).rows;
+  const { rows, protocolVersion } = body as PushReplicasBody;
   if (!Array.isArray(rows)) {
     return { ok: false, status: 400, code: 'VALIDATION', message: 'body.rows must be an array' };
   }
@@ -74,14 +78,65 @@ export const validatePushBatch = (body: unknown, userId: string, nowMs: number):
         offendingIndex: i,
       };
     }
-    if (!clampHlcSkew(row.updated_at_ts, nowMs)) {
+    if (
+      !isWellFormedHlc(row.updated_at_ts) ||
+      (row.deleted_at_ts !== null && !isWellFormedHlc(row.deleted_at_ts))
+    ) {
+      return {
+        ok: false,
+        status: 422,
+        code: 'VALIDATION',
+        message: `row[${i}] has a malformed operation clock`,
+        offendingIndex: i,
+      };
+    }
+    // Version 2 separates the server change cursor from content clocks.
+    // Only metadata fields may arrive with an old HLC. Legacy clients and
+    // manifest/delete/revival operations keep the original narrow window
+    // until their conflict branches have a durable resolution protocol.
+    const fieldOnlyReplay =
+      protocolVersion === 2 &&
+      isOfflineReplayKind(row.kind) &&
+      row.manifest_jsonb === null &&
+      row.deleted_at_ts === null &&
+      row.reincarnation === null;
+    const rowTime = hlcParse(row.updated_at_ts).physicalMs;
+    if (
+      !Number.isFinite(rowTime) ||
+      (fieldOnlyReplay
+        ? rowTime > nowMs + HLC_SKEW_TOLERANCE_MS
+        : !clampHlcSkew(row.updated_at_ts, nowMs))
+    ) {
       return {
         ok: false,
         status: 409,
         code: 'CLOCK_SKEW',
-        message: `row[${i}].updated_at_ts physical time is outside ±${HLC_SKEW_TOLERANCE_MS}ms of server`,
+        message: `row[${i}].updated_at_ts physical time is outside the allowed window`,
         offendingIndex: i,
       };
+    }
+    if (fieldOnlyReplay) {
+      for (const field of Object.values(row.fields_jsonb)) {
+        if (!isWellFormedHlc(field.t)) {
+          return {
+            ok: false,
+            status: 422,
+            code: 'VALIDATION',
+            message: `row[${i}] has a malformed field clock`,
+            offendingIndex: i,
+          };
+        }
+        const fieldTime = hlcParse(field.t).physicalMs;
+        if (fieldTime > nowMs + HLC_SKEW_TOLERANCE_MS) {
+          return {
+            ok: false,
+            status: 409,
+            code: 'CLOCK_SKEW',
+            message: `row[${i}] field clock is ahead of the server`,
+            offendingIndex: i,
+          };
+        }
+      }
     }
     if (row.deleted_at_ts && !clampHlcSkew(row.deleted_at_ts, nowMs)) {
       return {

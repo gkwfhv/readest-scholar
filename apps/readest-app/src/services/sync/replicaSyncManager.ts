@@ -44,6 +44,8 @@ export interface ReplicaSyncManagerOpts {
   /** Called at push time: returns the row to actually send, or null to skip it. */
   prepareRow?: (row: ReplicaRow) => Promise<ReplicaRow | null>;
   onAcknowledged?: (row: ReplicaRow) => void;
+  /** Persist losing field versions before their durable outbox rows are acknowledged. */
+  onMergeConflict?: (sent: ReplicaRow, merged: ReplicaRow) => void | Promise<void>;
 }
 
 interface DirtyKey {
@@ -223,10 +225,22 @@ export class ReplicaSyncManager {
     if (!snapshot.length) return;
 
     const pushed: number[] = [];
+    const recordSuccess = async (indexes: number[], merged: ReplicaRow[]) => {
+      if (this.opts.onMergeConflict) {
+        if (merged.length !== indexes.length) throw new Error('Incomplete replica merge response');
+        for (let j = 0; j < indexes.length; j++) {
+          await this.opts.onMergeConflict(snapshot[indexes[j]!]!, merged[j]!);
+        }
+      }
+      pushed.push(...indexes);
+    };
     let deferred: unknown = null;
     try {
-      await this.opts.client.push(snapshot);
-      snapshot.forEach((_, i) => pushed.push(i));
+      const merged = await this.opts.client.push(snapshot);
+      await recordSuccess(
+        snapshot.map((_, i) => i),
+        merged,
+      );
     } catch (err) {
       if (!isIsolatableError(err)) throw err;
       // One bad row fails the ENTIRE push, and the queue is only cleared on
@@ -242,8 +256,8 @@ export class ReplicaSyncManager {
       });
       for (const [kind, indexes] of indexesByKind) {
         try {
-          await this.opts.client.push(indexes.map((i) => snapshot[i]!));
-          pushed.push(...indexes);
+          const merged = await this.opts.client.push(indexes.map((i) => snapshot[i]!));
+          await recordSuccess(indexes, merged);
           continue;
         } catch (kindErr) {
           if (isUnknownKindError(kindErr)) {
@@ -264,8 +278,8 @@ export class ReplicaSyncManager {
         }
         for (const i of indexes) {
           try {
-            await this.opts.client.push([snapshot[i]!]);
-            pushed.push(i);
+            const merged = await this.opts.client.push([snapshot[i]!]);
+            await recordSuccess([i], merged);
           } catch (rowErr) {
             if (isUnknownKindError(rowErr)) this.unsupportedKinds.add(kind);
             else if (isRowRejection(rowErr)) this.rejectedRows.add(queued[i]!);

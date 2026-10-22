@@ -2,9 +2,11 @@ import { acknowledgeBookshelfOperation } from '@/services/bookshelves/journal';
 import { HlcGenerator, hlcParse } from '@/libs/crdt';
 import { LocalStorageHlcStore, type HlcSnapshotStore } from '@/libs/hlcStore';
 import { ReplicaSyncClient } from '@/libs/replicaSyncClient';
+import { isOfflineReplayKind } from '@/libs/replicaSchemas';
 import { markSettled, onSettled } from '@/utils/event';
 import { ReplicaSyncManager, type CursorStore } from './replicaSyncManager';
 import { LocalStoragePendingRowStore } from './replicaPendingStore';
+import { LocalStorageReplicaConflictStore } from './replicaConflictStore';
 import { getReplicaAdapter } from './replicaRegistry';
 
 const REPLICA_SYNC_READY_EVENT = 'replica-sync-ready';
@@ -77,6 +79,7 @@ export const initReplicaSync = (opts: ReplicaSyncInitOpts): ReplicaSyncContext =
     client,
     cursorStore: opts.cursorStore,
     pendingStore: new LocalStoragePendingRowStore(),
+    onMergeConflict: (sent, merged) => new LocalStorageReplicaConflictStore().record(sent, merged),
     prepareRow: async (row) => {
       const { getUserID } = await import('@/utils/access');
       const { isCredentialsSyncEnabled, isSyncCategoryEnabled } = await import('./syncCategories');
@@ -113,15 +116,23 @@ export const initReplicaSync = (opts: ReplicaSyncInitOpts): ReplicaSyncContext =
           Math.abs(rowTime - now) > 30_000 ||
           (deletionTime !== null && Math.abs(deletionTime - now) > 30_000);
         if (outsideWindow) {
-          // updated_at_ts is also the legacy manifest/reincarnation order and
-          // pull cursor. Restamping any old row can silently reorder those
-          // operations, so preserve it until a versioned transport cursor and
-          // conflict protocol are available.
-          console.warn('replica pending row requires versioned conflict handling', {
-            kind: row.kind,
-            replicaId: row.replica_id,
-          });
-          return null;
+          // Version 2 accepts old field clocks for metadata-only rows. Never
+          // restamp them: the server change sequence drives delivery, while
+          // the original field HLC still decides content order. Binary and
+          // lifecycle operations need explicit conflict branches first.
+          const canReplayFields =
+            isOfflineReplayKind(row.kind) &&
+            row.manifest_jsonb === null &&
+            row.deleted_at_ts === null &&
+            row.reincarnation === null &&
+            rowTime <= now + 30_000;
+          if (!canReplayFields) {
+            console.warn('replica pending row requires versioned conflict handling', {
+              kind: row.kind,
+              replicaId: row.replica_id,
+            });
+            return null;
+          }
         }
         return prepared;
       }

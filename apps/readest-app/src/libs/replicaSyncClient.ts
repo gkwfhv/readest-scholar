@@ -116,7 +116,7 @@ export class ReplicaSyncClient {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ rows }),
+        body: JSON.stringify({ protocolVersion: 2, rows }),
       });
     } catch (cause) {
       throw new SyncError('SERVER', 'Network failure during push', { cause });

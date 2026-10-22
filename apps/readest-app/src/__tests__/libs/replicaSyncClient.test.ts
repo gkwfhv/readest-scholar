@@ -50,7 +50,7 @@ describe('ReplicaSyncClient.push', () => {
     expect(init.method).toBe('POST');
     expect(init.headers.Authorization).toBe('Bearer fake-token');
     expect(init.headers['Content-Type']).toBe('application/json');
-    expect(JSON.parse(init.body)).toEqual({ rows: [sampleRow] });
+    expect(JSON.parse(init.body)).toEqual({ protocolVersion: 2, rows: [sampleRow] });
     expect(result).toEqual([sampleRow]);
   });
 

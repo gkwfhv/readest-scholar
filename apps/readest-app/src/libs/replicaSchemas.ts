@@ -220,6 +220,17 @@ export const KIND_ALLOWLIST: Record<string, KindSpec> = {
   },
 };
 
+/** Kinds whose old field edits can replay without file or lifecycle operations. */
+export const isOfflineReplayKind = (kind: string): boolean =>
+  [
+    'opds_catalog',
+    'abs_server',
+    'custom_translator',
+    'translation_prompt',
+    'custom_tts',
+    'settings',
+  ].includes(kind);
+
 export const isAllowedKind = (kind: string): boolean => Object.hasOwn(KIND_ALLOWLIST, kind);
 
 export interface FilenameOk {
