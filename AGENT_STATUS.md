@@ -80,6 +80,8 @@
 
 - Phase 3 [单字段冲突恢复与并发保护](docs/evidence/phase3/field-recovery-ui-2026-10-23.md)在服务器本地完成：迁移 036、恢复 RPC、按账户中文恢复区、敏感值遮罩、展开时快照与提交时 CAS。目标 5/5、TypeScript/Biome、Web standalone 构建通过；实际浏览器验证正常恢复和展开后的并发编辑拒绝。staging DB036，正式 Web 仍为原镜像，候选仅回环运行；全量测试日志待收尾。无 GitHub/GHCR 推送；Phase 3 尚需双设备故障与注释、二进制和缓存。
 
+- Phase 3 [双逻辑设备元数据故障探针](docs/evidence/phase3/two-device-metadata-fault-probe-2026-10-23.md)在服务器候选 Web 上通过：离线旧字段重放、在线新值胜出、模拟响应丢失后的重复请求、候选 Web 重启、增量游标收敛和历史分支留存；独立临时副本与历史清理为 0。该脚本只模拟协议设备，真实桌面/Web 断网及数据库进程崩溃仍待验收。无 GitHub/GHCR 推送。
+
 ## 下一动作
 
 1. [Phase 2 非生产合成数据验收](docs/evidence/phase2/acceptance-2026-10-22.md)已通过计划判据，开始 Phase 3 的可靠同步与离线开发。新版 Linux CEF 客户端已在用户授权下接受本地网络许可，合成账户登录、集合拉取及菜单同步状态通过；201 本地文件的跨端读写与故障注入仍列入 Phase 3/7 门槛。Phase 3 的服务端变更序号、分页 API 和客户端落盘后确认已在服务器本地通过回归；staging 数据库升级与 Web 候选回退已实测；单字段冲突恢复已在候选界面和数据库验证。下一步是笔记/批注及二进制冲突、双设备故障注入、按需缓存。
