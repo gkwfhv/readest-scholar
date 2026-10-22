@@ -1,0 +1,74 @@
+Window: "Readest Scholar", App: Readest Scholar Update Smoke.
+0 standard window Readest Scholar, Secondary Actions: Raise
+	1 scroll area
+		2 HTML content Description: Readest Scholar, URL: tauri://localhost/?q=Scholar+Scale+Paper+101
+			3 text Readest Scholar
+			4 container 书库
+				5 container 图书馆标题
+					6 toggle button 搜索图书, Value: off
+					7 text field (settable) Value: Scholar Scale Paper 101, Placeholder: 搜索书籍...
+					8 button 清除搜索
+					9 pop up button 导入书籍
+					10 button 选择书籍
+					11 pop up button 查看菜单
+					12 pop up button 设置菜单
+				13 container 你的书架
+					14 container 书架
+						15 button 搜索图书内容
+						16 container
+							17 heading 搜索结果, Value: 2
+								18 text 搜索结果
+							19 button Scholar Scale Paper 101
+							20 pop up button 导入书籍
+				21 container 书籍详情
+					22 text 书籍详情
+					23 button 关闭
+					24 button 查看书籍封面
+					25 text Scholar Scale Paper 101
+					26 text Synthetic Author 101
+					27 button 编辑元数据
+					28 button 从云端下载
+					29 pop up button 删除书籍选项
+					30 pop up button 更多操作
+					31 button 元数据
+					32 text 出版商
+					33 text 未知
+					34 text 出版日期
+					35 text 未知
+					36 text 更新日期
+					37 text 2026年10月22日
+					38 text 添加日期
+					39 text 2026年10月22日
+					40 text 语言
+					41 text 未知
+					42 text 格式
+					43 text PDF
+					44 text 文件大小
+					45 text 未知
+					46 text 页数
+					47 text 2
+					48 text 标识符
+					49 text 未知
+					50 text 主题
+					51 text 未知
+					52 text 标签
+					53 button Phase2 UI QA
+					54 button Cross-device
+					55 button Desktop QA
+					56 button 系列
+					57 text 系列
+					58 text 未知
+					59 text 系列编号
+					60 text 未知
+					61 button 简介
+					62 text Synthetic staging scale check
+	63 close button
+	64 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window
+	65 minimize button
+66 menu bar
+	67 Readest Scholar Update Smoke
+	68 File
+	69 Edit
+	70 View
+	71 Window
+	72 Help

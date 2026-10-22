@@ -23,4 +23,4 @@ Using the same 201-document browser account, Paper 101 was assigned to a new `Ph
 
 ## Remaining acceptance
 
-The packaged candidate completed a [server-only staging upgrade and rollback exercise](staging-image-upgrade-rollback-2026-10-22.md). Accepted staging was restored to its previous Web image; it still returns 0 signed URLs for this 201-key request, while the separate candidate returns 201. Phase 2 still requires the updated three-pane desktop check and a Web/desktop bidirectional collection and metadata edit at this scale. This evidence does not approve Phase 2 or production release.
+The packaged candidate completed a [server-only staging upgrade and rollback exercise](staging-image-upgrade-rollback-2026-10-22.md). Accepted staging was restored to its previous Web image; it still returns 0 signed URLs for this 201-key request, while the separate candidate returns 201. A separate [201-document Web ↔ desktop round trip](cross-device-201-collections-2026-10-22.md) now covers collection and tag edits while preserving DOI. Phase 2 still requires an updated three-pane native build and visual check. This evidence does not approve Phase 2 or production release.
