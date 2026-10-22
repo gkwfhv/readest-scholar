@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { HlcGenerator, hlcPack } from '@/libs/crdt';
 import { SyncError } from '@/libs/errors';
 import { ReplicaSyncManager } from '@/services/sync/replicaSyncManager';
+import { LocalStoragePendingRowStore } from '@/services/sync/replicaPendingStore';
 import type { Hlc, ReplicaRow } from '@/types/replica';
 
 const NOW = 1_700_000_000_000;
@@ -96,6 +97,25 @@ describe('ReplicaSyncManager.markDirty + flush', () => {
     await vi.advanceTimersByTimeAsync(2);
     expect(client.push).toHaveBeenCalledOnce();
     expect(client.push.mock.calls[0]![0]).toHaveLength(1);
+  });
+
+  test('retries a transient server outage without a new online event', async () => {
+    const push = vi
+      .fn<(rows: ReplicaRow[]) => Promise<ReplicaRow[]>>()
+      .mockRejectedValueOnce(new SyncError('SERVER', 'network outage'))
+      .mockResolvedValueOnce([makeRow('r1')]);
+    const { manager } = makeManager({ push });
+    manager.markDirty(makeRow('r1'));
+
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(manager.pendingCount()).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(4999);
+    expect(push).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(push).toHaveBeenCalledTimes(2);
+    expect(manager.pendingCount()).toBe(0);
   });
 
   test('successive markDirty resets the debounce window', async () => {
@@ -624,5 +644,148 @@ describe('ReplicaSyncManager.pullMany (batched incremental)', () => {
     await manager.pullMany(['dictionary', 'abs_server']);
     expect(client.pullBatch).toHaveBeenCalledOnce();
     expect(client.pullBatch.mock.calls[0]![0]!.map((c) => c.kind)).toEqual(['dictionary']);
+  });
+});
+
+describe('ReplicaSyncManager durable pending rows', () => {
+  const keyOf = (row: ReplicaRow) => JSON.stringify([row.user_id, row.kind, row.replica_id]);
+
+  const makePendingStore = () => {
+    const rows = new Map<string, ReplicaRow>();
+    return {
+      rows,
+      load: vi.fn(() => [...rows.values()]),
+      put: vi.fn((row: ReplicaRow) => {
+        rows.set(keyOf(row), row);
+      }),
+      remove: vi.fn((row: ReplicaRow) => {
+        rows.delete(keyOf(row));
+      }),
+    };
+  };
+
+  const createManager = (
+    pendingStore: ReturnType<typeof makePendingStore>,
+    client = makeFakeClient(),
+  ) =>
+    new ReplicaSyncManager({
+      hlc: new HlcGenerator(DEV, () => NOW),
+      client,
+      cursorStore: { get: () => null, set: () => {} },
+      pendingStore,
+      debounceMs: 10,
+    });
+
+  test('journals a non-bookshelf edit before the network debounce', () => {
+    const pendingStore = makePendingStore();
+    const manager = createManager(pendingStore);
+    const row = makeRow('offline-edit');
+
+    manager.markDirty(row);
+
+    expect(pendingStore.put).toHaveBeenCalledWith(row);
+    expect(pendingStore.rows.get(keyOf(row))).toEqual(row);
+    expect(manager.pendingCount()).toBe(1);
+  });
+
+  test('replays a persisted row on a new manager and clears it only after push acknowledgement', async () => {
+    const pendingStore = makePendingStore();
+    const row = makeRow('crash-recovery');
+    pendingStore.rows.set(keyOf(row), row);
+    const push = vi.fn(async (rows: ReplicaRow[]) => rows);
+    const manager = createManager(pendingStore, { ...makeFakeClient(), push });
+
+    expect(manager.pendingCount()).toBe(1);
+    manager.startAutoSync();
+    await vi.advanceTimersByTimeAsync(11);
+
+    expect(push).toHaveBeenCalledWith([row]);
+    expect(pendingStore.rows.size).toBe(0);
+    expect(manager.pendingCount()).toBe(0);
+    manager.stopAutoSync();
+  });
+
+  test('an offline failure survives restart and is retried from the persisted row', async () => {
+    const pendingStore = makePendingStore();
+    const row = makeRow('retry-after-crash');
+    pendingStore.rows.set(keyOf(row), row);
+    const failed = createManager(pendingStore, {
+      ...makeFakeClient(),
+      push: vi.fn(async () => {
+        throw new SyncError('SERVER', 'offline');
+      }),
+    });
+
+    await expect(failed.flush()).rejects.toThrow('offline');
+    expect(pendingStore.rows.get(keyOf(row))).toEqual(row);
+    failed.stopAutoSync();
+    vi.clearAllTimers();
+
+    const push = vi.fn(async (rows: ReplicaRow[]) => rows);
+    const resumed = createManager(pendingStore, { ...makeFakeClient(), push });
+    resumed.startAutoSync();
+    await vi.advanceTimersByTimeAsync(11);
+
+    expect(push).toHaveBeenCalledWith([row]);
+    expect(pendingStore.rows.size).toBe(0);
+    resumed.stopAutoSync();
+  });
+
+  test('an acknowledgement cannot remove a newer edit made during the request', async () => {
+    const pendingStore = makePendingStore();
+    const original = makeRow('concurrent');
+    const newer = makeRow('concurrent', hlcPack(NOW + 1, 0, DEV) as Hlc);
+    let manager: ReplicaSyncManager;
+    const push = vi.fn(async (rows: ReplicaRow[]) => {
+      manager.markDirty(newer);
+      return rows;
+    });
+    manager = createManager(pendingStore, { ...makeFakeClient(), push });
+    manager.markDirty(original);
+
+    await manager.flush();
+
+    expect(pendingStore.rows.get(keyOf(newer))?.updated_at_ts).toBe(newer.updated_at_ts);
+    expect(manager.pendingCount()).toBe(1);
+  });
+
+  test('an edit from another window remains queued after this window acknowledges an older snapshot', async () => {
+    localStorage.clear();
+    try {
+      const pendingStore = new LocalStoragePendingRowStore();
+      const original = makeRow('other-window');
+      const newer = makeRow('other-window', hlcPack(NOW + 1, 0, DEV) as Hlc);
+      const push = vi.fn(async (rows: ReplicaRow[]) => {
+        new LocalStoragePendingRowStore().put(newer);
+        return rows;
+      });
+      const manager = new ReplicaSyncManager({
+        hlc: new HlcGenerator(DEV, () => NOW),
+        client: { ...makeFakeClient(), push },
+        cursorStore: { get: () => null, set: () => {} },
+        pendingStore,
+        debounceMs: 10,
+      });
+      manager.markDirty(original);
+
+      await manager.flush();
+
+      expect(pendingStore.load()).toEqual([newer]);
+      expect(manager.pendingCount()).toBe(1);
+      expect(manager.pendingKeys()).toEqual([{ kind: 'dictionary', replicaId: 'other-window' }]);
+      manager.stopAutoSync();
+    } finally {
+      localStorage.clear();
+    }
+  });
+
+  test('same kind and replica id from two accounts stay separate', () => {
+    const pendingStore = makePendingStore();
+    const manager = createManager(pendingStore);
+    manager.markDirty(makeRow('same'));
+    manager.markDirty({ ...makeRow('same'), user_id: 'u2' });
+
+    expect(manager.pendingCount()).toBe(2);
+    expect(pendingStore.rows.size).toBe(2);
   });
 });

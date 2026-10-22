@@ -27,10 +27,19 @@ export interface CursorStore {
   set(kind: string, hlc: Hlc): void;
 }
 
+/** Synchronous journal: a row must be durable before markDirty returns. */
+export interface PendingRowStore {
+  load(): ReplicaRow[];
+  put(row: ReplicaRow): void;
+  /** Return false when a newer persisted version replaced the snapshot. */
+  remove(row: ReplicaRow): boolean | void;
+}
+
 export interface ReplicaSyncManagerOpts {
   hlc: HlcGenerator;
   client: Pick<ReplicaSyncClient, 'push' | 'pull' | 'pullBatch'>;
   cursorStore: CursorStore;
+  pendingStore?: PendingRowStore;
   debounceMs?: number;
   /** Called at push time: returns the row to actually send, or null to skip it. */
   prepareRow?: (row: ReplicaRow) => Promise<ReplicaRow | null>;
@@ -42,11 +51,10 @@ interface DirtyKey {
   replicaId: string;
 }
 
-// Durable bookshelf edits retain their account across sign-out/sign-in.
+// Every kind keeps the account in its key. The same content ID may exist in
+// different accounts, and pending writes must never merge across them.
 const dirtyKeyOf = (row: ReplicaRow): string =>
-  row.kind === 'bookshelf'
-    ? JSON.stringify([row.user_id, row.kind, row.replica_id])
-    : `${row.kind}::${row.replica_id}`;
+  JSON.stringify([row.user_id, row.kind, row.replica_id]);
 
 const mergeDirtyRows = (a: ReplicaRow, b: ReplicaRow): ReplicaRow => {
   if (a.user_id !== b.user_id || a.kind !== b.kind || a.replica_id !== b.replica_id) {
@@ -112,6 +120,8 @@ export class ReplicaSyncManager {
   private readonly rejectedRows = new WeakSet<ReplicaRow>();
   private readonly debounceMs: number;
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private retryDelayMs = 5000;
   private autoSyncInstalled = false;
   private readonly visibilityHandler = () => {
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
@@ -124,21 +134,53 @@ export class ReplicaSyncManager {
 
   constructor(private readonly opts: ReplicaSyncManagerOpts) {
     this.debounceMs = opts.debounceMs ?? 5000;
+    for (const row of opts.pendingStore?.load() ?? []) {
+      const key = dirtyKeyOf(row);
+      const existing = this.dirty.get(key);
+      this.dirty.set(key, existing ? mergeDirtyRows(existing, row) : row);
+    }
   }
 
   markDirty(row: ReplicaRow): void {
     const key = dirtyKeyOf(row);
     const existing = this.dirty.get(key);
-    this.dirty.set(key, existing ? mergeDirtyRows(existing, row) : row);
+    const merged = existing ? mergeDirtyRows(existing, row) : row;
+    // Journal first. A crash or storage error must not leave an apparently
+    // queued operation that only existed in memory.
+    this.opts.pendingStore?.put(merged);
+    this.dirty.set(key, merged);
     this.scheduleDebouncedFlush();
   }
 
   private scheduleDebouncedFlush(): void {
     if (this.debounceTimer !== null) clearTimeout(this.debounceTimer);
+    // A fresh edit gets its own debounce window; the old retry is redundant.
+    if (this.retryTimer !== null) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
     this.debounceTimer = setTimeout(() => {
       this.debounceTimer = null;
       void this.flush().catch((e) => console.warn('replica sync debounced flush failed', e));
     }, this.debounceMs);
+  }
+
+  private clearRetry(): void {
+    if (this.retryTimer !== null) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
+    this.retryDelayMs = 5000;
+  }
+
+  private scheduleRetry(): void {
+    if (this.retryTimer !== null) return;
+    const delay = this.retryDelayMs;
+    this.retryDelayMs = Math.min(delay * 2, 60_000);
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      void this.flush().catch((e) => console.warn('replica sync retry failed', e));
+    }, delay);
   }
 
   async flush(): Promise<void> {
@@ -146,13 +188,23 @@ export class ReplicaSyncManager {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
     }
-    if (this.dirty.size === 0) return;
     const entries = Array.from(this.dirty.entries()).filter(
       ([, row]) => !this.unsupportedKinds.has(row.kind) && !this.rejectedRows.has(row),
     );
-    if (entries.length === 0) return;
-    for (let offset = 0; offset < entries.length; offset += MAX_PUSH_BATCH) {
-      await this.flushBatch(entries.slice(offset, offset + MAX_PUSH_BATCH));
+    if (entries.length === 0) {
+      this.clearRetry();
+      return;
+    }
+    try {
+      for (let offset = 0; offset < entries.length; offset += MAX_PUSH_BATCH) {
+        await this.flushBatch(entries.slice(offset, offset + MAX_PUSH_BATCH));
+      }
+      this.clearRetry();
+    } catch (err) {
+      // A server or network outage can recover without firing the browser's
+      // online event. Bounded backoff keeps durable rows moving without storms.
+      this.scheduleRetry();
+      throw err;
     }
   }
 
@@ -223,12 +275,25 @@ export class ReplicaSyncManager {
       }
     }
     for (const i of pushed) {
-      this.opts.onAcknowledged?.(snapshot[i]!);
       // Only the exact object we snapshotted may be dropped: a concurrent
       // `markDirty` replaces it with a merge that hasn't been pushed yet.
       if (this.dirty.get(snapshotKeys[i]!) === queued[i]) {
-        this.dirty.delete(snapshotKeys[i]!);
+        const cleared = this.opts.pendingStore?.remove(queued[i]!);
+        if (cleared === false) {
+          // A second window replaced the persisted row while this request was
+          // in flight. Adopt its current version instead of forgetting it.
+          const replacement = this.opts.pendingStore
+            ?.load()
+            .find((row) => dirtyKeyOf(row) === snapshotKeys[i]);
+          if (replacement) {
+            this.dirty.set(snapshotKeys[i]!, replacement);
+            this.scheduleDebouncedFlush();
+          }
+        } else {
+          this.dirty.delete(snapshotKeys[i]!);
+        }
       }
+      this.opts.onAcknowledged?.(snapshot[i]!);
     }
     if (deferred) throw deferred;
   }
@@ -339,9 +404,15 @@ export class ReplicaSyncManager {
       window.addEventListener('online', this.onlineHandler);
     }
     this.autoSyncInstalled = true;
+    if (this.dirty.size > 0 && this.debounceTimer === null) this.scheduleDebouncedFlush();
   }
 
   stopAutoSync(): void {
+    if (this.debounceTimer !== null) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
+    this.clearRetry();
     if (!this.autoSyncInstalled) return;
     if (typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', this.visibilityHandler);

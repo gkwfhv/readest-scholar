@@ -1,0 +1,140 @@
+$ dotenv -e .env.web -- next build
+▲ Next.js 16.3.8 (Turbopack)
+- Environments: .env
+[@serwist/next] WARNING: You are using '@serwist/next' with `next dev --turbopack`, but it doesn't support Turbopack. Do one of the following:
+
+- Set `disable` to `process.env.NODE_ENV !== "production"`.
+
+- Use webpack by running `next dev --webpack` instead of `next dev --turbopack`.
+
+- Migrate to '@serwist/turbopack' which has experimental support for Turbopack. See https://serwist.pages.dev/docs/next/turbo for more information.
+
+- Migrate to configurator mode which has support for Turbopack. See https://serwist.pages.dev/docs/next/config for more information.
+
+Follow https://github.com/serwist/serwist/issues/54 for progress on Serwist + Turbopack. You can also suppress this warning by setting SERWIST_SUPPRESS_TURBOPACK_WARNING=1.
+
+✓ Running next.config.mjs took 74ms
+Warning: Custom Cache-Control headers detected for the following routes:
+  - /_next/static/:path*
+
+Setting a custom Cache-Control header can break Next.js development behavior.
+- Experiments (use with caution):
+  · proxyClientMaxBodySize: 33554432
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead.
+
+  To migrate automatically, run:
+  npx @next/codemod@canary middleware-to-proxy .
+
+  Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+✓ Compiled successfully in 62s
+  Running TypeScript ...
+  Finished TypeScript in 5.6s ...
+  Collecting page data using 15 workers ...
+  Generating static pages using 15 workers (0/56) ...
+  Generating static pages using 15 workers (14/56)
+  Generating static pages using 15 workers (28/56)
+✓ Finished writing to filesystem cache in 21.1s
+  Generating static pages using 15 workers (42/56)
+✓ Generating static pages using 15 workers (56/56) in 3.4s
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ƒ /api/ai/chat
+├ ƒ /api/ai/embed
+├ ƒ /api/apple/iap-verify
+├ ƒ /api/apple/notifications
+├ ƒ /api/azure-translate
+├ ƒ /api/crosspoint/books
+├ ƒ /api/crosspoint/books/[hash]
+├ ƒ /api/crosspoint/device/approve
+├ ƒ /api/crosspoint/device/code
+├ ƒ /api/crosspoint/device/token
+├ ƒ /api/crosspoint/keys/[id]
+├ ƒ /api/crosspoint/sessions
+├ ƒ /api/crosspoint/syncs/progress
+├ ƒ /api/crosspoint/syncs/progress/[document]
+├ ƒ /api/crosspoint/users/auth
+├ ƒ /api/google/iap-verify
+├ ƒ /api/google/notifications
+├ ƒ /api/hardcover/graphql
+├ ƒ /api/metadata/search
+├ ƒ /api/notion/[...path]
+├ ƒ /api/opds/proxy
+├ ƒ /api/share/[token]
+├ ƒ /api/share/[token]/cover
+├ ƒ /api/share/[token]/download
+├ ƒ /api/share/[token]/download/confirm
+├ ƒ /api/share/[token]/import
+├ ƒ /api/share/[token]/og.png
+├ ƒ /api/share/[token]/revoke
+├ ƒ /api/share/create
+├ ƒ /api/share/list
+├ ƒ /api/stats/compact
+├ ƒ /api/stats/restore
+├ ƒ /api/stripe/check
+├ ƒ /api/stripe/checkout
+├ ƒ /api/stripe/plans
+├ ƒ /api/stripe/portal
+├ ƒ /api/stripe/webhook
+├ ƒ /api/tts/edge
+├ ƒ /api/tts/readest
+├ ƒ /api/tts/readest/jobs
+├ ƒ /api/tts/readest/jobs/[id]
+├ ƒ /api/tts/readest/stream
+├ ƒ /api/yandex-translate
+├ ○ /auth
+├ ○ /auth/callback
+├ ○ /auth/error
+├ ○ /auth/recovery
+├ ○ /auth/update
+├ ○ /gdrive-callback
+├ ○ /hardcover/connect
+├ ○ /library
+├ ○ /link
+├ ○ /o
+├ ○ /offline
+├ ○ /onedrive-callback
+├ ○ /opds
+├ ○ /player
+├ ○ /reader
+├ ƒ /runtime-config.js
+├ ƒ /s
+├ ○ /send
+├ ○ /updater
+├ ○ /user
+└ ○ /user/subscription/success
+
+Route (pages)
+┌   /_app
+├ ƒ /api/bookorbit
+├ ƒ /api/deepl/translate
+├ ƒ /api/kosync
+├ ƒ /api/send/address
+├ ƒ /api/send/fetch-url
+├ ƒ /api/send/inbox
+├ ƒ /api/send/inbox/[id]/payload
+├ ƒ /api/send/inbox/[id]/transition
+├ ƒ /api/send/inbox/claim
+├ ƒ /api/send/inbox/file
+├ ƒ /api/send/senders
+├ ƒ /api/storage/delete
+├ ƒ /api/storage/download
+├ ƒ /api/storage/list
+├ ƒ /api/storage/purge
+├ ƒ /api/storage/stats
+├ ƒ /api/storage/upload
+├ ƒ /api/sync
+├ ƒ /api/sync/replica-keys
+├ ƒ /api/sync/replicas
+├ ƒ /api/user/delete
+├ ƒ /api/user/library
+└ ○ /reader/[ids] (3306 ms)
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
