@@ -2551,5 +2551,20 @@
   "Research Library": "科研书库",
   "Collections": "文献集",
   "No books in this collection.": "此文献集暂无书籍。",
-  "Select a book to view details.": "选择一本文献以查看详情。"
+  "Select a book to view details.": "选择一本文献以查看详情。",
+  "Recoverable sync versions": "可恢复的同步版本",
+  "Review older metadata values before restoring one field. Recent versions appear first.": "查看较旧的元数据值，再选择要恢复的字段。最近的版本排在前面。",
+  "Could not load sync recovery history.": "无法加载同步恢复历史。",
+  "Sync is still starting. Try again in a moment.": "同步仍在启动，请稍后重试。",
+  "This field changed on another device. Refresh the history before restoring it.": "该字段已在另一台设备上改变。请刷新历史记录后再恢复。",
+  "Could not restore this sync version.": "无法恢复这个同步版本。",
+  "Version restored on the server.": "已在服务器恢复所选版本。",
+  "Open library to sync this device": "打开书库以同步此设备",
+  "Loading sync history...": "正在加载同步历史…",
+  "No recoverable versions yet.": "暂无可恢复版本。",
+  "Older device version": "旧设备版本",
+  "Previous server version": "上一个服务器版本",
+  "Restoring...": "正在恢复…",
+  "Restore this field": "恢复此字段",
+  "Protected value": "受保护的值"
 }

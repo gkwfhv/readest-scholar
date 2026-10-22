@@ -2551,5 +2551,20 @@
   "Research Library": "科研書庫",
   "Collections": "文獻集",
   "No books in this collection.": "此文獻集暫無書籍。",
-  "Select a book to view details.": "選擇一篇文獻以查看詳情。"
+  "Select a book to view details.": "選擇一篇文獻以查看詳情。",
+  "Recoverable sync versions": "可復原的同步版本",
+  "Review older metadata values before restoring one field. Recent versions appear first.": "查看較舊的中繼資料值，再選擇要復原的欄位。最近的版本排在前面。",
+  "Could not load sync recovery history.": "無法載入同步復原歷史。",
+  "Sync is still starting. Try again in a moment.": "同步仍在啟動，請稍後重試。",
+  "This field changed on another device. Refresh the history before restoring it.": "此欄位已在另一台裝置上變更。請重新整理歷史記錄後再復原。",
+  "Could not restore this sync version.": "無法復原這個同步版本。",
+  "Version restored on the server.": "已在伺服器復原所選版本。",
+  "Open library to sync this device": "開啟書庫以同步此裝置",
+  "Loading sync history...": "正在載入同步歷史…",
+  "No recoverable versions yet.": "目前沒有可復原的版本。",
+  "Older device version": "舊裝置版本",
+  "Previous server version": "上一個伺服器版本",
+  "Restoring...": "正在復原…",
+  "Restore this field": "復原此欄位",
+  "Protected value": "受保護的值"
 }

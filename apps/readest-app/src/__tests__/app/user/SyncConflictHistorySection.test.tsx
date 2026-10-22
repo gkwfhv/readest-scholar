@@ -34,9 +34,10 @@ vi.mock('@/services/sync/replicaSync', () => ({
   getReplicaSync: () => null,
   subscribeReplicaSyncReady: () => () => {},
 }));
-vi.mock('@/hooks/useTranslation', () => ({
-  useTranslation: () => (key: string) => key,
-}));
+vi.mock('@/hooks/useTranslation', () => {
+  const translate = (key: string) => key;
+  return { useTranslation: () => translate };
+});
 
 import { SyncConflictHistorySection } from '@/app/user/components/SyncConflictHistorySection';
 

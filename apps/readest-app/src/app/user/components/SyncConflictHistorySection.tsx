@@ -149,11 +149,15 @@ export function SyncConflictHistorySection({ userId, token }: Props) {
               version.source,
               version.version_hash,
             ].join(':');
+            const title =
+              version.kind === 'settings' && version.replica_id === 'singleton'
+                ? _('App settings')
+                : version.kind + ' / ' + version.replica_id;
             return (
               <li key={key}>
                 <details className='eink-bordered border-base-300 rounded-lg border p-3'>
                   <summary className='text-base-content cursor-pointer text-sm font-medium break-all'>
-                    {version.kind} / {version.replica_id}
+                    {title}
                     <span className='text-base-content/60 ms-2 font-normal'>
                       {version.source === 'incoming'
                         ? _('Older device version')
@@ -171,7 +175,7 @@ export function SyncConflictHistorySection({ userId, token }: Props) {
                               {field.name}
                             </p>
                             <p className='text-base-content/70 mt-1 text-xs break-all whitespace-pre-wrap'>
-                              {field.preview}
+                              {field.restorable ? field.preview : _('Protected value')}
                             </p>
                           </div>
                           {field.restorable && isOfflineReplayKind(version.kind) && (
