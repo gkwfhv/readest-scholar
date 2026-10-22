@@ -37,6 +37,20 @@ describe('transferStore', () => {
       expect(transfer!.isBackground).toBe(false);
     });
 
+    test('persists one Scholar operation ID across retry and queue restore', () => {
+      const id = useTransferStore.getState().addTransfer('hash', 'Paper', 'upload');
+      const original = useTransferStore.getState().transfers[id]!;
+      expect(original.scholarOpId).toMatch(/^[0-9a-f]{8}-[0-9a-f-]{27}$/);
+      useTransferStore.getState().retryTransfer(id);
+      expect(useTransferStore.getState().transfers[id]!.scholarOpId).toBe(original.scholarOpId);
+      const saved = JSON.parse(JSON.stringify(useTransferStore.getState().transfers));
+      useTransferStore.setState(initialState);
+      useTransferStore.getState().restoreTransfers(saved, false);
+      expect(useTransferStore.getState().transfers[id]!.scholarOpId).toBe(original.scholarOpId);
+      const downloadId = useTransferStore.getState().addTransfer('hash2', 'Paper 2', 'download');
+      expect(useTransferStore.getState().transfers[downloadId]!.scholarOpId).toBeUndefined();
+    });
+
     test('accepts custom priority and isBackground', () => {
       const id = useTransferStore.getState().addTransfer('hash2', 'Book Two', 'download', 1, true);
       const transfer = useTransferStore.getState().transfers[id]!;

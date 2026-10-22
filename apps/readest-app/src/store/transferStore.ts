@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { v4 as uuidv4 } from 'uuid';
 import type { BaseDir } from '@/types/system';
 import { INDETERMINATE_PROGRESS } from '@/utils/transfer';
 
@@ -26,6 +27,7 @@ export interface TransferItem {
   kind: TransferKind;
   bookHash: string;
   bookTitle: string;
+  scholarOpId?: string;
   replicaKind?: string;
   replicaId?: string;
   replicaReincarnation?: string;
@@ -190,6 +192,7 @@ export const useTransferStore = create<TransferState>((set, get) => ({
       kind: 'book',
       bookHash,
       bookTitle,
+      scholarOpId: type === 'upload' ? uuidv4() : undefined,
       type,
       status: 'pending',
       progress: 0,
