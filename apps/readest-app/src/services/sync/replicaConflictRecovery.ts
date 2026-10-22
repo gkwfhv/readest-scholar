@@ -35,7 +35,8 @@ export interface ReplicaConflictTransport {
   restore(request: RestoreFieldRequest): Promise<ReplicaRow>;
 }
 
-const SENSITIVE_FIELD = /password|token|secret|userkey|accesskey|credential|customHeaders/i;
+const SENSITIVE_FIELD =
+  /password|token|secret|userkey|accesskey|apikey|credential|customheaders|username|authorization/i;
 
 const archivedFields = (version: ReplicaConflictVersion): Record<string, FieldEnvelope> =>
   version.row_data.fields_jsonb ?? {};

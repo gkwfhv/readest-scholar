@@ -21,6 +21,7 @@ const version: ReplicaConflictVersion = {
     fields_jsonb: {
       theme: { v: 'dark', t: old, s: 'a' },
       'readwise.accessToken': { v: 'private-token', t: old, s: 'a' },
+      apiKey: { v: 'legacy-plain-key', t: old, s: 'a' },
       cipher: { v: { c: 'secret', i: 'nonce', s: 'salt', alg: 'aes', h: 'hash' }, t: old, s: 'a' },
     },
   },
@@ -49,11 +50,16 @@ describe('replica conflict recovery', () => {
       preview: 'Protected value',
       restorable: false,
     });
+    expect(fields.find((field) => field.name === 'apiKey')).toMatchObject({
+      preview: 'Protected value',
+      restorable: false,
+    });
     expect(fields.find((field) => field.name === 'cipher')).toMatchObject({
       preview: 'Protected value',
       restorable: false,
     });
     expect(JSON.stringify(fields)).not.toContain('private-token');
+    expect(JSON.stringify(fields)).not.toContain('legacy-plain-key');
     expect(JSON.stringify(fields)).not.toContain('secret');
   });
 
