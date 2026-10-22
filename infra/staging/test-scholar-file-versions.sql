@@ -15,24 +15,22 @@ INSERT INTO public.files(user_id,id,file_key,file_size)
 INSERT INTO public.scholar_document_files(user_id,document_id,file_id,role)
   VALUES (:'actor_id', :'document_id', :'file_id', 'original');
 SELECT set_config('request.jwt.claim.sub', :'actor_id', true);
-SET LOCAL ROLE authenticated;
 SELECT version_id AS first_version, object_key AS first_key
-  FROM public.prepare_scholar_file_version_v1(:'file_id', :'first_op', repeat('a',64), 11) \gset
+  FROM public.reserve_scholar_file_version_v1(:'actor_id', :'file_id', :'first_op', repeat('a',64), 11, 1099511627776) \gset
 SELECT set_config('probe.first_version', :'first_version', true),
        set_config('probe.first_key', :'first_key', true);
 DO $probe$
 DECLARE version uuid; key text;
 BEGIN
-  SELECT version_id, object_key INTO version,key FROM public.prepare_scholar_file_version_v1(
-    current_setting('probe.file_id')::uuid, current_setting('probe.first_op')::uuid, repeat('a',64), 11);
+  SELECT version_id, object_key INTO version,key FROM public.reserve_scholar_file_version_v1(
+    current_setting('probe.actor_id')::uuid, current_setting('probe.file_id')::uuid, current_setting('probe.first_op')::uuid, repeat('a',64), 11, 1099511627776);
   IF version <> current_setting('probe.first_version')::uuid OR key <> current_setting('probe.first_key') THEN
     RAISE EXCEPTION 'prepare retry was not idempotent';
   END IF;
-  IF key NOT LIKE auth.uid()::text || '/Scholar/versions/%' THEN
+  IF key NOT LIKE current_setting('probe.actor_id') || '/Scholar/versions/%' THEN
     RAISE EXCEPTION 'object key escaped account';
   END IF;
 END $probe$;
-RESET ROLE;
 DO $probe$
 DECLARE result record;
 BEGIN
@@ -53,13 +51,11 @@ DO $probe$ BEGIN
     RAISE EXCEPTION 'first version did not activate';
   END IF;
 END $probe$;
-SET LOCAL ROLE authenticated;
-SELECT version_id AS second_version FROM public.prepare_scholar_file_version_v1(
-  :'file_id', :'second_op', repeat('b',64), 11) \gset
-SELECT version_id AS third_version FROM public.prepare_scholar_file_version_v1(
-  :'file_id', :'third_op', repeat('c',64), 11) \gset
+SELECT version_id AS second_version FROM public.reserve_scholar_file_version_v1(
+  :'actor_id', :'file_id', :'second_op', repeat('b',64), 11, 1099511627776) \gset
+SELECT version_id AS third_version FROM public.reserve_scholar_file_version_v1(
+  :'actor_id', :'file_id', :'third_op', repeat('c',64), 11, 1099511627776) \gset
 SELECT set_config('probe.second_version', :'second_version', true);
-RESET ROLE;
 SELECT applied AS second_applied FROM public.complete_scholar_file_version_v1(
   :'actor_id', :'file_id', :'second_op', repeat('b',64), 11, :'first_version') \gset
 SELECT applied AS third_applied FROM public.complete_scholar_file_version_v1(
@@ -89,9 +85,9 @@ DO $probe$ BEGIN
   END;
   PERFORM set_config('request.jwt.claim.sub', current_setting('probe.other_id'), true);
   BEGIN
-    PERFORM public.prepare_scholar_file_version_v1(
-      current_setting('probe.file_id')::uuid, gen_random_uuid(), repeat('d',64), 11);
-    RAISE EXCEPTION 'cross-account prepare succeeded';
+    PERFORM public.restore_scholar_file_version_v1(
+      current_setting('probe.file_id')::uuid, current_setting('probe.first_version')::uuid, current_setting('probe.second_version')::uuid);
+    RAISE EXCEPTION 'cross-account restore succeeded';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
 END $probe$;
