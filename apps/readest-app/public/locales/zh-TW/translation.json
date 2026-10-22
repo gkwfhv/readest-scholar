@@ -2568,5 +2568,17 @@
   "Previous server version": "上一個伺服器版本",
   "Restoring...": "正在復原…",
   "Restore this field": "復原此欄位",
-  "Protected value": "受保護的值"
+  "Protected value": "受保護的值",
+  "Recoverable note versions": "可復原的筆記版本",
+  "Review an older note before restoring it. Recent versions appear first.": "復原前請核對舊筆記；最近的版本排在前面。",
+  "Could not load note recovery history.": "無法載入筆記復原歷史。",
+  "Note version restored on the server.": "筆記版本已在伺服器復原。",
+  "Loading note history...": "正在載入筆記歷史…",
+  "No recoverable note versions yet.": "尚無可復原的筆記版本。",
+  "Bookmark or drawing": "書籤或手繪註記",
+  "Deleted note": "已刪除的筆記",
+  "Restoring this version will make it the current note on other devices.": "復原後，此版本將成為其他裝置上的目前筆記。",
+  "Restore this note": "復原此筆記",
+  "This note changed on another device. Refresh before restoring it.": "此筆記已在另一台裝置上變更。請重新整理後再復原。",
+  "Could not restore this note version.": "無法復原此筆記版本。"
 }

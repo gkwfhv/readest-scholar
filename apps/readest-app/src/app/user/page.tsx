@@ -48,6 +48,7 @@ import SharedLinksSection from './components/SharedLinksSection';
 import { SyncPassphraseSection } from './components/SyncPassphraseSection';
 import { SyncCategoriesSection } from './components/SyncCategoriesSection';
 import { SyncConflictHistorySection } from './components/SyncConflictHistorySection';
+import { NoteConflictHistorySection } from './components/NoteConflictHistorySection';
 import Checkout from './components/Checkout';
 
 type CheckoutState = {
@@ -372,6 +373,7 @@ const ProfilePage = () => {
                     <SyncCategoriesSection />
                     <SyncPassphraseSection />
                     <SyncConflictHistorySection userId={user.id} token={token} />
+                    <NoteConflictHistorySection userId={user.id} token={token} />
                   </div>
                 ) : (
                   <>

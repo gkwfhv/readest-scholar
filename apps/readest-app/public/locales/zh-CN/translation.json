@@ -2568,5 +2568,17 @@
   "Previous server version": "上一个服务器版本",
   "Restoring...": "正在恢复…",
   "Restore this field": "恢复此字段",
-  "Protected value": "受保护的值"
+  "Protected value": "受保护的值",
+  "Recoverable note versions": "可恢复的笔记版本",
+  "Review an older note before restoring it. Recent versions appear first.": "恢复前请核对旧笔记；最近的版本排在前面。",
+  "Could not load note recovery history.": "无法加载笔记恢复历史。",
+  "Note version restored on the server.": "笔记版本已在服务器恢复。",
+  "Loading note history...": "正在加载笔记历史…",
+  "No recoverable note versions yet.": "暂无可恢复的笔记版本。",
+  "Bookmark or drawing": "书签或手绘批注",
+  "Deleted note": "已删除的笔记",
+  "Restoring this version will make it the current note on other devices.": "恢复后，此版本将成为其他设备上的当前笔记。",
+  "Restore this note": "恢复此笔记",
+  "This note changed on another device. Refresh before restoring it.": "此笔记已在另一台设备上更改。请刷新后再恢复。",
+  "Could not restore this note version.": "无法恢复此笔记版本。"
 }

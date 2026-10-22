@@ -69,8 +69,9 @@ export function SyncConflictHistorySection({ userId, token }: Props) {
   };
 
   const load = useCallback(async () => {
-    reviewGeneration.current += 1;
+    const generation = ++reviewGeneration.current;
     setReviewed({});
+    setVersions([]);
     setLoading(true);
     setError(null);
     try {
@@ -82,11 +83,15 @@ export function SyncConflictHistorySection({ userId, token }: Props) {
         .order('recorded_at', { ascending: false })
         .limit(50);
       if (queryError) throw queryError;
-      setVersions((data ?? []) as ReplicaConflictVersion[]);
+      if (generation === reviewGeneration.current) {
+        setVersions((data ?? []) as ReplicaConflictVersion[]);
+      }
     } catch {
-      setError(_('Could not load sync recovery history.'));
+      if (generation === reviewGeneration.current) {
+        setError(_('Could not load sync recovery history.'));
+      }
     } finally {
-      setLoading(false);
+      if (generation === reviewGeneration.current) setLoading(false);
     }
   }, [token, userId, _]);
 

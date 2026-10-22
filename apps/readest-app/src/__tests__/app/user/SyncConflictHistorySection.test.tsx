@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
 const data = [
@@ -18,7 +18,12 @@ const data = [
   },
 ];
 
-const list = vi.fn(async () => ({ data, error: null }));
+const list = vi.fn(
+  async (): Promise<{ data: typeof data | null; error: { message: string } | null }> => ({
+    data,
+    error: null,
+  }),
+);
 const fetchReplica = vi.fn(async () => ({
   data: {
     user_id: 'account-a',
@@ -70,6 +75,22 @@ afterEach(() => {
 });
 
 describe('SyncConflictHistorySection', () => {
+  test('ignores a stale failed history request after the replacement loads', async () => {
+    let finishOld: (value: { data: null; error: { message: string } }) => void = () => {};
+    const old = new Promise<{ data: null; error: { message: string } }>((resolve) => {
+      finishOld = resolve;
+    });
+    list.mockImplementationOnce(() => old);
+    const { rerender } = render(
+      <SyncConflictHistorySection userId='account-a' token='old-token' />,
+    );
+    rerender(<SyncConflictHistorySection userId='account-a' token='new-token' />);
+    expect(await screen.findByText('dark')).toBeTruthy();
+    await act(async () => finishOld({ data: null, error: { message: 'offline' } }));
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByText('dark')).toBeTruthy();
+  });
+
   test('shows account recovery versions without exposing protected values', async () => {
     render(<SyncConflictHistorySection userId='account-a' token='synthetic-token' />);
     expect(await screen.findByText('Recoverable sync versions')).toBeTruthy();

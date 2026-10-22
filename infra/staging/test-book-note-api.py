@@ -21,6 +21,7 @@ parser.add_argument('--runtime-env', type=pathlib.Path, required=True)
 parser.add_argument('--candidate-url', default='http://127.0.0.1:3137')
 parser.add_argument('--supabase-url', default='http://127.0.0.1:8130')
 parser.add_argument('--db-container', default='scholar-staging-db')
+parser.add_argument('--test-restore', action='store_true', help='also exercise the note restore RPC')
 args = parser.parse_args()
 for url in (args.candidate_url, args.supabase_url):
     parsed = urllib.parse.urlsplit(url)
@@ -37,10 +38,12 @@ env = dict(
 key = env['SUPABASE_ANON_KEY']
 
 
-def request(url, method='GET', body=None, token=None):
+def request(url, method='GET', body=None, token=None, single=False):
     headers = {'apikey': key, 'content-type': 'application/json'}
     if token:
         headers['authorization'] = 'Bearer ' + token
+    if single:
+        headers['Accept'] = 'application/vnd.pgrst.object+json'
     payload = None if body is None else json.dumps(body).encode()
     req = urllib.request.Request(url, data=payload, headers=headers, method=method)
     try:
@@ -120,6 +123,30 @@ try:
     assert push('newer live edit', newer_edit)['note'] == 'newer live edit'
     assert current()['note'] == 'newer live edit' and current()['deleted_at'] is None
     assert archive_count() == 4
+    if args.test_restore:
+        versions = request(history_url, token=token)[1]
+        prior = next(v for v in versions if v['source'] == 'previous'
+                     and v['row_data']['note'] == 'live edit')
+        reviewed = current()
+        restore_request = {
+            'p_user_id': account_id,
+            'p_book_hash': book_hash,
+            'p_note_id': note_id,
+            'p_source': prior['source'],
+            'p_version_hash': prior['version_hash'],
+            'p_expected_current': reviewed,
+        }
+        restored = request(rest + '/rpc/restore_book_note_version_v1',
+                           'POST', restore_request, token, single=True)[1]
+        assert restored['note'] == 'live edit' and archive_count() == 5
+        try:
+            request(rest + '/rpc/restore_book_note_version_v1',
+                    'POST', restore_request, token, single=True)
+        except RuntimeError as exc:
+            assert 'HTTP 409' in str(exc), str(exc)
+        else:
+            raise AssertionError('stale restore succeeded')
+        print('note restore RPC passed: archived version restored; stale CAS rejected')
     print('note API fault probe passed: retry/stale/delete/tie/revive and four archived versions')
 finally:
     sql = (
