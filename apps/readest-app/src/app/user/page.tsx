@@ -47,6 +47,7 @@ import StorageManager from './components/StorageManager';
 import SharedLinksSection from './components/SharedLinksSection';
 import { SyncPassphraseSection } from './components/SyncPassphraseSection';
 import { SyncCategoriesSection } from './components/SyncCategoriesSection';
+import { SyncConflictHistorySection } from './components/SyncConflictHistorySection';
 import Checkout from './components/Checkout';
 
 type CheckoutState = {
@@ -370,6 +371,7 @@ const ProfilePage = () => {
                   <div className='flex flex-col gap-y-8 px-6'>
                     <SyncCategoriesSection />
                     <SyncPassphraseSection />
+                    <SyncConflictHistorySection userId={user.id} token={token} />
                   </div>
                 ) : (
                   <>
