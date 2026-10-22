@@ -10,7 +10,7 @@
 
 ## 验证
 
-- 服务器专用构建容器中的目标 Vitest 5/5、TypeScript、Biome 和 Next standalone 构建通过。完整 Vitest 结果见服务器日志 `/home/gavin/scholar-phase3-reviewguard-full-test.log`。
+- 服务器专用构建容器中的目标 Vitest 5/5、TypeScript、Biome 和 Next standalone 构建通过。环境参数正确的完整 Vitest 为 13,909 通过、16 跳过（1,194 个文件通过、4 个跳过）；服务器日志 `/home/gavin/scholar-phase3-reviewguard-full-test-final.log`。
 - 迁移 036 在从 staging 快照恢复的隔离数据库中先红后绿：跨账户、过期 current、保留其它字段、归档被覆盖 winner 均通过；部署前另作私有快照 `/home/gavin/scholar-staging-backups/20261022T171322Z`，STATUS=complete。真实 staging 已应用 036；登录态历史 GET=200，RPC 可见，非法目标被拒。
 - 服务器本地候选 `scholar-phase3-web:reviewguard` 在回环 3135 运行。浏览器通过 SSH 隧道以合成账户查看到中文恢复区：展开时“正在核对当前版本…”且按钮禁用，完成后启用；敏感值只显示“受保护的值”。
 - 在展开后将同一合成字段更改为 `Concurrent edit`，再点击“恢复此字段”；界面显示“该字段已在另一台设备上改变”，新编辑没有被恢复操作覆盖。此前一个正常恢复操作已通过浏览器实测，服务端字段回到历史值并把旧 winner 归档。

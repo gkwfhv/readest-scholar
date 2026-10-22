@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useSync } from '@/hooks/useSync';
 import { BookNote, FIXED_LAYOUT_FORMATS } from '@/types/book';
@@ -31,6 +31,8 @@ export const useNotesSync = (bookKey: string) => {
   const { getView, getViewsById } = useReaderStore();
 
   const config = getConfig(bookKey);
+  const retryPendingRef = useRef(false);
+  const latestSyncAttemptRef = useRef(0);
 
   const populateXPointersForPush = async (notes: BookNote[]): Promise<BookNote[]> => {
     const bookData = getBookData(bookKey);
@@ -168,8 +170,15 @@ export const useNotesSync = (bookKey: string) => {
         const book = getBookData(bookKey)?.book;
         const newNotes = getNewNotes();
         if (newNotes.notes?.length) {
-          populateXPointersForPush(newNotes.notes).then((enriched) => {
-            syncNotes(enriched, book?.hash, book?.metaHash, 'both');
+          const attempt = ++latestSyncAttemptRef.current;
+          populateXPointersForPush(newNotes.notes).then(async (enriched) => {
+            if (attempt !== latestSyncAttemptRef.current) return;
+            const pushed = await syncNotes(enriched, book?.hash, book?.metaHash, 'both');
+            // An older request can finish after a newer edit failed; its
+            // success must not erase the newer edit's retry obligation.
+            if (attempt === latestSyncAttemptRef.current) {
+              retryPendingRef.current = pushed === false;
+            }
           });
         } else {
           syncNotes(newNotes.notes, book?.hash, book?.metaHash, 'both');
@@ -183,6 +192,20 @@ export const useNotesSync = (bookKey: string) => {
     ),
     [syncNotes],
   );
+
+  // A failed upload is still in local booknotes. Retry even when a container
+  // proxy returns and navigator.onLine never changed, as in a service outage.
+  useEffect(() => {
+    const retry = () => {
+      if (retryPendingRef.current) handleAutoSync();
+    };
+    const timer = window.setInterval(retry, 15_000);
+    window.addEventListener('online', retry);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('online', retry);
+    };
+  }, [handleAutoSync]);
 
   // A book's first reading position is saved after its notes load, and that
   // write keeps the same booknotes array, so re-run once it appears.
