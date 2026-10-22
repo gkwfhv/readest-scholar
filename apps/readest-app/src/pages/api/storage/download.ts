@@ -99,7 +99,7 @@ export async function processFileKeys(
     queryBatches(fileKeys).map((batch) =>
       supabase
         .from('files')
-        .select('id, user_id, file_key, book_hash')
+        .select('id, user_id, file_key, book_hash, file_size')
         .eq('user_id', userId)
         .in('file_key', batch)
         .is('deleted_at', null),
@@ -142,7 +142,7 @@ export async function processFileKeys(
         queryBatches(bookHashes).map((batch) =>
           supabase
             .from('files')
-            .select('id, user_id, file_key, book_hash')
+            .select('id, user_id, file_key, book_hash, file_size')
             .eq('user_id', userId)
             .in('book_hash', batch)
             .is('deleted_at', null),
@@ -242,6 +242,10 @@ export async function processFileKeys(
       }
 
       const hasHead = headByFileId.has(fileRecord.id);
+      // Scholar registration creates a zero-byte row before any object exists.
+      if (fileRecord.file_size === 0 && !hasHead) {
+        return { fileKey, downloadUrl: undefined };
+      }
       const objectKey = hasHead ? activeObjectByFileId.get(fileRecord.id) : fileRecord.file_key;
       if (!objectKey) return { fileKey, downloadUrl: undefined };
 

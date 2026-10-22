@@ -84,6 +84,18 @@ describe('legacy download alias for Scholar versions', () => {
     expect(urls[coverKey]).toContain(coverKey);
   });
 
+  it('does not sign an unuploaded zero-byte Scholar placeholder', async () => {
+    from.mockImplementation((table: string) => {
+      if (table === 'files') return query('is', { data: [
+        { id: fileId, user_id: userId, file_key: originalKey, book_hash: 'hash', file_size: 0 },
+      ], error: null });
+      return query('in', { data: [], error: null });
+    });
+    const urls = await processFileKeys([originalKey], userId);
+    expect(urls[originalKey]).toBeUndefined();
+    expect(getDownloadSignedUrl).not.toHaveBeenCalled();
+  });
+
   it('preserves legacy downloads when the server has no Scholar schema yet', async () => {
     from.mockImplementation((table: string) => {
       if (table === 'files') return query('is', {
