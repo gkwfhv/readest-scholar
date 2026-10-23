@@ -241,6 +241,47 @@ describe('TauriChatAdapter wiring (M1.11)', () => {
     }
     expect(call.system).toContain('My Book');
   });
+  it('PDF spoiler protection includes the current physical page in legacy lookup', async () => {
+    const backend = fakeLegacy({
+      searchResult: [
+        {
+          id: 'pdf-1-0-0',
+          bookHash: 'pdf-1',
+          sectionIndex: 0,
+          chapterTitle: 'Page 1',
+          pageNumber: 1,
+          text: 'The paper reports 28.4 BLEU.',
+          searchMethod: 'bm25',
+          score: 1,
+        },
+      ],
+    });
+    const adapter = createTauriAdapter(() => ({
+      settings: { ...baseSettings, reedy: { enabled: false }, spoilerProtection: true },
+      bookHash: 'pdf-1',
+      bookTitle: 'Synthetic Paper',
+      authorName: '',
+      currentPage: 0,
+      currentSectionIndex: 0,
+      isPdf: true,
+      backend,
+      sourceStore: new ReedySourceStore(),
+    }));
+    await drainRun(
+      adapter.run({
+        messages: [{ role: 'user', content: [{ type: 'text', text: 'What BLEU score?' }] }],
+        abortSignal: undefined,
+      } as unknown as Parameters<typeof adapter.run>[0]) as AsyncIterable<unknown>,
+    );
+    expect(backend.searchForSystemPrompt).toHaveBeenCalledWith('What BLEU score?', 'pdf-1', {
+      topK: 10,
+      spoilerBoundPosition: 1,
+    });
+    expect((streamTextMock.mock.calls[0]![0] as RunCall).system).toContain(
+      'Current visible page: 1.',
+    );
+  });
+
   it('PDF without retrieved evidence refuses before calling the model', async () => {
     const adapter = createTauriAdapter(() => ({
       settings: { ...baseSettings, reedy: { enabled: false }, spoilerProtection: false },
