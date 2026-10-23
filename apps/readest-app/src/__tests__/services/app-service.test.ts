@@ -1,7 +1,12 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BaseDir, FileSystem, ResolvedPath } from '@/types/system';
 import { DatabaseOpts, DatabaseService } from '@/types/database';
-import { SchemaType } from '@/services/database/migrate';
+import { SchemaType, migrate } from '@/services/database/migrate';
+import { getMigrations } from '@/services/database/migrations';
+import { NodeDatabaseService } from '@/services/database/nodeDatabaseService';
+import { ReedyDb } from '@/services/reedy/db/ReedyDb';
+import { aiAccountScope } from '@/services/ai/accountScope';
+import type { Book } from '@/types/book';
 
 // Mock all service dependencies
 vi.mock('@/services/settingsService', () => ({
@@ -611,6 +616,35 @@ describe('BaseAppService', () => {
     test('loadLibraryBooks delegates', async () => {
       const result = await service.loadLibraryBooks();
       expect(result).toEqual([{ title: 'Book1' }]);
+    });
+  });
+
+  describe('importBook AI deletion fence', () => {
+    test('a completed native reimport reopens only its account-scoped SQLite index', async () => {
+      const db = await NodeDatabaseService.open(':memory:', { experimental: ['index_method'] });
+      try {
+        await migrate(db, getMigrations('reedy'));
+        const scope = aiAccountScope('reimported-book', 'test-account');
+        await new ReedyDb(db).purgeBookData(scope);
+        localStorage.setItem('user', JSON.stringify({ id: 'test-account' }));
+        vi.spyOn(service, 'openDatabase').mockResolvedValue(db);
+        vi.mocked(BookSvc.importBook).mockResolvedValueOnce({
+          hash: 'reimported-book',
+        } as Book);
+
+        await service.importBook('file.pdf', []);
+
+        const rows = await db.select<{ generation: string; deleted: number }>(
+          'SELECT generation, deleted FROM reedy_book_fence WHERE book_hash = ?',
+          [scope],
+        );
+        expect(rows).toHaveLength(1);
+        expect(rows[0]!.deleted).toBe(0);
+        expect(rows[0]!.generation).toBeTruthy();
+      } finally {
+        localStorage.removeItem('user');
+        await db.close();
+      }
     });
   });
 
