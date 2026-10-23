@@ -115,6 +115,7 @@ export const useReedyStore = create<ReedyStoreState>((set, get) => ({
   },
 
   reset() {
+    get().abortController?.abort();
     set({
       messages: [],
       isRunning: false,
