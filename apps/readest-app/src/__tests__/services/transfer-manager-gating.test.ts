@@ -227,6 +227,26 @@ describe('Scholar file queue baseline', () => {
     expect(useTransferStore.getState().transfers[newId]?.status).toBe('completed');
   });
 
+  test('opening a book promotes an automatic mirror task to a manual download', async () => {
+    scholarRelease.mockReturnValue(true);
+    scholarAccountId.mockResolvedValue(userA);
+    const book = makeBook({ uploadedAt: 1000, downloadedAt: null });
+    transferManager.pauseQueue();
+    const service = await initManager(makeAppService(), [book]);
+    const id = transferManager.queueDownload(book, 20, true, true)!;
+    expect(transferManager.queueDownload(book, 0, false)).toBe(id);
+    const task = useTransferStore.getState().transfers[id]!;
+    expect(task.scholarMirror).toBe(false);
+    expect(task.isBackground).toBe(false);
+    expect(task.priority).toBe(0);
+    transferManager.stopScholarFullMirror(userA);
+    expect(useTransferStore.getState().transfers[id]?.status).toBe('pending');
+    transferManager.resumeQueue();
+    await flushAsync();
+    expect(service['downloadBook']).toHaveBeenCalledTimes(1);
+    expect(useTransferStore.getState().transfers[id]?.status).toBe('completed');
+  });
+
   test('full mirror replaces a stale local copy and records the remote timestamp', async () => {
     scholarRelease.mockReturnValue(true);
     scholarAccountId.mockResolvedValue(userA);

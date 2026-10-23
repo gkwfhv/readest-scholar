@@ -279,7 +279,15 @@ class TransferManager {
 
     const existing = store.getTransferByBookHash(book.hash, 'download');
     if (existing) {
-      if (!scholar || existing.scholarAccountId === scholar.accountId) return existing.id;
+      if (!scholar || existing.scholarAccountId === scholar.accountId) {
+        // Opening a book turns an automatic mirror transfer into a user request.
+        // A later switch to on-demand must not cancel the reader's download.
+        if (scholar && !scholarMirror && !isBackground && existing.scholarMirror) {
+          store.promoteScholarMirrorDownload(existing.id, priority);
+          this.persistQueue();
+        }
+        return existing.id;
+      }
       this.abortControllers.get(existing.id)?.abort();
       store.setTransferStatus(existing.id, 'cancelled', undefined, 'policy');
     }
@@ -889,9 +897,9 @@ class TransferManager {
           (await getScholarAccountId()) !== transfer.scholarAccountId) {
         throw new Error('Scholar download account changed; requeue under the current account');
       }
-      const refreshMirror = !!transfer.scholarMirror && !!book.uploadedAt &&
+      const refreshScholarFile = !!transfer.scholarAccountId && !!book.uploadedAt &&
         book.uploadedAt > (book.downloadedAt ?? 0);
-      await this.appService!.downloadBook(book, false, refreshMirror, progressHandler);
+      await this.appService!.downloadBook(book, false, refreshScholarFile, progressHandler);
       if (abortController.signal.aborted || (transfer.scholarAccountId &&
           (await getScholarAccountId()) !== transfer.scholarAccountId)) {
         throw new Error('Scholar download account changed; requeue under the current account');

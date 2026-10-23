@@ -90,6 +90,7 @@ interface TransferState {
     },
   ) => string;
   removeTransfer: (transferId: string) => void;
+  promoteScholarMirrorDownload: (transferId: string, priority: number) => void;
   setScholarSnapshotPath: (transferId: string, path: string | undefined) => void;
   rebaseScholarDelete: (transferId: string, expectedVersionId: string) => void;
   updateTransferProgress: (
@@ -302,6 +303,16 @@ export const useTransferStore = create<TransferState>((set, get) => ({
       return { transfers: remaining };
     });
   },
+
+  promoteScholarMirrorDownload: (transferId, priority) => set((state) => {
+    const task = state.transfers[transferId];
+    if (!task || task.type !== 'download' || !task.scholarMirror ||
+        !['pending', 'in_progress'].includes(task.status)) return state;
+    return { transfers: { ...state.transfers, [transferId]: {
+      ...task, scholarMirror: false, isBackground: false,
+      priority: Math.min(task.priority, priority),
+    } } };
+  }),
 
   updateTransferProgress: (transferId, progress, transferred, total, speed) => {
     set((state) => {
