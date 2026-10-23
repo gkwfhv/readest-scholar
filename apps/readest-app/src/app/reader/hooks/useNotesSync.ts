@@ -145,11 +145,17 @@ export const useNotesSync = (bookKey: string) => {
     if (!config?.location || !book || !user) return {};
 
     const bookNotes = config.booknotes ?? [];
-    // A note without an xpointer is pushed until it gets one; a drawing never
-    // does (see populateXPointersForPush), so it goes only when it changed.
+    // Re-push a live EPUB note until its xpointer is populated. PDF/CBZ
+    // anchors have no xpointer by design, and tombstones never gain one:
+    // treating either as pending would upload the same note on every pull.
+    const needsXPointer = (note: BookNote) =>
+      !FIXED_LAYOUT_FORMATS.has(book.format) &&
+      !note.deletedAt &&
+      !note.xpointer0 &&
+      note.type !== 'ink';
     const newNotes = bookNotes.filter(
       (note) =>
-        (!note.xpointer0 && note.type !== 'ink') ||
+        needsXPointer(note) ||
         lastSyncedAtNotes < note.updatedAt ||
         lastSyncedAtNotes < (note.deletedAt ?? 0),
     );

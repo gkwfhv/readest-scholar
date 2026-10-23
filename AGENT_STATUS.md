@@ -119,3 +119,7 @@
 ## Phase 3 双客户端书签往返（2026-10-23）
 
 服务器上两个独立 Linux CEF QA 容器以同一合成账户实测：A 创建第 1 页书签，B 拉取；B 创建第 2 页书签，A 在已打开阅读器中拉取；B 重启后两个书签仍存在。另一合成账户不能读取 A 的书签。详见 docs/evidence/phase3/two-native-clients-bookmark-sync-2026-10-23.md。Phase 3 尚需双端同一注释并发、服务崩溃故障注入、移动网络切换和最终候选构建验收；没有向 GitHub/GHCR 推送。
+
+## Phase 3 离线书签收敛与 PDF 重推修复（2026-10-23）
+
+服务器上 A/B 两个独立 Linux CEF 客户端以同一合成账户完成不同书签的并发离线/在线删除。B 断开自己的候选 Web 代理后删第 2 页，A 在线删第 1 页；B 网络恢复与重启后侧栏为空，staging 两个书签行都是墓碑。旧客户端对没有 xpointer 的 PDF 书签反复 POST 笔记，新增先失败后通过的五项回归并限制补充 xpointer 的待发送条件，reader hooks 292/292、TypeScript、Biome 及服务器 Web/CEF 构建通过。曾有一次 QA 构建漏载 staging 环境而误连上游认证服务；使用现有 native-build.env 重建后，B 登录态恢复，空闲 43 秒无周期性 POST。详见 docs/evidence/phase3/two-native-clients-bookmark-sync-2026-10-23.md。Phase 3 仍需同一注释的双端并发、服务崩溃及移动网络切换等门槛；未向 GitHub/GHCR 推送。
