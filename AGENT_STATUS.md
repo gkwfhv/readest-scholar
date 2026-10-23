@@ -115,3 +115,7 @@
 [不可变文件活动/历史下载](docs/evidence/phase3/immutable-file-download-2026-10-23.md)新增账户隔离的版本下载 API；回环候选对两个不同字节版本、CAS 落败、指定历史下载、恢复后活动下载和第二账户 404 完成真实合成往返，测试数据已清理。正式 Web 与客户端仍未接入。
 
 [文件版本旧接口兼容](docs/evidence/phase3/immutable-file-legacy-compat-2026-10-23.md)在合成 staging 候选版实测：旧上传原件与下载可用，新版本发布后旧下载返回活动版字节，旧覆盖上传返回 409。[客户端传输基础](docs/evidence/phase3/scholar-file-client-transfer-2026-10-23.md)已分块计算 SHA-256 并用同一操作 ID 处理丢失响应；尚无持久离线队列和书库接入。
+
+## Phase 3 双客户端书签往返（2026-10-23）
+
+服务器上两个独立 Linux CEF QA 容器以同一合成账户实测：A 创建第 1 页书签，B 拉取；B 创建第 2 页书签，A 在已打开阅读器中拉取；B 重启后两个书签仍存在。另一合成账户不能读取 A 的书签。详见 docs/evidence/phase3/two-native-clients-bookmark-sync-2026-10-23.md。Phase 3 尚需双端同一注释并发、服务崩溃故障注入、移动网络切换和最终候选构建验收；没有向 GitHub/GHCR 推送。
