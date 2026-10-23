@@ -21,7 +21,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     !/^Readest\/Books\/[^/]+\/[^/]+$/.test(fileName) ||
     !isUuid(opId) ||
     !(expectedVersionId === null || isUuid(expectedVersionId))
-  ) return res.status(400).json({ error: 'Invalid Scholar file delete request' });
+  )
+    return res.status(400).json({ error: 'Invalid Scholar file delete request' });
 
   const { data, error } = await createSupabaseClient(token).rpc('delete_scholar_file_v1', {
     p_file_key: user.id + '/' + fileName,
@@ -29,12 +30,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     p_expected_version_id: expectedVersionId,
   });
   if (error) {
-    if (error.code === 'PT409') return res.status(409).json({ error: 'Scholar delete conflict; remote version retained' });
-    if (error.code === 'PT410') return res.status(410).json({ error: 'Scholar file already deleted' });
+    if (error.code === 'PT409')
+      return res.status(409).json({ error: 'Scholar delete conflict; remote version retained' });
+    if (error.code === 'PT410')
+      return res.status(410).json({ error: 'Scholar file already deleted' });
     if (error.code === 'PT404' || error.code === '42501') {
       return res.status(404).json({ error: 'Scholar file not found' });
     }
-    if (error.code === '22023') return res.status(400).json({ error: 'Invalid Scholar file delete request' });
+    if (error.code === '22023')
+      return res.status(400).json({ error: 'Invalid Scholar file delete request' });
     console.error('Scholar file delete failed:', error);
     return res.status(500).json({ error: 'Could not delete Scholar file' });
   }

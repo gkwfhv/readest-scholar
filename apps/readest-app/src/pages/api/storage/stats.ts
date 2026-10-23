@@ -33,9 +33,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const supabase = createSupabaseAdminClient();
 
-    const { data: liveStats, error: liveStatsError } = await supabase.rpc(
-      'get_storage_usage_v1', { p_user_id: user.id },
-    );
+    const { data: liveStats, error: liveStatsError } = await supabase.rpc('get_storage_usage_v1', {
+      p_user_id: user.id,
+    });
     if (liveStatsError && !['PGRST202', '42883'].includes(liveStatsError.code)) {
       console.error('Error querying storage usage:', liveStatsError);
       return res.status(500).json({ error: 'Failed to retrieve storage statistics' });

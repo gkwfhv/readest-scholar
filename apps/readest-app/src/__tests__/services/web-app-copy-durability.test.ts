@@ -24,7 +24,14 @@ describe('Web file copy durability', () => {
     expect(store.put).toHaveBeenCalledOnce();
 
     let settled = false;
-    void copy.then(() => { settled = true; }, () => { settled = true; });
+    void copy.then(
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      },
+    );
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(settled).toBe(false);
     (transaction['onerror'] as () => void)();

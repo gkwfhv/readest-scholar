@@ -615,17 +615,24 @@ describe('TransferManager', () => {
     const appService = { ...makeAppService(), deleteFile: vi.fn().mockResolvedValue(undefined) };
     await transferManager.initialize(appService as never, () => [], vi.fn(), translationFn);
     const conflict = makeTransferItem({
-      id: 'scholar-conflict', status: 'failed',
+      id: 'scholar-conflict',
+      status: 'failed',
       error: 'Scholar file conflict; remote version retained',
-      scholarAccountId: 'account-id', scholarSnapshotPath: 'scholar-uploads/account-id/op-id',
+      scholarAccountId: 'account-id',
+      scholarSnapshotPath: 'scholar-uploads/account-id/op-id',
     });
-    const ordinary = makeTransferItem({ id: 'ordinary-failure', status: 'failed', error: 'network' });
+    const ordinary = makeTransferItem({
+      id: 'ordinary-failure',
+      status: 'failed',
+      error: 'network',
+    });
     useTransferStore.setState({ transfers: { [conflict.id]: conflict, [ordinary.id]: ordinary } });
 
     transferManager.clearFailed();
 
-    expect(useTransferStore.getState().transfers[conflict.id]?.scholarSnapshotPath)
-      .toBe(conflict.scholarSnapshotPath);
+    expect(useTransferStore.getState().transfers[conflict.id]?.scholarSnapshotPath).toBe(
+      conflict.scholarSnapshotPath,
+    );
     expect(useTransferStore.getState().transfers[ordinary.id]).toBeUndefined();
     expect(appService.deleteFile).not.toHaveBeenCalled();
     const stored = JSON.parse(localStorage.getItem('readest_transfer_queue')!);

@@ -145,12 +145,18 @@ const TransferItemRow: React.FC<{
         {transfer.status === 'failed' &&
           (transfer.error?.includes('Scholar file conflict') ||
             transfer.error?.includes('Scholar delete conflict')) && (
-          <button onClick={() => onResolve(transfer.id)}
-            className='btn btn-ghost btn-sm eink-bordered'
-            aria-label={_(transfer.type === 'delete' ? 'Resolve file delete conflict' : 'Resolve file conflict')}>
-            {_('Resolve')}
-          </button>
-        )}
+            <button
+              onClick={() => onResolve(transfer.id)}
+              className='btn btn-ghost btn-sm eink-bordered'
+              aria-label={_(
+                transfer.type === 'delete'
+                  ? 'Resolve file delete conflict'
+                  : 'Resolve file conflict',
+              )}
+            >
+              {_('Resolve')}
+            </button>
+          )}
         {isRetryableTransfer(transfer) && (
           <button
             onClick={() => onRetry(transfer.id)}
@@ -405,20 +411,27 @@ const TransferQueuePanel: React.FC = () => {
           )}
         </div>
       </div>
-      {conflictId && (() => {
-        const transfer = transfers.find((item) => item.id === conflictId);
-        // A delete conflict may concern a book already tombstoned locally,
-        // so the visible shelf cannot be used for this lookup.
-        const book = fullLibrary.find((item) => item.hash === transfer?.bookHash);
-        if (!transfer || !book) return null;
-        return transfer.type === 'delete' ? (
-          <ScholarFileDeleteConflictDialog transfer={transfer} book={book}
-            onClose={() => setConflictId(null)} />
-        ) : (
-          <ScholarFileConflictDialog transfer={transfer} book={book}
-            onClose={() => setConflictId(null)} />
-        );
-      })()}
+      {conflictId &&
+        (() => {
+          const transfer = transfers.find((item) => item.id === conflictId);
+          // A delete conflict may concern a book already tombstoned locally,
+          // so the visible shelf cannot be used for this lookup.
+          const book = fullLibrary.find((item) => item.hash === transfer?.bookHash);
+          if (!transfer || !book) return null;
+          return transfer.type === 'delete' ? (
+            <ScholarFileDeleteConflictDialog
+              transfer={transfer}
+              book={book}
+              onClose={() => setConflictId(null)}
+            />
+          ) : (
+            <ScholarFileConflictDialog
+              transfer={transfer}
+              book={book}
+              onClose={() => setConflictId(null)}
+            />
+          );
+        })()}
     </div>
   );
 };

@@ -10,6 +10,5 @@ export const isProtectedScholarStorageKey = (fileKey: string, userId: string): b
   if (!fileKey.startsWith(userId + '/')) return false;
   const relative = fileKey.slice(userId.length + 1);
   if (relative.startsWith('Scholar/versions/')) return true;
-  return isScholarReleaseBundle() &&
-    /^Readest\/Books\/[^/]+\/[^/]+$/.test(relative);
+  return isScholarReleaseBundle() && /^Readest\/Books\/[^/]+\/[^/]+$/.test(relative);
 };

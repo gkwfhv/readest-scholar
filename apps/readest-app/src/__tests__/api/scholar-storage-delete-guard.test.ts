@@ -29,8 +29,16 @@ const fileId = '00000000-0000-4000-8000-000000000002';
 const bookKey = userId + '/Readest/Books/hash/Paper.pdf';
 const coverKey = userId + '/Readest/Books/hash/cover.png';
 const request = (method: string, query: Record<string, unknown> = {}, body: unknown = {}) => ({
-  req: { method, query, body, headers: { authorization: 'Bearer token' } } as unknown as NextApiRequest,
-  res: { status: vi.fn().mockReturnThis(), json: vi.fn().mockReturnThis() } as unknown as NextApiResponse,
+  req: {
+    method,
+    query,
+    body,
+    headers: { authorization: 'Bearer token' },
+  } as unknown as NextApiRequest,
+  res: {
+    status: vi.fn().mockReturnThis(),
+    json: vi.fn().mockReturnThis(),
+  } as unknown as NextApiResponse,
 });
 
 beforeEach(() => {
@@ -69,18 +77,27 @@ describe('Scholar storage delete guard', () => {
   it('keeps generic deletion working on an older server without the version table', async () => {
     scholarRelease.active = false;
     const fileQuery: Record<string, unknown> = {};
-    for (const method of ['select', 'eq', 'limit']) fileQuery[method] = vi.fn().mockReturnValue(fileQuery);
-    fileQuery['single'] = vi.fn().mockResolvedValue({ data: { id: fileId, user_id: userId }, error: null });
+    for (const method of ['select', 'eq', 'limit'])
+      fileQuery[method] = vi.fn().mockReturnValue(fileQuery);
+    fileQuery['single'] = vi
+      .fn()
+      .mockResolvedValue({ data: { id: fileId, user_id: userId }, error: null });
     const versionQuery: Record<string, unknown> = {};
-    for (const method of ['select', 'eq', 'limit']) versionQuery[method] = vi.fn().mockReturnValue(versionQuery);
-    versionQuery['maybeSingle'] = vi.fn().mockResolvedValue({ data: null, error: { code: '42P01' } });
-    const fileDelete = { delete: vi.fn().mockReturnValue({
-      eq: vi.fn().mockResolvedValue({ error: null }),
-    }) };
+    for (const method of ['select', 'eq', 'limit'])
+      versionQuery[method] = vi.fn().mockReturnValue(versionQuery);
+    versionQuery['maybeSingle'] = vi
+      .fn()
+      .mockResolvedValue({ data: null, error: { code: '42P01' } });
+    const fileDelete = {
+      delete: vi.fn().mockReturnValue({
+        eq: vi.fn().mockResolvedValue({ error: null }),
+      }),
+    };
     let filesReads = 0;
     createSupabaseAdminClient.mockReturnValue({
-      from: vi.fn((name: string) => name === 'files'
-        ? (filesReads++ === 0 ? fileQuery : fileDelete) : versionQuery),
+      from: vi.fn((name: string) =>
+        name === 'files' ? (filesReads++ === 0 ? fileQuery : fileDelete) : versionQuery,
+      ),
     });
     const { req, res } = request('DELETE', { fileKey: bookKey });
     await removeOne(req, res);
@@ -91,13 +108,19 @@ describe('Scholar storage delete guard', () => {
   it('also blocks retained versions when a server lacks the Scholar release flag', async () => {
     scholarRelease.active = false;
     const fileQuery: Record<string, unknown> = {};
-    for (const method of ['select', 'eq', 'limit']) fileQuery[method] = vi.fn().mockReturnValue(fileQuery);
-    fileQuery['single'] = vi.fn().mockResolvedValue({ data: { id: fileId, user_id: userId }, error: null });
+    for (const method of ['select', 'eq', 'limit'])
+      fileQuery[method] = vi.fn().mockReturnValue(fileQuery);
+    fileQuery['single'] = vi
+      .fn()
+      .mockResolvedValue({ data: { id: fileId, user_id: userId }, error: null });
     const versionQuery: Record<string, unknown> = {};
-    for (const method of ['select', 'eq', 'limit']) versionQuery[method] = vi.fn().mockReturnValue(versionQuery);
-    versionQuery['maybeSingle'] = vi.fn().mockResolvedValue({ data: { file_id: fileId }, error: null });
+    for (const method of ['select', 'eq', 'limit'])
+      versionQuery[method] = vi.fn().mockReturnValue(versionQuery);
+    versionQuery['maybeSingle'] = vi
+      .fn()
+      .mockResolvedValue({ data: { file_id: fileId }, error: null });
     createSupabaseAdminClient.mockReturnValue({
-      from: vi.fn((name: string) => name === 'files' ? fileQuery : versionQuery),
+      from: vi.fn((name: string) => (name === 'files' ? fileQuery : versionQuery)),
     });
     const { req, res } = request('DELETE', { fileKey: bookKey });
     await removeOne(req, res);

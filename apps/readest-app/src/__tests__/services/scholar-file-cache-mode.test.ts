@@ -11,14 +11,23 @@ import { shouldMirrorScholarBook } from '@/hooks/useScholarFullMirror';
 
 const accountA = '00000000-0000-4000-8000-000000000001';
 const accountB = '00000000-0000-4000-8000-000000000002';
-const book = (changes: Partial<Book> = {}) => ({
-  hash: 'paper', title: 'Paper', format: 'PDF', uploadedAt: 1,
-  ...changes,
-}) as Book;
-const transfer = (changes: Partial<TransferItem> = {}) => ({
-  id: 'task', kind: 'book', type: 'download', bookHash: 'paper', status: 'failed',
-  ...changes,
-}) as TransferItem;
+const book = (changes: Partial<Book> = {}) =>
+  ({
+    hash: 'paper',
+    title: 'Paper',
+    format: 'PDF',
+    uploadedAt: 1,
+    ...changes,
+  }) as Book;
+const transfer = (changes: Partial<TransferItem> = {}) =>
+  ({
+    id: 'task',
+    kind: 'book',
+    type: 'download',
+    bookHash: 'paper',
+    status: 'failed',
+    ...changes,
+  }) as TransferItem;
 
 beforeEach(() => localStorage.clear());
 
@@ -42,8 +51,12 @@ describe('Scholar device file cache mode', () => {
     expect(shouldMirrorScholarBook(book(), [transfer()])).toBe(false);
     expect(shouldMirrorScholarBook(book(), [transfer({ status: 'pending' })])).toBe(false);
     expect(shouldMirrorScholarBook(book(), [transfer({ status: 'completed' })])).toBe(true);
-    expect(shouldMirrorScholarBook(book(), [transfer({ scholarAccountId: accountB })], accountA)).toBe(true);
-    expect(shouldMirrorScholarBook(book(), [transfer({ scholarAccountId: accountA })], accountA)).toBe(false);
+    expect(
+      shouldMirrorScholarBook(book(), [transfer({ scholarAccountId: accountB })], accountA),
+    ).toBe(true);
+    expect(
+      shouldMirrorScholarBook(book(), [transfer({ scholarAccountId: accountA })], accountA),
+    ).toBe(false);
   });
 });
 

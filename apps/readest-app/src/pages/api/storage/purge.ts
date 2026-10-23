@@ -80,7 +80,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .from('scholar_file_versions')
       .select('file_id')
       .eq('user_id', user.id)
-      .in('file_id', fileRecords.map((record) => record.id))
+      .in(
+        'file_id',
+        fileRecords.map((record) => record.id),
+      )
       .limit(1);
     if (versionError && !['42P01', 'PGRST205'].includes(versionError.code)) {
       return res.status(500).json({ error: 'Could not verify Scholar versions' });

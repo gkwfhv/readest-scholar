@@ -60,7 +60,10 @@ export async function uploadScholarFileVersion(
         await webUpload(file, prepared.uploadUrl, onProgress, prepared.headers);
       } else {
         await tauriUpload(
-          prepared.uploadUrl, fileFullPath!, 'PUT', onProgress,
+          prepared.uploadUrl,
+          fileFullPath!,
+          'PUT',
+          onProgress,
           new Map(Object.entries(prepared.headers)),
         );
       }

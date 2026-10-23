@@ -33,11 +33,18 @@ export function getScholarFileBaseline(
     if (!raw) return undefined;
     const value: unknown = JSON.parse(raw);
     if (
-      typeof value !== 'object' || value === null ||
-      !('fileId' in value) || typeof value.fileId !== 'string' || !UUID.test(value.fileId) ||
+      typeof value !== 'object' ||
+      value === null ||
+      !('fileId' in value) ||
+      typeof value.fileId !== 'string' ||
+      !UUID.test(value.fileId) ||
       !('versionId' in value) ||
-      !(value.versionId === null || (typeof value.versionId === 'string' && UUID.test(value.versionId)))
-    ) return undefined;
+      !(
+        value.versionId === null ||
+        (typeof value.versionId === 'string' && UUID.test(value.versionId))
+      )
+    )
+      return undefined;
     return { fileId: value.fileId, versionId: value.versionId };
   } catch {
     return undefined;
@@ -50,9 +57,11 @@ export function saveScholarFileBaseline(
   baseline: ScholarFileBaseline,
 ): void {
   if (
-    !UUID.test(userId) || !UUID.test(baseline.fileId) ||
+    !UUID.test(userId) ||
+    !UUID.test(baseline.fileId) ||
     !(baseline.versionId === null || UUID.test(baseline.versionId)) ||
     typeof localStorage === 'undefined'
-  ) throw new Error('Invalid Scholar file baseline');
+  )
+    throw new Error('Invalid Scholar file baseline');
   localStorage.setItem(keyFor(userId, cloudFilePath), JSON.stringify(baseline));
 }

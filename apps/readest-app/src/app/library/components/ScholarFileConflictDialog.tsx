@@ -50,7 +50,8 @@ export default function ScholarFileConflictDialog({
         }
         const filePath = CLOUD_BOOKS_SUBDIR + '/' + getRemoteBookFilename(book);
         const statusResponse = await fetchWithAuth(
-          getAPIBaseUrl() + '/scholar/files/status?fileKey=' +
+          getAPIBaseUrl() +
+            '/scholar/files/status?fileKey=' +
             encodeURIComponent(accountId + '/' + filePath),
           { method: 'GET' },
         );
@@ -69,37 +70,51 @@ export default function ScholarFileConflictDialog({
         };
         const lookupVersion = async (key: 'versionId' | 'opId', value: string) => {
           const response = await fetchWithAuth(
-            getAPIBaseUrl() + '/scholar/files/history?fileId=' +
-              encodeURIComponent(status.fileId) + '&' + key + '=' + encodeURIComponent(value),
+            getAPIBaseUrl() +
+              '/scholar/files/history?fileId=' +
+              encodeURIComponent(status.fileId) +
+              '&' +
+              key +
+              '=' +
+              encodeURIComponent(value),
             { method: 'GET' },
           );
           const result = (await response.json()) as { versions: FileVersion[] };
           return result.versions[0];
         };
-        const cloud = history.versions.find((v) => v.versionId === history.activeVersionId) ||
+        const cloud =
+          history.versions.find((v) => v.versionId === history.activeVersionId) ||
           (history.activeVersionId
-            ? await lookupVersion('versionId', history.activeVersionId) : undefined);
-        const local = history.versions.find((v) => v.opId === transfer.scholarOpId) ||
-          await lookupVersion('opId', transfer.scholarOpId);
+            ? await lookupVersion('versionId', history.activeVersionId)
+            : undefined);
+        const local =
+          history.versions.find((v) => v.opId === transfer.scholarOpId) ||
+          (await lookupVersion('opId', transfer.scholarOpId));
         if (
-          !cloud || !local || !history.activeVersionId ||
+          !cloud ||
+          !local ||
+          !history.activeVersionId ||
           status.fileId !== history.fileId ||
           status.activeVersionId !== history.activeVersionId
         ) {
           throw new Error('File versions changed; reopen this dialog');
         }
-        if (!cancelled) setReview({
-          fileId: status.fileId,
-          activeVersionId: history.activeVersionId,
-          cloud,
-          local,
-        });
+        if (!cancelled)
+          setReview({
+            fileId: status.fileId,
+            activeVersionId: history.activeVersionId,
+            cloud,
+            local,
+          });
       } catch (cause) {
-        if (!cancelled) setError(cause instanceof Error ? cause.message : 'Could not load versions');
+        if (!cancelled)
+          setError(cause instanceof Error ? cause.message : 'Could not load versions');
       }
     };
     void load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [book, transfer.scholarAccountId, transfer.scholarOpId]);
 
   const resolve = async (useLocal: boolean) => {
@@ -146,8 +161,12 @@ export default function ScholarFileConflictDialog({
 
   return (
     <div className='fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4'>
-      <div role='dialog' aria-modal='true' aria-label={_('Resolve file conflict')}
-        className='modal-box bg-base-100 w-full max-w-lg rounded-2xl p-5'>
+      <div
+        role='dialog'
+        aria-modal='true'
+        aria-label={_('Resolve file conflict')}
+        className='modal-box bg-base-100 w-full max-w-lg rounded-2xl p-5'
+      >
         <h2 className='text-lg font-semibold'>{_('Resolve file conflict')}</h2>
         <p className='mt-1 text-sm'>{book.title}</p>
         <p className='text-base-content/70 mt-2 text-sm'>
@@ -158,8 +177,14 @@ export default function ScholarFileConflictDialog({
             {versionCard(_('Cloud version'), review.cloud)}
             {versionCard(_('This upload'), review.local)}
           </div>
-        ) : !error ? <p className='mt-4 text-sm'>{_('Loading versions...')}</p> : null}
-        {error && <p role='alert' className='text-error mt-3 text-sm'>{_(error)}</p>}
+        ) : !error ? (
+          <p className='mt-4 text-sm'>{_('Loading versions...')}</p>
+        ) : null}
+        {error && (
+          <p role='alert' className='text-error mt-3 text-sm'>
+            {_(error)}
+          </p>
+        )}
         <p className='text-base-content/70 mt-3 text-xs'>
           {_('Your local file stays on this device whichever version you choose.')}
         </p>
@@ -167,12 +192,20 @@ export default function ScholarFileConflictDialog({
           <button type='button' className='btn btn-ghost eink-bordered' onClick={onClose}>
             {_('Close')}
           </button>
-          <button type='button' className='btn btn-ghost eink-bordered'
-            disabled={!review || busy} onClick={() => void resolve(false)}>
+          <button
+            type='button'
+            className='btn btn-ghost eink-bordered'
+            disabled={!review || busy}
+            onClick={() => void resolve(false)}
+          >
             {_('Keep cloud version')}
           </button>
-          <button type='button' className='btn btn-contrast'
-            disabled={!review || busy} onClick={() => void resolve(true)}>
+          <button
+            type='button'
+            className='btn btn-contrast'
+            disabled={!review || busy}
+            onClick={() => void resolve(true)}
+          >
             {_('Use this upload')}
           </button>
         </div>

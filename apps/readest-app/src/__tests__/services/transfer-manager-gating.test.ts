@@ -185,12 +185,14 @@ describe('Scholar file queue baseline', () => {
     expect(scholarBaseline).toHaveBeenCalledWith(userA, expect.stringContaining('Readest/Books/'));
     transferManager.resumeQueue();
     await flushAsync();
-    expect(service["uploadBook"]).toHaveBeenCalledWith(book, expect.any(Function), {
-      accountId: userA, opId: task.scholarOpId, expectedVersionId: versionId,
+    expect(service['uploadBook']).toHaveBeenCalledWith(book, expect.any(Function), {
+      accountId: userA,
+      opId: task.scholarOpId,
+      expectedVersionId: versionId,
       snapshotPath: `scholar-uploads/${userA}/${task.scholarOpId}`,
     });
   });
-  test("accepts an upload after sign-in updates an already initialized manager", async () => {
+  test('accepts an upload after sign-in updates an already initialized manager', async () => {
     scholarRelease.mockReturnValue(true);
     scholarAccountId.mockResolvedValue(null);
     const book = makeBook();
@@ -203,7 +205,7 @@ describe('Scholar file queue baseline', () => {
     expect(id).toBeTruthy();
     expect(useTransferStore.getState().transfers[id!]!.scholarAccountId).toBe(userA);
     transferManager.setScholarAccountId(null);
-    expect(transferManager.queueUpload(makeBook({ hash: "other" }))).toBeNull();
+    expect(transferManager.queueUpload(makeBook({ hash: 'other' }))).toBeNull();
   });
 
   test('full mirror downloads stay bound to the account that queued them', async () => {
@@ -268,10 +270,12 @@ describe('Scholar file queue baseline', () => {
     transferManager.pauseQueue();
     await initManager(makeAppService(), [book]);
     const mirrorId = transferManager.queueDownload(book, 20, true, true)!;
-    const otherId = useTransferStore.getState().addTransfer(
-      'other-book', 'Other book', 'download', 10, false,
-      { accountId: userA, expectedVersionId: null },
-    );
+    const otherId = useTransferStore
+      .getState()
+      .addTransfer('other-book', 'Other book', 'download', 10, false, {
+        accountId: userA,
+        expectedVersionId: null,
+      });
     expect(useTransferStore.getState().transfers[mirrorId]?.scholarMirror).toBe(true);
     expect(useTransferStore.getState().transfers[otherId]?.scholarMirror).toBe(false);
 
@@ -296,14 +300,17 @@ describe('Scholar file queue baseline', () => {
     expect(task.scholarFilePath).toContain('Readest/Books/');
     transferManager.resumeQueue();
     await flushAsync();
-    expect(fetchWithAuth).toHaveBeenCalledWith(expect.stringContaining('/scholar/files/delete'),
+    expect(fetchWithAuth).toHaveBeenCalledWith(
+      expect.stringContaining('/scholar/files/delete'),
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({
-          fileName: task.scholarFilePath, opId: task.scholarOpId,
+          fileName: task.scholarFilePath,
+          opId: task.scholarOpId,
           expectedVersionId: versionId,
         }),
-      }));
+      }),
+    );
     expect(service['deleteBook']).not.toHaveBeenCalled();
     expect(book.uploadedAt).toBeNull();
     expect(useTransferStore.getState().transfers[id]?.status).toBe('completed');
@@ -313,7 +320,9 @@ describe('Scholar file queue baseline', () => {
     scholarRelease.mockReturnValue(true);
     scholarAccountId.mockResolvedValue(userA);
     scholarBaseline.mockReturnValue({ fileId: 'file-id', versionId });
-    fetchWithAuth.mockRejectedValueOnce(new Error('Scholar delete conflict; remote version retained'));
+    fetchWithAuth.mockRejectedValueOnce(
+      new Error('Scholar delete conflict; remote version retained'),
+    );
     const book = makeBook({ uploadedAt: 1000 });
     transferManager.pauseQueue();
     await initManager(makeAppService(), [book]);
@@ -332,26 +341,42 @@ describe('Scholar file queue baseline', () => {
     scholarAccountId.mockResolvedValue(userA);
     const book = makeBook({ deletedAt: 1000, downloadedAt: null, uploadedAt: 900 });
     const updateBook = vi.fn().mockResolvedValue(undefined);
-    await transferManager.initialize(makeAppService() as never, () => [book], updateBook, translationFn);
+    await transferManager.initialize(
+      makeAppService() as never,
+      () => [book],
+      updateBook,
+      translationFn,
+    );
     const task = makeTransferItem({
-      id: 'delete-conflict', type: 'delete', status: 'failed',
-      scholarAccountId: userA, scholarFilePath: 'Readest/Books/hash1/Test Book.epub',
+      id: 'delete-conflict',
+      type: 'delete',
+      status: 'failed',
+      scholarAccountId: userA,
+      scholarFilePath: 'Readest/Books/hash1/Test Book.epub',
       scholarOpId: '00000000-0000-4000-8000-000000000004',
       scholarExpectedVersionId: versionId,
       error: 'Scholar delete conflict; remote version retained',
     });
     useTransferStore.setState({ transfers: { [task.id]: task } });
     await transferManager.keepScholarCloudAfterDeleteConflict(task.id, 'file-id', versionId);
-    expect(fetchWithAuth).toHaveBeenCalledWith(expect.stringContaining('/scholar/files/restore'),
+    expect(fetchWithAuth).toHaveBeenCalledWith(
+      expect.stringContaining('/scholar/files/restore'),
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ fileId: 'file-id', versionId, expectedVersionId: versionId }),
-      }));
-    expect(updateBook).toHaveBeenCalledWith(expect.objectContaining({
-      deletedAt: null, fileSyncDeletionRequestedAt: null, uploadedAt: 900,
-    }));
-    expect(saveScholarBaseline).toHaveBeenCalledWith(userA, task.scholarFilePath,
-      { fileId: 'file-id', versionId });
+      }),
+    );
+    expect(updateBook).toHaveBeenCalledWith(
+      expect.objectContaining({
+        deletedAt: null,
+        fileSyncDeletionRequestedAt: null,
+        uploadedAt: 900,
+      }),
+    );
+    expect(saveScholarBaseline).toHaveBeenCalledWith(userA, task.scholarFilePath, {
+      fileId: 'file-id',
+      versionId,
+    });
     expect(useTransferStore.getState().transfers[task.id]).toBeUndefined();
     expect(useTransferStore.getState().getQueueStats().failed).toBe(0);
   });
@@ -363,8 +388,11 @@ describe('Scholar file queue baseline', () => {
     transferManager.pauseQueue();
     await initManager(makeAppService(), [makeBook()]);
     const task = makeTransferItem({
-      id: 'delete-conflict', type: 'delete', status: 'failed',
-      scholarAccountId: userA, scholarFilePath: 'Readest/Books/hash1/Test Book.epub',
+      id: 'delete-conflict',
+      type: 'delete',
+      status: 'failed',
+      scholarAccountId: userA,
+      scholarFilePath: 'Readest/Books/hash1/Test Book.epub',
       scholarOpId: '00000000-0000-4000-8000-000000000004',
       scholarExpectedVersionId: versionId,
       error: 'Scholar delete conflict; remote version retained',
@@ -388,13 +416,19 @@ describe('Scholar file queue baseline', () => {
     const id = transferManager.queueUpload(book)!;
     await flushAsync(0);
     const task = useTransferStore.getState().transfers[id]!;
-    expect(service['createScholarUploadSnapshot']).toHaveBeenCalledWith(book, task.scholarSnapshotPath);
+    expect(service['createScholarUploadSnapshot']).toHaveBeenCalledWith(
+      book,
+      task.scholarSnapshotPath,
+    );
     expect(service['uploadBook']).not.toHaveBeenCalled();
     book.filePath = '/changed-source.pdf';
     transferManager.resumeQueue();
     await flushAsync();
-    expect(service['uploadBook']).toHaveBeenCalledWith(book, expect.any(Function),
-      expect.objectContaining({ snapshotPath: task.scholarSnapshotPath, opId: task.scholarOpId }));
+    expect(service['uploadBook']).toHaveBeenCalledWith(
+      book,
+      expect.any(Function),
+      expect.objectContaining({ snapshotPath: task.scholarSnapshotPath, opId: task.scholarOpId }),
+    );
     expect(service['deleteFile']).toHaveBeenCalledWith(task.scholarSnapshotPath, 'Cache');
   });
 
@@ -415,8 +449,11 @@ describe('Scholar file queue baseline', () => {
     expect(service['createScholarUploadSnapshot']).not.toHaveBeenCalled();
     transferManager.resumeQueue();
     await flushAsync();
-    expect(service['uploadBook']).toHaveBeenCalledWith(book, expect.any(Function),
-      expect.objectContaining({ snapshotPath: task.scholarSnapshotPath, opId: task.scholarOpId }));
+    expect(service['uploadBook']).toHaveBeenCalledWith(
+      book,
+      expect.any(Function),
+      expect.objectContaining({ snapshotPath: task.scholarSnapshotPath, opId: task.scholarOpId }),
+    );
   });
 
   test('missing restored snapshot fails without using the operation ID', async () => {
@@ -431,7 +468,10 @@ describe('Scholar file queue baseline', () => {
     resetTransferManager();
     resetTransferStore();
     localStorage.setItem('readest_transfer_queue', saved);
-    const service = await initManager(makeAppService({ exists: vi.fn().mockResolvedValue(false) }), [book]);
+    const service = await initManager(
+      makeAppService({ exists: vi.fn().mockResolvedValue(false) }),
+      [book],
+    );
     transferManager.resumeQueue();
     await flushAsync();
     expect(service['uploadBook']).not.toHaveBeenCalled();
@@ -443,9 +483,12 @@ describe('Scholar file queue baseline', () => {
     scholarRelease.mockReturnValue(true);
     scholarAccountId.mockResolvedValue(userA);
     const book = makeBook();
-    const service = await initManager(makeAppService({
-      createScholarUploadSnapshot: vi.fn().mockRejectedValue(new Error('disk full')),
-    }), [book]);
+    const service = await initManager(
+      makeAppService({
+        createScholarUploadSnapshot: vi.fn().mockRejectedValue(new Error('disk full')),
+      }),
+      [book],
+    );
     const id = transferManager.queueUpload(book)!;
     await flushAsync();
     expect(service['uploadBook']).not.toHaveBeenCalled();
@@ -472,9 +515,14 @@ describe('Scholar file queue baseline', () => {
     scholarAccountId.mockResolvedValue(userA);
     const book = makeBook();
     transferManager.pauseQueue();
-    const service = await initManager(makeAppService({
-      uploadBook: vi.fn().mockRejectedValue(new Error('Scholar file conflict; local version retained')),
-    }), [book]);
+    const service = await initManager(
+      makeAppService({
+        uploadBook: vi
+          .fn()
+          .mockRejectedValue(new Error('Scholar file conflict; local version retained')),
+      }),
+      [book],
+    );
     await flushAsync(0);
     const id = transferManager.queueUpload(book)!;
     transferManager.resumeQueue();
@@ -495,7 +543,7 @@ describe('Scholar file queue baseline', () => {
     scholarAccountId.mockResolvedValue(userB);
     transferManager.resumeQueue();
     await flushAsync();
-    expect(service["uploadBook"]).not.toHaveBeenCalled();
+    expect(service['uploadBook']).not.toHaveBeenCalled();
   });
 });
 
@@ -877,13 +925,23 @@ describe('Scholar conflict completion', () => {
     scholarAccountId.mockResolvedValue(accountId);
     const book = makeBook();
     const service = await initManager(makeAppService(), [book]);
-    useTransferStore.setState({ transfers: { t1: makeTransferItem({
-      status: 'failed', error: 'Scholar file conflict; local version retained',
-      scholarAccountId: accountId, scholarOpId: 'op-1', scholarSnapshotPath: 'scholar-uploads/snapshot',
-    }) } });
+    useTransferStore.setState({
+      transfers: {
+        t1: makeTransferItem({
+          status: 'failed',
+          error: 'Scholar file conflict; local version retained',
+          scholarAccountId: accountId,
+          scholarOpId: 'op-1',
+          scholarSnapshotPath: 'scholar-uploads/snapshot',
+        }),
+      },
+    });
     await transferManager.finishScholarConflict('t1', fileId, versionId, true);
-    expect(saveScholarBaseline).toHaveBeenCalledWith(accountId,
-      expect.stringContaining('Readest/Books/'), { fileId, versionId });
+    expect(saveScholarBaseline).toHaveBeenCalledWith(
+      accountId,
+      expect.stringContaining('Readest/Books/'),
+      { fileId, versionId },
+    );
     expect(book.uploadedAt).toEqual(expect.any(Number));
     expect(useTransferStore.getState().transfers['t1']?.status).toBe('completed');
     expect(service['deleteFile']).toHaveBeenCalledWith('scholar-uploads/snapshot', 'Cache');
@@ -892,12 +950,20 @@ describe('Scholar conflict completion', () => {
   test('an account switch leaves the conflict and its local snapshot intact', async () => {
     scholarAccountId.mockResolvedValue('00000000-0000-4000-8000-000000000004');
     const service = await initManager(makeAppService(), [makeBook()]);
-    useTransferStore.setState({ transfers: { t1: makeTransferItem({
-      status: 'failed', error: 'Scholar file conflict; local version retained',
-      scholarAccountId: accountId, scholarOpId: 'op-1', scholarSnapshotPath: 'scholar-uploads/snapshot',
-    }) } });
-    await expect(transferManager.finishScholarConflict('t1', fileId, versionId, false))
-      .rejects.toThrow('Scholar upload account changed');
+    useTransferStore.setState({
+      transfers: {
+        t1: makeTransferItem({
+          status: 'failed',
+          error: 'Scholar file conflict; local version retained',
+          scholarAccountId: accountId,
+          scholarOpId: 'op-1',
+          scholarSnapshotPath: 'scholar-uploads/snapshot',
+        }),
+      },
+    });
+    await expect(
+      transferManager.finishScholarConflict('t1', fileId, versionId, false),
+    ).rejects.toThrow('Scholar upload account changed');
     expect(saveScholarBaseline).not.toHaveBeenCalled();
     expect(useTransferStore.getState().transfers['t1']?.status).toBe('failed');
     expect(service['deleteFile']).not.toHaveBeenCalled();

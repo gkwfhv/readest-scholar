@@ -2586,6 +2586,6 @@
   "On demand": "按需下載",
   "Download a book when you open it.": "開啟書籍時下載。",
   "Full mirror": "完整鏡像",
-  "Download every cloud book for offline reading in the background.": "在背景下載所有雲端書籍，以便離線閱讀。"
-  "On mobile, background mirroring runs only when Wi-Fi is detected; if network type is unavailable, open books to download them on demand.": "在行動裝置上，只有偵測到 Wi-Fi 時才會在背景鏡像；無法辨識網路類型時，請開啟書籍按需下載。",
+  "Download every cloud book for offline reading in the background.": "在背景下載所有雲端書籍，以便離線閱讀。",
+  "On mobile, background mirroring runs only when Wi-Fi is detected; if network type is unavailable, open books to download them on demand.": "在行動裝置上，只有偵測到 Wi-Fi 時才會在背景鏡像；無法辨識網路類型時，請開啟書籍按需下載。"
 }

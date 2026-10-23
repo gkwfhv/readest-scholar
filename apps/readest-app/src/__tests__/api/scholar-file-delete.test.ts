@@ -24,8 +24,15 @@ const body = {
   expectedVersionId: headId,
 };
 const request = (method: string, input: unknown = body) => ({
-  req: { method, body: input, headers: { authorization: 'Bearer token' } } as unknown as NextApiRequest,
-  res: { status: vi.fn().mockReturnThis(), json: vi.fn().mockReturnThis() } as unknown as NextApiResponse,
+  req: {
+    method,
+    body: input,
+    headers: { authorization: 'Bearer token' },
+  } as unknown as NextApiRequest,
+  res: {
+    status: vi.fn().mockReturnThis(),
+    json: vi.fn().mockReturnThis(),
+  } as unknown as NextApiResponse,
 });
 
 beforeEach(() => {
@@ -50,7 +57,9 @@ describe('Scholar file delete API', () => {
     });
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({
-      fileId, activeVersionId: headId, deletedAt: '2026-10-23T00:00:00Z',
+      fileId,
+      activeVersionId: headId,
+      deletedAt: '2026-10-23T00:00:00Z',
     });
   });
 

@@ -5,8 +5,11 @@ export const SCHOLAR_FILE_CACHE_MODE_EVENT = 'scholar-file-cache-mode-changed';
 const prefix = 'readest_scholar_file_cache_mode_v1:';
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export function getScholarFileCacheMode(accountId: string | null | undefined): ScholarFileCacheMode {
-  if (!accountId || !uuid.test(accountId) || typeof localStorage === 'undefined') return 'on_demand';
+export function getScholarFileCacheMode(
+  accountId: string | null | undefined,
+): ScholarFileCacheMode {
+  if (!accountId || !uuid.test(accountId) || typeof localStorage === 'undefined')
+    return 'on_demand';
   try {
     return localStorage.getItem(prefix + accountId) === 'full_mirror' ? 'full_mirror' : 'on_demand';
   } catch {

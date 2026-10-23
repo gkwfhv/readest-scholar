@@ -14,9 +14,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!user || !token) return res.status(403).json({ error: 'Not authenticated' });
 
   const { fileId, opId, versionId } = req.query;
-  if (!isUuid(fileId) || (opId !== undefined && !isUuid(opId)) ||
-      (versionId !== undefined && !isUuid(versionId)) ||
-      (opId !== undefined && versionId !== undefined)) {
+  if (
+    !isUuid(fileId) ||
+    (opId !== undefined && !isUuid(opId)) ||
+    (versionId !== undefined && !isUuid(versionId)) ||
+    (opId !== undefined && versionId !== undefined)
+  ) {
     return res.status(400).json({ error: 'Invalid file history request' });
   }
 
@@ -59,7 +62,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { data: versions, error: versionError } = await query
     .order('verified_at', { ascending: false })
     .limit(opId || versionId ? 1 : 100);
-  if (versionError) return res.status(500).json({ error: 'Could not read Scholar version history' });
+  if (versionError)
+    return res.status(500).json({ error: 'Could not read Scholar version history' });
 
   return res.status(200).json({
     fileId,

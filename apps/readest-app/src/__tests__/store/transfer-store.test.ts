@@ -54,8 +54,10 @@ describe('transferStore', () => {
     test('freezes the account and local version baseline for a Scholar upload', () => {
       const userId = '00000000-0000-4000-8000-000000000001';
       const versionId = '00000000-0000-4000-8000-000000000002';
-      const id = useTransferStore.getState().addTransfer('hash', 'Paper', 'upload', 10, false,
-        { accountId: userId, expectedVersionId: versionId });
+      const id = useTransferStore.getState().addTransfer('hash', 'Paper', 'upload', 10, false, {
+        accountId: userId,
+        expectedVersionId: versionId,
+      });
       const item = useTransferStore.getState().transfers[id]!;
       expect(item.scholarAccountId).toBe(userId);
       expect(item.scholarExpectedVersionId).toBe(versionId);
@@ -264,12 +266,12 @@ describe('transferStore', () => {
       const upload = useTransferStore.getState().addTransfer('h1', 'Upload', 'upload');
       const deletion = useTransferStore.getState().addTransfer('h2', 'Delete', 'delete');
       const other = useTransferStore.getState().addTransfer('h3', 'Other', 'download');
-      useTransferStore.getState().setTransferStatus(
-        upload, 'failed', 'Scholar file conflict; local version retained',
-      );
-      useTransferStore.getState().setTransferStatus(
-        deletion, 'failed', 'Scholar delete conflict; remote version retained',
-      );
+      useTransferStore
+        .getState()
+        .setTransferStatus(upload, 'failed', 'Scholar file conflict; local version retained');
+      useTransferStore
+        .getState()
+        .setTransferStatus(deletion, 'failed', 'Scholar delete conflict; remote version retained');
       useTransferStore.getState().setTransferStatus(other, 'failed', 'network');
 
       useTransferStore.getState().clearFailed();

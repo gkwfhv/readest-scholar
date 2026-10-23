@@ -26,7 +26,12 @@ export type BookFileContentSource = Extract<
 export function isBookFileContentSource(
   source: BookContentSource,
 ): source is BookFileContentSource {
-  return source.kind === 'managed' || source.kind === 'external' || source.kind === 'url' || source.kind === 'snapshot';
+  return (
+    source.kind === 'managed' ||
+    source.kind === 'external' ||
+    source.kind === 'url' ||
+    source.kind === 'snapshot'
+  );
 }
 
 async function resolveLegacyManagedSource(

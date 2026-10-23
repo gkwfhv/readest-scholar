@@ -26,9 +26,14 @@ vi.mock('@/services/transferManager', () => ({
 }));
 import { useScholarFullMirror } from '@/hooks/useScholarFullMirror';
 
-const makeBook = (hash: string): Book => ({
-  hash, title: hash, format: 'PDF', uploadedAt: 1, downloadedAt: null,
-}) as Book;
+const makeBook = (hash: string): Book =>
+  ({
+    hash,
+    title: hash,
+    format: 'PDF',
+    uploadedAt: 1,
+    downloadedAt: null,
+  }) as Book;
 
 beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -40,8 +45,14 @@ beforeEach(() => {
   useTransferStore.setState({ transfers: {} });
   useSettingsStore.setState({ settings: { version: 1, readestCloud: { enabled: true } } as never });
   queueDownload.mockImplementation((book: Book) => {
-    const task = { id: book.hash, bookHash: book.hash, kind: 'book', type: 'download',
-      status: 'pending', scholarAccountId: accountId } as TransferItem;
+    const task = {
+      id: book.hash,
+      bookHash: book.hash,
+      kind: 'book',
+      type: 'download',
+      status: 'pending',
+      scholarAccountId: accountId,
+    } as TransferItem;
     useTransferStore.setState((state) => ({ transfers: { ...state.transfers, [task.id]: task } }));
     return task.id;
   });
@@ -51,14 +62,21 @@ afterEach(() => vi.useRealTimers());
 test('full mirror queues only remote-only files after opt-in and library growth', async () => {
   const appService = { isBookAvailable: vi.fn().mockResolvedValue(false) } as unknown as AppService;
   const { unmount } = renderHook(() => useScholarFullMirror(accountId, true, appService));
-  await act(async () => { await vi.runAllTimersAsync(); });
+  await act(async () => {
+    await vi.runAllTimersAsync();
+  });
   expect(queueDownload).not.toHaveBeenCalled();
 
   await act(async () => {
     setScholarFileCacheMode(accountId, 'full_mirror');
     await vi.runAllTimersAsync();
   });
-  expect(queueDownload).toHaveBeenCalledWith(expect.objectContaining({ hash: 'paper-a' }), 20, true, true);
+  expect(queueDownload).toHaveBeenCalledWith(
+    expect.objectContaining({ hash: 'paper-a' }),
+    20,
+    true,
+    true,
+  );
   expect(queueDownload).toHaveBeenCalledTimes(1);
 
   await act(async () => {
@@ -67,7 +85,10 @@ test('full mirror queues only remote-only files after opt-in and library growth'
   });
   expect(queueDownload).toHaveBeenCalledTimes(2);
   expect(queueDownload).toHaveBeenLastCalledWith(
-    expect.objectContaining({ hash: 'paper-b' }), 20, true, true,
+    expect.objectContaining({ hash: 'paper-b' }),
+    20,
+    true,
+    true,
   );
   unmount();
 });
@@ -76,7 +97,9 @@ test('turning off full mirror stops this account automatic downloads', async () 
   const appService = { isBookAvailable: vi.fn().mockResolvedValue(false) } as unknown as AppService;
   setScholarFileCacheMode(accountId, 'full_mirror');
   const { unmount } = renderHook(() => useScholarFullMirror(accountId, true, appService));
-  await act(async () => { await vi.runAllTimersAsync(); });
+  await act(async () => {
+    await vi.runAllTimersAsync();
+  });
   expect(queueDownload).toHaveBeenCalledTimes(1);
   expect(stopScholarFullMirror).not.toHaveBeenCalled();
 
@@ -95,7 +118,9 @@ test('a newer cloud file is queued even when older local bytes still exist', asy
   setScholarFileCacheMode(accountId, 'full_mirror');
   const appService = { isBookAvailable: vi.fn().mockResolvedValue(true) } as unknown as AppService;
   const { unmount } = renderHook(() => useScholarFullMirror(accountId, true, appService));
-  await act(async () => { await vi.runAllTimersAsync(); });
+  await act(async () => {
+    await vi.runAllTimersAsync();
+  });
   expect(queueDownload).toHaveBeenCalledWith(oldBook, 20, true, true);
   expect(appService.isBookAvailable).not.toHaveBeenCalled();
   unmount();

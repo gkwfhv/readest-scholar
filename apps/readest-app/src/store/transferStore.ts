@@ -74,7 +74,12 @@ interface TransferState {
     type: TransferType,
     priority?: number,
     isBackground?: boolean,
-    scholar?: { accountId: string; expectedVersionId: string | null; filePath?: string; mirror?: boolean },
+    scholar?: {
+      accountId: string;
+      expectedVersionId: string | null;
+      filePath?: string;
+      mirror?: boolean;
+    },
   ) => string;
   addReplicaTransfer: (
     replicaKind: string,
@@ -159,10 +164,13 @@ export const isFailedLikeTransfer = (t: TransferItem): boolean =>
 
 export const isUnresolvedScholarConflict = (t: TransferItem): boolean =>
   t.status === 'failed' &&
-  ['Scholar file conflict', 'Scholar delete conflict'].some((message) => t.error?.includes(message));
+  ['Scholar file conflict', 'Scholar delete conflict'].some((message) =>
+    t.error?.includes(message),
+  );
 
 export const isRetryableTransfer = (t: TransferItem): boolean =>
-  isFailedLikeTransfer(t) && !isUnresolvedScholarConflict(t) &&
+  isFailedLikeTransfer(t) &&
+  !isUnresolvedScholarConflict(t) &&
   (!t.scholarAccountId || t.type !== 'upload' || !!t.scholarSnapshotPath);
 
 /**
@@ -214,8 +222,8 @@ export const useTransferStore = create<TransferState>((set, get) => ({
       scholarOpId: type === 'upload' || (type === 'delete' && !!scholar) ? uuidv4() : undefined,
       scholarAccountId: scholar?.accountId,
       scholarFilePath: scholar?.filePath,
-      scholarExpectedVersionId: (type === 'upload' || type === 'delete')
-        ? scholar?.expectedVersionId : undefined,
+      scholarExpectedVersionId:
+        type === 'upload' || type === 'delete' ? scholar?.expectedVersionId : undefined,
       scholarSnapshotRequired: type === 'upload' && !!scholar,
       scholarMirror: type === 'download' && !!scholar?.mirror,
       type,
@@ -270,32 +278,51 @@ export const useTransferStore = create<TransferState>((set, get) => ({
     return id;
   },
 
-  setScholarSnapshotPath: (transferId, path) => set((state) => {
-    const transfer = state.transfers[transferId];
-    if (!transfer || (path && transfer.status !== 'pending')) return state;
-    return { transfers: { ...state.transfers, [transferId]: {
-      ...transfer, scholarSnapshotPath: path,
-    } } };
-  }),
+  setScholarSnapshotPath: (transferId, path) =>
+    set((state) => {
+      const transfer = state.transfers[transferId];
+      if (!transfer || (path && transfer.status !== 'pending')) return state;
+      return {
+        transfers: {
+          ...state.transfers,
+          [transferId]: {
+            ...transfer,
+            scholarSnapshotPath: path,
+          },
+        },
+      };
+    }),
 
-  rebaseScholarDelete: (transferId, expectedVersionId) => set((state) => {
-    const transfer = state.transfers[transferId];
-    if (!transfer || transfer.kind !== 'book' || transfer.type !== 'delete' ||
+  rebaseScholarDelete: (transferId, expectedVersionId) =>
+    set((state) => {
+      const transfer = state.transfers[transferId];
+      if (
+        !transfer ||
+        transfer.kind !== 'book' ||
+        transfer.type !== 'delete' ||
         transfer.status !== 'failed' ||
         !transfer.error?.includes('Scholar delete conflict') ||
-        !transfer.scholarAccountId || !transfer.scholarFilePath) return state;
-    return { transfers: { ...state.transfers, [transferId]: {
-      ...transfer,
-      scholarOpId: uuidv4(),
-      scholarExpectedVersionId: expectedVersionId,
-      status: 'pending',
-      error: undefined,
-      retryCount: 0,
-      progress: 0,
-      startedAt: undefined,
-      completedAt: undefined,
-    } } };
-  }),
+        !transfer.scholarAccountId ||
+        !transfer.scholarFilePath
+      )
+        return state;
+      return {
+        transfers: {
+          ...state.transfers,
+          [transferId]: {
+            ...transfer,
+            scholarOpId: uuidv4(),
+            scholarExpectedVersionId: expectedVersionId,
+            status: 'pending',
+            error: undefined,
+            retryCount: 0,
+            progress: 0,
+            startedAt: undefined,
+            completedAt: undefined,
+          },
+        },
+      };
+    }),
 
   removeTransfer: (transferId) => {
     set((state) => {
@@ -304,15 +331,28 @@ export const useTransferStore = create<TransferState>((set, get) => ({
     });
   },
 
-  promoteScholarMirrorDownload: (transferId, priority) => set((state) => {
-    const task = state.transfers[transferId];
-    if (!task || task.type !== 'download' || !task.scholarMirror ||
-        !['pending', 'in_progress'].includes(task.status)) return state;
-    return { transfers: { ...state.transfers, [transferId]: {
-      ...task, scholarMirror: false, isBackground: false,
-      priority: Math.min(task.priority, priority),
-    } } };
-  }),
+  promoteScholarMirrorDownload: (transferId, priority) =>
+    set((state) => {
+      const task = state.transfers[transferId];
+      if (
+        !task ||
+        task.type !== 'download' ||
+        !task.scholarMirror ||
+        !['pending', 'in_progress'].includes(task.status)
+      )
+        return state;
+      return {
+        transfers: {
+          ...state.transfers,
+          [transferId]: {
+            ...task,
+            scholarMirror: false,
+            isBackground: false,
+            priority: Math.min(task.priority, priority),
+          },
+        },
+      };
+    }),
 
   updateTransferProgress: (transferId, progress, transferred, total, speed) => {
     set((state) => {
@@ -440,8 +480,10 @@ export const useTransferStore = create<TransferState>((set, get) => ({
     set((state) => {
       const remaining: Record<string, TransferItem> = {};
       Object.entries(state.transfers).forEach(([id, transfer]) => {
-        if ((transfer.status !== 'failed' && transfer.status !== 'cancelled') ||
-            isUnresolvedScholarConflict(transfer)) {
+        if (
+          (transfer.status !== 'failed' && transfer.status !== 'cancelled') ||
+          isUnresolvedScholarConflict(transfer)
+        ) {
           remaining[id] = transfer;
         }
       });

@@ -27,7 +27,11 @@ const fileId = '00000000-0000-4000-8000-000000000002';
 const activeVersionId = '00000000-0000-4000-8000-000000000003';
 const book = { hash: 'book-hash', title: 'Paper', deletedAt: 1 } as Book;
 const transfer = {
-  id: 'task-1', kind: 'book', type: 'delete', status: 'failed', bookHash: book.hash,
+  id: 'task-1',
+  kind: 'book',
+  type: 'delete',
+  status: 'failed',
+  bookHash: book.hash,
   scholarAccountId: accountId,
   scholarFilePath: 'Readest/Books/book-hash/Paper.pdf',
   scholarOpId: '00000000-0000-4000-8000-000000000004',
@@ -39,15 +43,23 @@ beforeEach(() => {
   getScholarAccountId.mockReset().mockResolvedValue(accountId);
   keepCloud.mockReset().mockResolvedValue(undefined);
   requeueDelete.mockReset().mockResolvedValue(undefined);
-  fetchWithAuth.mockReset()
+  fetchWithAuth
+    .mockReset()
     .mockResolvedValueOnce(response({ fileId, activeVersionId }))
-    .mockResolvedValueOnce(response({
-      fileId, activeVersionId,
-      versions: [{
-        versionId: activeVersionId, sha256: 'a'.repeat(64),
-        fileSize: 90000, verifiedAt: '2026-10-23T00:00:00Z',
-      }],
-    }));
+    .mockResolvedValueOnce(
+      response({
+        fileId,
+        activeVersionId,
+        versions: [
+          {
+            versionId: activeVersionId,
+            sha256: 'a'.repeat(64),
+            fileSize: 90000,
+            verifiedAt: '2026-10-23T00:00:00Z',
+          },
+        ],
+      }),
+    );
 });
 afterEach(cleanup);
 
@@ -57,9 +69,9 @@ describe('Scholar file delete conflict dialog', () => {
     expect(await screen.findByText('Current cloud version')).toBeTruthy();
     expect(screen.getByText(/SHA-256: aaaaaaaa/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Keep cloud file' }));
-    await waitFor(() => expect(keepCloud).toHaveBeenCalledWith(
-      transfer.id, fileId, activeVersionId,
-    ));
+    await waitFor(() =>
+      expect(keepCloud).toHaveBeenCalledWith(transfer.id, fileId, activeVersionId),
+    );
     expect(requeueDelete).not.toHaveBeenCalled();
   });
 
@@ -67,21 +79,28 @@ describe('Scholar file delete conflict dialog', () => {
     render(<ScholarFileDeleteConflictDialog transfer={transfer} book={book} onClose={vi.fn()} />);
     await screen.findByText('Current cloud version');
     fireEvent.click(screen.getByRole('button', { name: 'Delete current cloud version' }));
-    await waitFor(() => expect(requeueDelete).toHaveBeenCalledWith(
-      transfer.id, fileId, activeVersionId,
-    ));
+    await waitFor(() =>
+      expect(requeueDelete).toHaveBeenCalledWith(transfer.id, fileId, activeVersionId),
+    );
     expect(keepCloud).not.toHaveBeenCalled();
   });
 
   it('does not offer an action if the version changed during review', async () => {
-    fetchWithAuth.mockReset()
+    fetchWithAuth
+      .mockReset()
       .mockResolvedValueOnce(response({ fileId, activeVersionId }))
-      .mockResolvedValueOnce(response({
-        fileId, activeVersionId: 'different', versions: [],
-      }));
+      .mockResolvedValueOnce(
+        response({
+          fileId,
+          activeVersionId: 'different',
+          versions: [],
+        }),
+      );
     render(<ScholarFileDeleteConflictDialog transfer={transfer} book={book} onClose={vi.fn()} />);
     expect(await screen.findByRole('alert')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Keep cloud file' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Keep cloud file' }).hasAttribute('disabled')).toBe(
+      true,
+    );
     expect(keepCloud).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,10 @@
-import { AppService, FileSystem, BaseDir, DeleteAction, ScholarFileUploadContext } from '@/types/system';
+import {
+  AppService,
+  FileSystem,
+  BaseDir,
+  DeleteAction,
+  ScholarFileUploadContext,
+} from '@/types/system';
 import { Book } from '@/types/book';
 import {
   getDir,
@@ -23,7 +29,11 @@ import { isScholarReleaseBundle, isScholarTestBundle, getAPIBaseUrl } from '@/se
 import { fetchWithAuth } from '@/utils/fetch';
 import { uploadScholarFileVersion } from '@/libs/scholarFileVersion';
 import { sha256File } from '@/services/dictionaries/plugins/integrity';
-import { getScholarAccountId, getScholarFileBaseline, saveScholarFileBaseline } from './scholarFileBaseline';
+import {
+  getScholarAccountId,
+  getScholarFileBaseline,
+  saveScholarFileBaseline,
+} from './scholarFileBaseline';
 
 export async function deleteBook(
   fs: FileSystem,
@@ -241,17 +251,19 @@ export async function uploadBook(
         !(isScholarReleaseBundle() || isScholarTestBundle()) ||
         !(error instanceof Error) ||
         error.message !== 'File size differs from existing object'
-      ) throw error;
+      )
+        throw error;
       console.warn('Scholar cover differs from the stored copy; keeping the remote cover');
     }
     completedFiles.count++;
   }
 
   const cfp = `${CLOUD_BOOKS_SUBDIR}/${getRemoteBookFilename(book)}`;
-  if ((isScholarReleaseBundle() || isScholarTestBundle())) {
+  if (isScholarReleaseBundle() || isScholarTestBundle()) {
     const accountId = await getScholarAccountId();
     if (!accountId) throw new Error('Not authenticated');
-    if (scholar && scholar.accountId !== accountId) throw new Error('Scholar upload account changed');
+    if (scholar && scholar.accountId !== accountId)
+      throw new Error('Scholar upload account changed');
     const expectedVersionId = scholar
       ? scholar.expectedVersionId
       : (getScholarFileBaseline(accountId, cfp)?.versionId ?? null);
@@ -267,7 +279,12 @@ export async function uploadBook(
       const { fileId } = (await response.json()) as { fileId: string };
       if (!fileId) throw new Error('Invalid Scholar file registration');
       const result = await uploadScholarFileVersion(
-        file, fileId, opId, expectedVersionId, handleProgress, fullPath,
+        file,
+        fileId,
+        opId,
+        expectedVersionId,
+        handleProgress,
+        fullPath,
       );
       if (!result.applied) throw new Error('Scholar file conflict; local version retained');
       saveScholarFileBaseline(accountId, cfp, { fileId, versionId: result.versionId });
@@ -344,7 +361,8 @@ async function downloadVerifiedScholarBookFile(
   const endpoint = `${getAPIBaseUrl()}/scholar/files`;
   const fileKey = `${accountId}/${cfp}`;
   const statusResponse = await fetchWithAuth(
-    `${endpoint}/status?fileKey=${encodeURIComponent(fileKey)}`, { method: 'GET' },
+    `${endpoint}/status?fileKey=${encodeURIComponent(fileKey)}`,
+    { method: 'GET' },
   );
   const status = (await statusResponse.json()) as {
     fileId?: string;
@@ -364,24 +382,36 @@ async function downloadVerifiedScholarBookFile(
     fileSize?: number;
   };
   if (
-    version.versionId !== status.activeVersionId || !version.downloadUrl ||
+    version.versionId !== status.activeVersionId ||
+    !version.downloadUrl ||
     !/^[0-9a-f]{64}$/i.test(version.sha256 ?? '') ||
-    !Number.isSafeInteger(version.fileSize) || (version.fileSize ?? -1) < 0
-  ) throw new Error('Invalid Scholar file version response');
+    !Number.isSafeInteger(version.fileSize) ||
+    (version.fileSize ?? -1) < 0
+  )
+    throw new Error('Invalid Scholar file version response');
 
   const temporaryPath = `${dst}.scholar-${crypto.randomUUID()}.part`;
   try {
-    await downloadFile({ appService, dst: temporaryPath, cfp, url: version.downloadUrl, onProgress });
+    await downloadFile({
+      appService,
+      dst: temporaryPath,
+      cfp,
+      url: version.downloadUrl,
+      onProgress,
+    });
     const staged = await fs.openFile(temporaryPath, 'None');
     try {
-      if (staged.size !== version.fileSize || await sha256File(staged) !== version.sha256?.toLowerCase()) {
+      if (
+        staged.size !== version.fileSize ||
+        (await sha256File(staged)) !== version.sha256?.toLowerCase()
+      ) {
         throw new Error('Scholar file hash mismatch');
       }
     } finally {
       const opened = staged as ClosableFile;
       if (opened.close) await opened.close();
     }
-    if (await getScholarAccountId() !== accountId) {
+    if ((await getScholarAccountId()) !== accountId) {
       throw new Error('Scholar upload account changed');
     }
     await fs.copyFile(temporaryPath, 'None', dst, 'None');

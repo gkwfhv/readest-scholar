@@ -9,7 +9,8 @@ export async function createScholarUploadSnapshot(
   path: string,
 ): Promise<number> {
   const source = await resolveBookContentSource(fs, book);
-  if (!isBookFileContentSource(source)) throw new Error('Scholar upload source is unavailable; requeue');
+  if (!isBookFileContentSource(source))
+    throw new Error('Scholar upload source is unavailable; requeue');
   const directory = path.slice(0, path.lastIndexOf('/'));
   await fs.createDir(directory, 'Cache', true);
   try {
@@ -29,8 +30,10 @@ export async function createScholarUploadSnapshot(
       expectedSize = before.size;
       await fs.copyFile(source.path, source.base, path, 'Cache');
       const after = await fs.stats(source.path, source.base);
-      if (before.size !== after.size ||
-          (before.mtime && after.mtime && before.mtime.getTime() !== after.mtime.getTime())) {
+      if (
+        before.size !== after.size ||
+        (before.mtime && after.mtime && before.mtime.getTime() !== after.mtime.getTime())
+      ) {
         throw new Error('Scholar upload source changed during snapshot; requeue');
       }
     }

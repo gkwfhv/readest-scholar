@@ -15,17 +15,36 @@ import {
   SCHOLAR_FILE_CACHE_MODE_EVENT,
 } from '@/services/scholarFileCacheMode';
 import { isReadestCloudStorageActive } from '@/services/sync/cloudSyncProvider';
-import { isScholarReleaseBundle, isScholarTestBundle, isTauriAppPlatform } from '@/services/environment';
+import {
+  isScholarReleaseBundle,
+  isScholarTestBundle,
+  isTauriAppPlatform,
+} from '@/services/environment';
 import { isFeedBook } from '@/services/rss/feedBookUrl';
 import { isAbsEbook, isAudiobook } from '@/utils/audiobook';
 
 /** Exclude fileless and already queued books; never spin on a failed transfer. */
-export function shouldMirrorScholarBook(book: Book, transfers: TransferItem[], accountId?: string): boolean {
-  if (book.deletedAt || !book.uploadedAt || isFeedBook(book) ||
-      isAudiobook(book) || isAbsEbook(book)) return false;
-  return !transfers.some((item) => item.kind === 'book' && item.type === 'download' &&
-    item.bookHash === book.hash && item.status !== 'completed' &&
-    (!accountId || item.scholarAccountId === accountId));
+export function shouldMirrorScholarBook(
+  book: Book,
+  transfers: TransferItem[],
+  accountId?: string,
+): boolean {
+  if (
+    book.deletedAt ||
+    !book.uploadedAt ||
+    isFeedBook(book) ||
+    isAudiobook(book) ||
+    isAbsEbook(book)
+  )
+    return false;
+  return !transfers.some(
+    (item) =>
+      item.kind === 'book' &&
+      item.type === 'download' &&
+      item.bookHash === book.hash &&
+      item.status !== 'completed' &&
+      (!accountId || item.scholarAccountId === accountId),
+  );
 }
 
 /**
@@ -40,8 +59,14 @@ export function useScholarFullMirror(
   appService: AppService | null | undefined,
 ): void {
   useEffect(() => {
-    if (!accountId || !libraryLoaded || !appService || !isTauriAppPlatform() ||
-        !(isScholarReleaseBundle() || isScholarTestBundle())) return;
+    if (
+      !accountId ||
+      !libraryLoaded ||
+      !appService ||
+      !isTauriAppPlatform() ||
+      !(isScholarReleaseBundle() || isScholarTestBundle())
+    )
+      return;
 
     const isNativeMobile = appService.isIOSApp || appService.isAndroidApp;
     let disposed = false;
@@ -50,7 +75,10 @@ export function useScholarFullMirror(
     let initialScan = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const scan = async () => {
-      if (scanning) { rerun = true; return; }
+      if (scanning) {
+        rerun = true;
+        return;
+      }
       scanning = true;
       try {
         if (getScholarFileCacheMode(accountId) !== 'full_mirror') {
@@ -74,29 +102,50 @@ export function useScholarFullMirror(
         const checkAllLocalBytes = initialScan;
         initialScan = false;
         for (const book of books) {
-          if (disposed || getScholarFileCacheMode(accountId) !== 'full_mirror' ||
-              !isScholarMirrorNetworkAllowed(isNativeMobile)) break;
+          if (
+            disposed ||
+            getScholarFileCacheMode(accountId) !== 'full_mirror' ||
+            !isScholarMirrorNetworkAllowed(isNativeMobile)
+          )
+            break;
           const remoteNewer = !!book.uploadedAt && book.uploadedAt > (book.downloadedAt ?? 0);
           if (!checkAllLocalBytes && book.downloadedAt && !remoteNewer) continue;
-          if (!shouldMirrorScholarBook(book, Object.values(useTransferStore.getState().transfers), accountId)) continue;
+          if (
+            !shouldMirrorScholarBook(
+              book,
+              Object.values(useTransferStore.getState().transfers),
+              accountId,
+            )
+          )
+            continue;
           try {
-            if (!remoteNewer && await appService.isBookAvailable(book)) continue;
+            if (!remoteNewer && (await appService.isBookAvailable(book))) continue;
           } catch (error) {
             console.warn('Could not inspect Scholar local file for full mirror', error);
             continue;
           }
-          if (disposed || getScholarFileCacheMode(accountId) !== 'full_mirror' ||
-              (await getScholarAccountId()) !== accountId) break;
+          if (
+            disposed ||
+            getScholarFileCacheMode(accountId) !== 'full_mirror' ||
+            (await getScholarAccountId()) !== accountId
+          )
+            break;
           transferManager.queueDownload(book, 20, true, true);
         }
       } finally {
         scanning = false;
-        if (rerun && !disposed) { rerun = false; schedule(); }
+        if (rerun && !disposed) {
+          rerun = false;
+          schedule();
+        }
       }
     };
     const schedule = () => {
       if (timer) clearTimeout(timer);
-      timer = setTimeout(() => { timer = undefined; void scan(); }, 0);
+      timer = setTimeout(() => {
+        timer = undefined;
+        void scan();
+      }, 0);
     };
     const onModeChange = (event: Event) => {
       if ((event as CustomEvent<string>).detail !== accountId) return;
@@ -117,7 +166,10 @@ export function useScholarFullMirror(
     window.addEventListener(SCHOLAR_FILE_CACHE_MODE_EVENT, onModeChange);
     window.addEventListener('storage', onStorage);
     const connection = getScholarMirrorConnection();
-    const onNetworkChange = () => { initialScan = true; schedule(); };
+    const onNetworkChange = () => {
+      initialScan = true;
+      schedule();
+    };
     connection?.addEventListener('change', onNetworkChange);
     window.addEventListener('online', onNetworkChange);
     schedule();

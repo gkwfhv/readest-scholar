@@ -4,8 +4,17 @@ import { isScholarReleaseBundle, isScholarTestBundle, getAPIBaseUrl } from '@/se
 import { fetchWithAuth } from '@/utils/fetch';
 import { getRemoteBookFilename } from '@/utils/book';
 import { CLOUD_BOOKS_SUBDIR } from '@/services/constants';
-import { getScholarAccountId, getScholarFileBaseline, saveScholarFileBaseline } from '@/services/scholarFileBaseline';
-import { useTransferStore, isRetryableTransfer, TransferItem, ReplicaTransferFile } from '@/store/transferStore';
+import {
+  getScholarAccountId,
+  getScholarFileBaseline,
+  saveScholarFileBaseline,
+} from '@/services/scholarFileBaseline';
+import {
+  useTransferStore,
+  isRetryableTransfer,
+  TransferItem,
+  ReplicaTransferFile,
+} from '@/store/transferStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { isReadestCloudStorageActive } from '@/services/sync/cloudSyncProvider';
 import { isSyncCategoryEnabled } from '@/services/sync/syncCategories';
@@ -130,7 +139,8 @@ class TransferManager {
     this.getLibrary = getLibrary;
     this.updateBook = updateBook;
     this._ = translationFn;
-    this.scholarAccountId = (isScholarReleaseBundle() || isScholarTestBundle()) ? await getScholarAccountId() : null;
+    this.scholarAccountId =
+      isScholarReleaseBundle() || isScholarTestBundle() ? await getScholarAccountId() : null;
     await this.loadPersistedQueue();
     this.failUnstagedScholarTransfers();
     this.reconcileUploadsWithProvider();
@@ -152,10 +162,10 @@ class TransferManager {
   /** Keep upload queue ownership aligned with the live auth session. */
   setScholarAccountId(accountId: string | null): void {
     if (!(isScholarReleaseBundle() || isScholarTestBundle())) return;
-    this.scholarAccountId = accountId &&
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(accountId)
-      ? accountId
-      : null;
+    this.scholarAccountId =
+      accountId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(accountId)
+        ? accountId
+        : null;
   }
 
   isReady(): boolean {
@@ -197,7 +207,7 @@ class TransferManager {
     }
 
     let scholar: { accountId: string; expectedVersionId: string | null } | undefined;
-    if ((isScholarReleaseBundle() || isScholarTestBundle())) {
+    if (isScholarReleaseBundle() || isScholarTestBundle()) {
       if (!this.scholarAccountId) return null;
       const cfp = `${CLOUD_BOOKS_SUBDIR}/${getRemoteBookFilename(book)}`;
       scholar = {
@@ -239,10 +249,18 @@ class TransferManager {
   private failUnstagedScholarTransfers(): void {
     const store = useTransferStore.getState();
     for (const task of Object.values(store.transfers)) {
-      if (task.kind === 'book' && task.type === 'upload' && task.scholarAccountId &&
-          task.status === 'pending' && !task.scholarSnapshotPath) {
-        store.setTransferStatus(task.id, 'failed',
-          'Scholar upload snapshot unavailable after restart; requeue');
+      if (
+        task.kind === 'book' &&
+        task.type === 'upload' &&
+        task.scholarAccountId &&
+        task.status === 'pending' &&
+        !task.scholarSnapshotPath
+      ) {
+        store.setTransferStatus(
+          task.id,
+          'failed',
+          'Scholar upload snapshot unavailable after restart; requeue',
+        );
         if (task.scholarOpId) {
           const partial = `scholar-uploads/${task.scholarAccountId}/${task.scholarOpId}`;
           void this.appService?.deleteFile(partial, 'Cache').catch(() => {});
@@ -262,7 +280,12 @@ class TransferManager {
     }
   }
 
-  queueDownload(book: Book, priority: number = 10, isBackground: boolean = false, scholarMirror = false): string | null {
+  queueDownload(
+    book: Book,
+    priority: number = 10,
+    isBackground: boolean = false,
+    scholarMirror = false,
+  ): string | null {
     if (!this.isReady()) {
       console.warn('TransferManager not initialized');
       return null;
@@ -272,9 +295,12 @@ class TransferManager {
     if (isAudiobook(book)) return null;
 
     const store = useTransferStore.getState();
-    const scholar = isScholarReleaseBundle() || isScholarTestBundle()
-      ? this.scholarAccountId ? { accountId: this.scholarAccountId, expectedVersionId: null, mirror: scholarMirror } : null
-      : undefined;
+    const scholar =
+      isScholarReleaseBundle() || isScholarTestBundle()
+        ? this.scholarAccountId
+          ? { accountId: this.scholarAccountId, expectedVersionId: null, mirror: scholarMirror }
+          : null
+        : undefined;
     if (scholar === null) return null;
 
     const existing = store.getTransferByBookHash(book.hash, 'download');
@@ -292,7 +318,14 @@ class TransferManager {
       store.setTransferStatus(existing.id, 'cancelled', undefined, 'policy');
     }
 
-    const transferId = store.addTransfer(book.hash, book.title, 'download', priority, isBackground, scholar);
+    const transferId = store.addTransfer(
+      book.hash,
+      book.title,
+      'download',
+      priority,
+      isBackground,
+      scholar,
+    );
     this.persistQueue();
     this.processQueue();
     return transferId;
@@ -303,8 +336,12 @@ class TransferManager {
     const store = useTransferStore.getState();
     let changed = false;
     for (const task of Object.values(store.transfers)) {
-      if (!task.scholarMirror || task.scholarAccountId !== accountId ||
-          !['pending', 'in_progress'].includes(task.status)) continue;
+      if (
+        !task.scholarMirror ||
+        task.scholarAccountId !== accountId ||
+        !['pending', 'in_progress'].includes(task.status)
+      )
+        continue;
       this.abortControllers.get(task.id)?.abort();
       store.setTransferStatus(task.id, 'cancelled', undefined, 'policy');
       changed = true;
@@ -350,17 +387,27 @@ class TransferManager {
       return existing.id;
     }
 
-    let scholar: { accountId: string; expectedVersionId: string | null; filePath: string } | undefined;
+    let scholar:
+      | { accountId: string; expectedVersionId: string | null; filePath: string }
+      | undefined;
     if (isScholarReleaseBundle() || isScholarTestBundle()) {
       if (!this.scholarAccountId) return null;
       const filePath = CLOUD_BOOKS_SUBDIR + '/' + getRemoteBookFilename(book);
       scholar = {
         accountId: this.scholarAccountId,
-        expectedVersionId: getScholarFileBaseline(this.scholarAccountId, filePath)?.versionId ?? null,
+        expectedVersionId:
+          getScholarFileBaseline(this.scholarAccountId, filePath)?.versionId ?? null,
         filePath,
       };
     }
-    const transferId = store.addTransfer(book.hash, book.title, 'delete', priority, isBackground, scholar);
+    const transferId = store.addTransfer(
+      book.hash,
+      book.title,
+      'delete',
+      priority,
+      isBackground,
+      scholar,
+    );
     this.persistQueue();
     this.processQueue();
     return transferId;
@@ -479,10 +526,14 @@ class TransferManager {
   ): Promise<void> {
     const task = useTransferStore.getState().transfers[transferId];
     if (
-      !task || task.status !== 'failed' || task.type !== 'upload' ||
-      !task.error?.includes('Scholar file conflict') || !task.scholarAccountId ||
+      !task ||
+      task.status !== 'failed' ||
+      task.type !== 'upload' ||
+      !task.error?.includes('Scholar file conflict') ||
+      !task.scholarAccountId ||
       !task.scholarOpId
-    ) throw new Error('Scholar file conflict is no longer available');
+    )
+      throw new Error('Scholar file conflict is no longer available');
     const accountId = await getScholarAccountId();
     if (accountId !== task.scholarAccountId) throw new Error('Scholar upload account changed');
     const book = this.getLibrary?.().find((item) => item.hash === task.bookHash);
@@ -494,18 +545,24 @@ class TransferManager {
       book.uploadedAt = Date.now();
       await this.updateBook?.(book);
     }
-    useTransferStore.getState().setTransferStatus(
-      transferId, useLocal ? 'completed' : 'cancelled', undefined, 'user',
-    );
+    useTransferStore
+      .getState()
+      .setTransferStatus(transferId, useLocal ? 'completed' : 'cancelled', undefined, 'user');
     this.cleanupScholarSnapshots([task]);
     this.persistQueue();
   }
 
   private async getScholarDeleteConflictTask(transferId: string): Promise<TransferItem> {
     const task = useTransferStore.getState().transfers[transferId];
-    if (!task || task.kind !== 'book' || task.type !== 'delete' ||
-        task.status !== 'failed' || !task.error?.includes('Scholar delete conflict') ||
-        !task.scholarAccountId || !task.scholarFilePath) {
+    if (
+      !task ||
+      task.kind !== 'book' ||
+      task.type !== 'delete' ||
+      task.status !== 'failed' ||
+      !task.error?.includes('Scholar delete conflict') ||
+      !task.scholarAccountId ||
+      !task.scholarFilePath
+    ) {
       throw new Error('Scholar delete conflict is no longer available');
     }
     const accountId = await getScholarAccountId();
@@ -514,7 +571,9 @@ class TransferManager {
   }
 
   async keepScholarCloudAfterDeleteConflict(
-    transferId: string, fileId: string, activeVersionId: string,
+    transferId: string,
+    fileId: string,
+    activeVersionId: string,
   ): Promise<void> {
     const task = await this.getScholarDeleteConflictTask(transferId);
     const baseline = getScholarFileBaseline(task.scholarAccountId!, task.scholarFilePath!);
@@ -529,7 +588,9 @@ class TransferManager {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        fileId, versionId: activeVersionId, expectedVersionId: activeVersionId,
+        fileId,
+        versionId: activeVersionId,
+        expectedVersionId: activeVersionId,
       }),
     });
     if (book.deletedAt || !book.uploadedAt) {
@@ -542,7 +603,8 @@ class TransferManager {
       });
     }
     saveScholarFileBaseline(task.scholarAccountId!, task.scholarFilePath!, {
-      fileId, versionId: activeVersionId,
+      fileId,
+      versionId: activeVersionId,
     });
     // The delete was explicitly abandoned after restoring the library entry.
     // Remove its failed queue row so the Failed count reflects unresolved work.
@@ -551,7 +613,9 @@ class TransferManager {
   }
 
   async requeueScholarDeleteConflict(
-    transferId: string, fileId: string, activeVersionId: string,
+    transferId: string,
+    fileId: string,
+    activeVersionId: string,
   ): Promise<void> {
     const task = await this.getScholarDeleteConflictTask(transferId);
     const baseline = getScholarFileBaseline(task.scholarAccountId!, task.scholarFilePath!);
@@ -653,8 +717,12 @@ class TransferManager {
 
     if (store.isQueuePaused) return;
 
-    const pending = store.getPendingTransfers().filter((t) =>
-      !this.isDeferredBookUpload(t) && (!t.scholarSnapshotRequired || !!t.scholarSnapshotPath));
+    const pending = store
+      .getPendingTransfers()
+      .filter(
+        (t) =>
+          !this.isDeferredBookUpload(t) && (!t.scholarSnapshotRequired || !!t.scholarSnapshotPath),
+      );
     const activeCount = store.getActiveTransfers().length;
     const maxConcurrent = store.maxConcurrent;
 
@@ -675,8 +743,12 @@ class TransferManager {
     // not yet hydrated) don't count — re-looping on them every 100ms
     // would busy-wait; the settings subscription wakes them instead.
     const newStore = useTransferStore.getState();
-    const processable = newStore.getPendingTransfers().filter((t) =>
-      !this.isDeferredBookUpload(t) && (!t.scholarSnapshotRequired || !!t.scholarSnapshotPath));
+    const processable = newStore
+      .getPendingTransfers()
+      .filter(
+        (t) =>
+          !this.isDeferredBookUpload(t) && (!t.scholarSnapshotRequired || !!t.scholarSnapshotPath),
+      );
     if (processable.length > 0 && !newStore.isQueuePaused) {
       setTimeout(() => this.processQueue(), 100);
     }
@@ -750,16 +822,18 @@ class TransferManager {
       // Quota exhaustion is permanent for this account state; retrying
       // burns three backoff rounds per book for the same 403.
       const isQuotaError = errorMessage.includes('Insufficient storage quota');
-      const isPermanentError = isQuotaError || [
-        'Scholar file conflict',
-        'Scholar delete conflict',
-        'Legacy Scholar delete queue needs requeue',
-        'Scholar upload account changed',
-        'Scholar download account changed',
-        'Legacy Scholar download queue needs requeue',
-        'Legacy upload queue needs requeue',
-        'Scholar upload snapshot',
-      ].some((message) => errorMessage.includes(message));
+      const isPermanentError =
+        isQuotaError ||
+        [
+          'Scholar file conflict',
+          'Scholar delete conflict',
+          'Legacy Scholar delete queue needs requeue',
+          'Scholar upload account changed',
+          'Scholar download account changed',
+          'Legacy Scholar download queue needs requeue',
+          'Legacy upload queue needs requeue',
+          'Scholar upload snapshot',
+        ].some((message) => errorMessage.includes(message));
 
       if (
         !isPermanentError &&
@@ -865,15 +939,21 @@ class TransferManager {
 
     if (transfer.type === 'upload') {
       let scholar: ScholarFileUploadContext | undefined;
-      if ((isScholarReleaseBundle() || isScholarTestBundle())) {
+      if (isScholarReleaseBundle() || isScholarTestBundle()) {
         const currentAccount = await getScholarAccountId();
         if (!currentAccount || currentAccount !== transfer.scholarAccountId) {
           this.cleanupScholarSnapshots([transfer]);
           throw new Error('Scholar upload account changed; requeue under the current account');
         }
-        if (!transfer.scholarOpId || transfer.scholarExpectedVersionId === undefined ||
-            !transfer.scholarSnapshotRequired || !transfer.scholarSnapshotPath) {
-          throw new Error('Legacy upload queue needs requeue for Scholar file versions and snapshot');
+        if (
+          !transfer.scholarOpId ||
+          transfer.scholarExpectedVersionId === undefined ||
+          !transfer.scholarSnapshotRequired ||
+          !transfer.scholarSnapshotPath
+        ) {
+          throw new Error(
+            'Legacy upload queue needs requeue for Scholar file versions and snapshot',
+          );
         }
         if (!(await this.appService!.exists(transfer.scholarSnapshotPath, 'Cache'))) {
           useTransferStore.getState().setScholarSnapshotPath(transfer.id, undefined);
@@ -893,15 +973,21 @@ class TransferManager {
       if ((isScholarReleaseBundle() || isScholarTestBundle()) && !transfer.scholarAccountId) {
         throw new Error('Legacy Scholar download queue needs requeue');
       }
-      if (transfer.scholarAccountId &&
-          (await getScholarAccountId()) !== transfer.scholarAccountId) {
+      if (
+        transfer.scholarAccountId &&
+        (await getScholarAccountId()) !== transfer.scholarAccountId
+      ) {
         throw new Error('Scholar download account changed; requeue under the current account');
       }
-      const refreshScholarFile = !!transfer.scholarAccountId && !!book.uploadedAt &&
+      const refreshScholarFile =
+        !!transfer.scholarAccountId &&
+        !!book.uploadedAt &&
         book.uploadedAt > (book.downloadedAt ?? 0);
       await this.appService!.downloadBook(book, false, refreshScholarFile, progressHandler);
-      if (abortController.signal.aborted || (transfer.scholarAccountId &&
-          (await getScholarAccountId()) !== transfer.scholarAccountId)) {
+      if (
+        abortController.signal.aborted ||
+        (transfer.scholarAccountId && (await getScholarAccountId()) !== transfer.scholarAccountId)
+      ) {
         throw new Error('Scholar download account changed; requeue under the current account');
       }
       book.downloadedAt = Math.max(Date.now(), book.uploadedAt ?? 0);
@@ -912,8 +998,11 @@ class TransferManager {
         if (!currentAccount || currentAccount !== transfer.scholarAccountId) {
           throw new Error('Scholar upload account changed; requeue under the current account');
         }
-        if (!transfer.scholarOpId || !transfer.scholarFilePath ||
-            transfer.scholarExpectedVersionId === undefined) {
+        if (
+          !transfer.scholarOpId ||
+          !transfer.scholarFilePath ||
+          transfer.scholarExpectedVersionId === undefined
+        ) {
           throw new Error('Legacy Scholar delete queue needs requeue');
         }
         await fetchWithAuth(getAPIBaseUrl() + '/scholar/files/delete', {

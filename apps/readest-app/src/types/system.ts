@@ -209,7 +209,11 @@ export interface AppService {
   importBook(file: string | File, books: Book[], options?: ImportBookOptions): Promise<Book | null>;
   refreshBookMetadata(book: Book): Promise<boolean>;
   deleteBook(book: Book, deleteAction: DeleteAction): Promise<void>;
-  uploadBook(book: Book, onProgress?: ProgressHandler, scholar?: ScholarFileUploadContext): Promise<void>;
+  uploadBook(
+    book: Book,
+    onProgress?: ProgressHandler,
+    scholar?: ScholarFileUploadContext,
+  ): Promise<void>;
   uploadBookCover(book: Book, onProgress?: ProgressHandler): Promise<void>;
   downloadBook(
     book: Book,

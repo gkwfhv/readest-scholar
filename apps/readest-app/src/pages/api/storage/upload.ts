@@ -164,14 +164,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!existingRecord) {
         const { data: inserted, error: insertError } = await supabase
           .from('files')
-          .insert([{
-            user_id: user.id,
-            book_hash: bookHash ?? null,
-            replica_kind: replicaKind ?? null,
-            replica_id: replicaId ?? null,
-            file_key: fileKey,
-            file_size: fileSize,
-          }])
+          .insert([
+            {
+              user_id: user.id,
+              book_hash: bookHash ?? null,
+              replica_kind: replicaKind ?? null,
+              replica_id: replicaId ?? null,
+              file_key: fileKey,
+              file_size: fileSize,
+            },
+          ])
           .select()
           .single();
         if (insertError) return res.status(500).json({ error: insertError.message });
@@ -193,7 +195,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(500).json({ error: 'Could not check file version' });
       }
       if (head) {
-        return res.status(409).json({ error: 'File has a newer Scholar version; update this client' });
+        return res
+          .status(409)
+          .json({ error: 'File has a newer Scholar version; update this client' });
       }
     }
     try {
