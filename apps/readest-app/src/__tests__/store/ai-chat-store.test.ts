@@ -106,6 +106,24 @@ describe('aiChatStore', () => {
     });
   });
 
+  test('invalidating a deleted book hides an in-flight conversation load', async () => {
+    let finishLoad!: (conversations: AIConversation[]) => void;
+    mockGetConversations.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishLoad = resolve;
+        }),
+    );
+    const loading = useAIChatStore.getState().loadConversations('deleted-book');
+    useAIChatStore.getState().invalidateBookScope('deleted-book');
+    finishLoad([
+      { id: 'old', bookHash: 'deleted-book', title: 'Private', createdAt: 1, updatedAt: 1 },
+    ]);
+    await loading;
+    expect(useAIChatStore.getState().currentBookHash).toBeNull();
+    expect(useAIChatStore.getState().conversations).toEqual([]);
+  });
+
   // ── setActiveConversation ──────────────────────────────────────
   describe('setActiveConversation', () => {
     test('sets null to clear active conversation', async () => {

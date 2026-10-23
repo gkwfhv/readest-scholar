@@ -24,6 +24,16 @@ export async function deleteBookAiData(
   appService: Pick<AppService, 'appPlatform' | 'openDatabase'>,
 ): Promise<void> {
   const scope = aiAccountScope(bookHash, userId);
+  // Stop the active UI turn before deleting its backing rows.
+  const [{ useAIChatStore }, { useReedyStore }] = await Promise.all([
+    import('@/store/aiChatStore'),
+    import('@/services/reedy/store/reedyStore'),
+  ]);
+  useAIChatStore.getState().invalidateBookScope(scope);
+  if (useReedyStore.getState().scope === scope) {
+    useReedyStore.getState().reset();
+    useReedyStore.setState({ scope: null });
+  }
   const conversations = await aiStore.getConversations(scope);
   await aiStore.clearBook(scope);
   for (const conversation of conversations) {

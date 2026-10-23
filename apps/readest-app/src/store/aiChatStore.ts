@@ -16,6 +16,7 @@ interface AIChatState {
   deleteConversation: (id: string) => Promise<void>;
   renameConversation: (id: string, title: string) => Promise<void>;
   clearActiveConversation: () => void;
+  invalidateBookScope: (bookHash: string) => void;
 }
 
 let scopeRequestId = 0;
@@ -192,5 +193,18 @@ export const useAIChatStore = create<AIChatState>((set, get) => ({
   clearActiveConversation: () => {
     ++selectionRequestId;
     set({ activeConversationId: null, messages: [], isLoadingHistory: false });
+  },
+
+  invalidateBookScope: (bookHash: string) => {
+    if (get().currentBookHash !== bookHash) return;
+    ++scopeRequestId;
+    ++selectionRequestId;
+    set({
+      currentBookHash: null,
+      conversations: [],
+      activeConversationId: null,
+      messages: [],
+      isLoadingHistory: false,
+    });
   },
 }));
