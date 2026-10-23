@@ -3,7 +3,7 @@ import { AppService, BaseDir, type ScholarFileUploadContext } from '@/types/syst
 import { isScholarReleaseBundle, isScholarTestBundle } from '@/services/environment';
 import { getRemoteBookFilename } from '@/utils/book';
 import { CLOUD_BOOKS_SUBDIR } from '@/services/constants';
-import { getScholarAccountId, getScholarFileBaseline } from '@/services/scholarFileBaseline';
+import { getScholarAccountId, getScholarFileBaseline, saveScholarFileBaseline } from '@/services/scholarFileBaseline';
 import { useTransferStore, isRetryableTransfer, TransferItem, ReplicaTransferFile } from '@/store/transferStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { isReadestCloudStorageActive } from '@/services/sync/cloudSyncProvider';
@@ -146,6 +146,15 @@ class TransferManager {
 
     // Start processing queue
     this.processQueue();
+  }
+
+  /** Keep upload queue ownership aligned with the live auth session. */
+  setScholarAccountId(accountId: string | null): void {
+    if (!(isScholarReleaseBundle() || isScholarTestBundle())) return;
+    this.scholarAccountId = accountId &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(accountId)
+      ? accountId
+      : null;
   }
 
   isReady(): boolean {
@@ -420,6 +429,36 @@ class TransferManager {
     }
 
     useTransferStore.getState().setTransferStatus(transferId, 'cancelled', undefined, 'user');
+    this.persistQueue();
+  }
+
+  async finishScholarConflict(
+    transferId: string,
+    fileId: string,
+    versionId: string,
+    useLocal: boolean,
+  ): Promise<void> {
+    const task = useTransferStore.getState().transfers[transferId];
+    if (
+      !task || task.status !== 'failed' || task.type !== 'upload' ||
+      !task.error?.includes('Scholar file conflict') || !task.scholarAccountId ||
+      !task.scholarOpId
+    ) throw new Error('Scholar file conflict is no longer available');
+    const accountId = await getScholarAccountId();
+    if (accountId !== task.scholarAccountId) throw new Error('Scholar upload account changed');
+    const book = this.getLibrary?.().find((item) => item.hash === task.bookHash);
+    if (!book) throw new Error('Book not found in library');
+
+    const filePath = CLOUD_BOOKS_SUBDIR + '/' + getRemoteBookFilename(book);
+    saveScholarFileBaseline(accountId, filePath, { fileId, versionId });
+    if (useLocal) {
+      book.uploadedAt = Date.now();
+      await this.updateBook?.(book);
+    }
+    useTransferStore.getState().setTransferStatus(
+      transferId, useLocal ? 'completed' : 'cancelled', undefined, 'user',
+    );
+    this.cleanupScholarSnapshots([task]);
     this.persistQueue();
   }
 

@@ -153,7 +153,8 @@ export const isFailedLikeTransfer = (t: TransferItem): boolean =>
   t.status === 'failed' || (t.status === 'cancelled' && t.cancelReason !== 'policy');
 
 export const isRetryableTransfer = (t: TransferItem): boolean =>
-  isFailedLikeTransfer(t) && (!t.scholarAccountId || !!t.scholarSnapshotPath);
+  isFailedLikeTransfer(t) && !t.error?.includes('Scholar file conflict') &&
+  (!t.scholarAccountId || !!t.scholarSnapshotPath);
 
 /**
  * Per-book download progress for the covers' transfer overlay, keyed by book

@@ -13,6 +13,7 @@ import {
   MdDeleteSweep,
 } from 'react-icons/md';
 import { useTransferQueue } from '@/hooks/useTransferQueue';
+import ScholarFileConflictDialog from './ScholarFileConflictDialog';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useResponsiveSize } from '@/hooks/useResponsiveSize';
 import { useKeyDownActions } from '@/hooks/useKeyDownActions';
@@ -89,8 +90,9 @@ const TransferItemRow: React.FC<{
   transfer: TransferItem;
   onCancel: (id: string) => void;
   onRetry: (id: string) => void;
+  onResolve: (id: string) => void;
   iconSize: number;
-}> = ({ transfer, onCancel, onRetry, iconSize }) => {
+}> = ({ transfer, onCancel, onRetry, onResolve, iconSize }) => {
   const _ = useTranslation();
 
   const completedLabel = {
@@ -138,6 +140,14 @@ const TransferItemRow: React.FC<{
       </div>
 
       <div className='flex items-center gap-1'>
+        {transfer.status === 'failed' &&
+          transfer.error?.includes('Scholar file conflict') && (
+          <button onClick={() => onResolve(transfer.id)}
+            className='btn btn-ghost btn-sm eink-bordered'
+            aria-label={_('Resolve file conflict')}>
+            {_('Resolve')}
+          </button>
+        )}
         {isRetryableTransfer(transfer) && (
           <button
             onClick={() => onRetry(transfer.id)}
@@ -185,6 +195,7 @@ const TransferQueuePanel: React.FC = () => {
   } = useTransferQueue();
 
   const [filter, setFilter] = useState<FilterType>('all');
+  const [conflictId, setConflictId] = useState<string | null>(null);
 
   const onClose = () => setIsOpen(false);
   const divRef = useKeyDownActions({ onCancel: onClose, onConfirm: onClose });
@@ -351,6 +362,7 @@ const TransferQueuePanel: React.FC = () => {
                 transfer={transfer}
                 onCancel={cancelTransfer}
                 onRetry={retryTransfer}
+                onResolve={setConflictId}
                 iconSize={iconSize}
               />
             ))
@@ -385,6 +397,14 @@ const TransferQueuePanel: React.FC = () => {
           )}
         </div>
       </div>
+      {conflictId && (() => {
+        const transfer = transfers.find((item) => item.id === conflictId);
+        const book = getVisibleLibrary().find((item) => item.hash === transfer?.bookHash);
+        return transfer && book ? (
+          <ScholarFileConflictDialog transfer={transfer} book={book}
+            onClose={() => setConflictId(null)} />
+        ) : null;
+      })()}
     </div>
   );
 };

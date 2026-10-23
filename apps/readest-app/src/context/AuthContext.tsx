@@ -12,6 +12,7 @@ import {
 import { User } from '@supabase/supabase-js';
 import { supabase } from '@/utils/supabase';
 import posthog from 'posthog-js';
+import { transferManager } from '@/services/transferManager';
 
 interface AuthContextType {
   token: string | null;
@@ -51,12 +52,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         posthog.identify(user.id);
         setToken(access_token);
         setUser(user);
+        transferManager.setScholarAccountId(user.id);
       } else {
         localStorage.removeItem('token');
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('user');
         setToken(null);
         setUser(null);
+        transferManager.setScholarAccountId(null);
       }
     };
     const refreshSession = async () => {
@@ -88,6 +91,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(newUser);
     localStorage.setItem('token', newToken);
     localStorage.setItem('user', JSON.stringify(newUser));
+    transferManager.setScholarAccountId(newUser.id);
   }, []);
 
   const logout = useCallback(async () => {
@@ -101,6 +105,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       localStorage.removeItem('user');
       setToken(null);
       setUser(null);
+      transferManager.setScholarAccountId(null);
     }
   }, []);
 

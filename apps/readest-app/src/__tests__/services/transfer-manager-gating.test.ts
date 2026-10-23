@@ -6,6 +6,7 @@ import type { SystemSettings } from '@/types/settings';
 const scholarRelease = vi.fn();
 const scholarAccountId = vi.fn();
 const scholarBaseline = vi.fn();
+const saveScholarBaseline = vi.fn();
 vi.mock('@/services/environment', async (original) => ({
   ...(await original<typeof import('@/services/environment')>()),
   isScholarReleaseBundle: () => scholarRelease(),
@@ -13,6 +14,7 @@ vi.mock('@/services/environment', async (original) => ({
 vi.mock('@/services/scholarFileBaseline', () => ({
   getScholarAccountId: () => scholarAccountId(),
   getScholarFileBaseline: (...args: unknown[]) => scholarBaseline(...args),
+  saveScholarFileBaseline: (...args: unknown[]) => saveScholarBaseline(...args),
 }));
 
 vi.mock('@/utils/event', () => ({
@@ -184,6 +186,22 @@ describe('Scholar file queue baseline', () => {
       snapshotPath: `scholar-uploads/${userA}/${task.scholarOpId}`,
     });
   });
+  test("accepts an upload after sign-in updates an already initialized manager", async () => {
+    scholarRelease.mockReturnValue(true);
+    scholarAccountId.mockResolvedValue(null);
+    const book = makeBook();
+    transferManager.pauseQueue();
+    await initManager(makeAppService(), [book]);
+    expect(transferManager.queueUpload(book)).toBeNull();
+
+    transferManager.setScholarAccountId(userA);
+    const id = transferManager.queueUpload(book);
+    expect(id).toBeTruthy();
+    expect(useTransferStore.getState().transfers[id!]!.scholarAccountId).toBe(userA);
+    transferManager.setScholarAccountId(null);
+    expect(transferManager.queueUpload(makeBook({ hash: "other" }))).toBeNull();
+  });
+
   test('stages the body even when paused, and reuses its path after the source changes', async () => {
     scholarRelease.mockReturnValue(true);
     scholarAccountId.mockResolvedValue(userA);
@@ -670,5 +688,41 @@ describe('quota failure handling', () => {
     const transfer = Object.values(useTransferStore.getState().transfers)[0];
     expect(transfer?.status).toBe('failed');
     expect(transfer?.retryCount).toBe(3);
+  });
+});
+
+describe('Scholar conflict completion', () => {
+  const accountId = '00000000-0000-4000-8000-000000000001';
+  const fileId = '00000000-0000-4000-8000-000000000002';
+  const versionId = '00000000-0000-4000-8000-000000000003';
+
+  test('publishing the verified local version closes the queue item and deletes its snapshot', async () => {
+    scholarAccountId.mockResolvedValue(accountId);
+    const book = makeBook();
+    const service = await initManager(makeAppService(), [book]);
+    useTransferStore.setState({ transfers: { t1: makeTransferItem({
+      status: 'failed', error: 'Scholar file conflict; local version retained',
+      scholarAccountId: accountId, scholarOpId: 'op-1', scholarSnapshotPath: 'scholar-uploads/snapshot',
+    }) } });
+    await transferManager.finishScholarConflict('t1', fileId, versionId, true);
+    expect(saveScholarBaseline).toHaveBeenCalledWith(accountId,
+      expect.stringContaining('Readest/Books/'), { fileId, versionId });
+    expect(book.uploadedAt).toEqual(expect.any(Number));
+    expect(useTransferStore.getState().transfers['t1']?.status).toBe('completed');
+    expect(service['deleteFile']).toHaveBeenCalledWith('scholar-uploads/snapshot', 'Cache');
+  });
+
+  test('an account switch leaves the conflict and its local snapshot intact', async () => {
+    scholarAccountId.mockResolvedValue('00000000-0000-4000-8000-000000000004');
+    const service = await initManager(makeAppService(), [makeBook()]);
+    useTransferStore.setState({ transfers: { t1: makeTransferItem({
+      status: 'failed', error: 'Scholar file conflict; local version retained',
+      scholarAccountId: accountId, scholarOpId: 'op-1', scholarSnapshotPath: 'scholar-uploads/snapshot',
+    }) } });
+    await expect(transferManager.finishScholarConflict('t1', fileId, versionId, false))
+      .rejects.toThrow('Scholar upload account changed');
+    expect(saveScholarBaseline).not.toHaveBeenCalled();
+    expect(useTransferStore.getState().transfers['t1']?.status).toBe('failed');
+    expect(service['deleteFile']).not.toHaveBeenCalled();
   });
 });
