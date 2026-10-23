@@ -90,6 +90,14 @@ export async function deleteBook(
     }
   }
   if ((deleteAction === 'cloud' || deleteAction === 'both') && book.uploadedAt) {
+    if (isScholarReleaseBundle() || isScholarTestBundle()) {
+      // The Scholar transfer queue performs a version-aware soft delete. A
+      // legacy object delete here could destroy bytes before the CAS runs.
+      if (deleteAction === 'cloud') {
+        throw new Error('Use Scholar version-aware file deletion');
+      }
+      return;
+    }
     const fps = [getRemoteBookFilename(book), getCoverFilename(book)];
     for (const fp of fps) {
       const cfp = `${CLOUD_BOOKS_SUBDIR}/${fp}`;
