@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { aiAccountScope } from '@/services/ai/accountScope';
 import { aiStore } from '@/services/ai/storage/aiStore';
+import { useAIChatStore } from '@/store/aiChatStore';
+import { useReedyStore } from '@/services/reedy/store/reedyStore';
 import {
   deleteBookAiData,
   queueBookAiDataDeletion,
@@ -57,9 +59,31 @@ describe('AI IndexedDB account isolation and deletion', () => {
       expect(await aiStore.getConversations(b)).toHaveLength(1);
 
       const web = { appPlatform: 'web' } as Parameters<typeof deleteBookAiData>[2];
+      useAIChatStore.setState({
+        currentBookHash: a,
+        conversations: [conversation(a + '-chat', a)],
+        activeConversationId: a + '-chat',
+        messages: [
+          {
+            id: 'visible',
+            conversationId: a + '-chat',
+            role: 'user',
+            content: 'Private',
+            createdAt: 1,
+          },
+        ],
+      });
+      const activeTurn = new AbortController();
+      useReedyStore.getState().activateScope(a);
+      useReedyStore.getState().startAssistantTurn('active', activeTurn);
       queueBookAiDataDeletion(paper, 'account-a');
       await deleteBookAiData(paper, 'account-a', web);
 
+      expect(activeTurn.signal.aborted).toBe(true);
+      expect(useReedyStore.getState().scope).toBeNull();
+      expect(useReedyStore.getState().messages).toEqual([]);
+      expect(useAIChatStore.getState().currentBookHash).toBeNull();
+      expect(useAIChatStore.getState().messages).toEqual([]);
       expect(await aiStore.getMeta(a)).toBeNull();
       expect(await aiStore.getChunks(a)).toEqual([]);
       expect(await aiStore.getConversations(a)).toEqual([]);
