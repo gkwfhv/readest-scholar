@@ -99,6 +99,7 @@ const AIPanel: React.FC = () => {
   const [openrouterModels, setOpenrouterModels] = useState<OpenRouterModelInfo[]>([]);
   const [openrouterFetchingModels, setOpenrouterFetchingModels] = useState(false);
   const [openrouterModelsError, setOpenrouterModelsError] = useState('');
+  const openrouterModelRequestId = useRef(0);
 
   const savedCustomModel = aiSettings.aiGatewayCustomModel ?? '';
   const savedModel = aiSettings.aiGatewayModel ?? DEFAULT_AI_SETTINGS.aiGatewayModel ?? '';
@@ -172,6 +173,7 @@ const AIPanel: React.FC = () => {
 
   // ---- OpenRouter: fetch /models list ----
   const fetchOpenrouterModelList = useCallback(async () => {
+    const requestId = ++openrouterModelRequestId.current;
     if (!enabled || !openrouterUrl || !openrouterKey) {
       setOpenrouterModels([]);
       return;
@@ -180,26 +182,28 @@ const AIPanel: React.FC = () => {
     setOpenrouterModelsError('');
     try {
       const models = await fetchOpenRouterModels(openrouterUrl, openrouterKey);
+      if (requestId !== openrouterModelRequestId.current) return;
       // Sort by id for a stable picker. Keep raw entries — UI uses
       // `name || id` so OpenRouter's friendly labels still show up.
       models.sort((a, b) => a.id.localeCompare(b.id));
       setOpenrouterModels(models);
-      if (models.length > 0 && !models.some((m) => m.id === openrouterModel)) {
-        setOpenrouterModel(models[0]!.id);
-      }
     } catch (e) {
+      if (requestId !== openrouterModelRequestId.current) return;
       setOpenrouterModels([]);
       setOpenrouterModelsError((e as Error).message || _('Failed to fetch models'));
     } finally {
-      setOpenrouterFetchingModels(false);
+      if (requestId === openrouterModelRequestId.current) setOpenrouterFetchingModels(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, openrouterUrl, openrouterKey, openrouterModel]);
+  }, [enabled, openrouterUrl, openrouterKey]);
 
   useEffect(() => {
     if (provider === 'openrouter' && enabled && openrouterKey && openrouterUrl) {
-      fetchOpenrouterModelList();
+      void fetchOpenrouterModelList();
     }
+    return () => {
+      openrouterModelRequestId.current += 1;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [provider, enabled, openrouterKey, openrouterUrl]);
 
@@ -664,34 +668,23 @@ const AIPanel: React.FC = () => {
             />
           </div>
 
-          {/* Model picker — populated from the endpoint's /models */}
+          {/* Discovery suggestions must never replace a configured model ID. */}
           <div className='flex flex-col gap-2 pe-4 py-3'>
             <SettingLabel>{_('LLM Model')}</SettingLabel>
-            {openrouterModels.length > 0 ? (
-              <select
-                className='select select-sm bg-base-100 text-base-content w-full'
-                value={openrouterModel}
-                onChange={(e) => setOpenrouterModel(e.target.value)}
-                disabled={!enabled}
-              >
-                {openrouterModels.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name ? `${m.name} (${m.id})` : m.id}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              // Fallback: free-text input when /models isn't reachable yet,
-              // so the user isn't locked out before refreshing succeeds.
-              <input
-                type='text'
-                className='input input-sm w-full'
-                value={openrouterModel}
-                onChange={(e) => setOpenrouterModel(e.target.value)}
-                placeholder='openai/gpt-4o-mini'
-                disabled={!enabled}
-              />
-            )}
+            <input
+              type='text'
+              list='openrouter-chat-model-options'
+              className='input input-sm w-full'
+              value={openrouterModel}
+              onChange={(e) => setOpenrouterModel(e.target.value)}
+              placeholder='openai/gpt-4o-mini'
+              disabled={!enabled}
+            />
+            <datalist id='openrouter-chat-model-options'>
+              {openrouterModels.map((m) => (
+                <option key={m.id} value={m.id} label={m.name || m.id} />
+              ))}
+            </datalist>
             {openrouterModelsError && (
               <span className='text-error text-xs'>{openrouterModelsError}</span>
             )}
@@ -702,40 +695,26 @@ const AIPanel: React.FC = () => {
             )}
           </div>
 
-          {/* Embedding model — same /models listing as the LLM picker.
-              OpenAI's /v1/models doesn't tag chat vs embedding, so the two
-              selects share one list and the user picks the right one.
-              Falls back to free text when the list isn't loaded yet, so
-              the user can still type a known ID before refreshing. */}
+          {/* Chat and embedding IDs may be absent from /models on a compatible proxy. */}
           <div className='flex flex-col gap-2 pe-4 py-3'>
             <SettingLabel>{_('Embedding Model')}</SettingLabel>
-            {openrouterModels.length > 0 ? (
-              <select
-                className='select select-sm bg-base-100 text-base-content w-full'
-                value={openrouterEmbeddingModel}
-                onChange={(e) => setOpenrouterEmbeddingModel(e.target.value)}
-                disabled={!enabled}
-              >
-                <option value=''>{_('None (disable RAG)')}</option>
-                {openrouterModels.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name ? `${m.name} (${m.id})` : m.id}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                type='text'
-                className='input input-sm w-full'
-                value={openrouterEmbeddingModel}
-                onChange={(e) => setOpenrouterEmbeddingModel(e.target.value)}
-                placeholder='openai/text-embedding-3-small'
-                disabled={!enabled}
-              />
-            )}
+            <input
+              type='text'
+              list='openrouter-embedding-model-options'
+              className='input input-sm w-full'
+              value={openrouterEmbeddingModel}
+              onChange={(e) => setOpenrouterEmbeddingModel(e.target.value)}
+              placeholder='openai/text-embedding-3-small'
+              disabled={!enabled}
+            />
+            <datalist id='openrouter-embedding-model-options'>
+              {openrouterModels.map((m) => (
+                <option key={m.id} value={m.id} label={m.name || m.id} />
+              ))}
+            </datalist>
             <span className='text-base-content/60 text-xs'>
               {_(
-                'Optional. Leave blank if your endpoint does not support embeddings — chat will still work but RAG features will be unavailable.',
+                'Leave blank to use the default embedding model. For a compatible endpoint, enter a supported embedding model ID.',
               )}
             </span>
           </div>

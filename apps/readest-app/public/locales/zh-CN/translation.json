@@ -2598,6 +2598,7 @@
   "The source PDF no longer has this page": "原 PDF 已不包含此页面",
   "The PDF page has invalid crop or rotation": "PDF 页面的裁剪或旋转数据无效",
   "This PDF has no extractable text. It may be scanned; run OCR before indexing it for AI search.": "此 PDF 没有可提取的文字，可能是扫描件。请先运行 OCR，再为 AI 搜索建立索引。",
+  "Leave blank to use the default embedding model. For a compatible endpoint, enter a supported embedding model ID.": "留空将使用默认嵌入模型。对于兼容接口，请填写该接口支持的嵌入模型 ID。",
   "Explain with AI": "用 AI 解释",
   "Explain selected text with AI": "用 AI 解释选中文字",
   "Summarize with AI": "用 AI 总结",
