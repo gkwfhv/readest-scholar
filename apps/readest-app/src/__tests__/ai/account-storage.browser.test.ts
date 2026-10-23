@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { aiAccountScope } from '@/services/ai/accountScope';
 import { aiStore } from '@/services/ai/storage/aiStore';
+import { runBookAiWork } from '@/services/ai/bookAiWork';
 import { useAIChatStore } from '@/store/aiChatStore';
 import { useReedyStore } from '@/services/reedy/store/reedyStore';
 import {
@@ -97,6 +98,56 @@ describe('AI IndexedDB account isolation and deletion', () => {
       await aiStore.clearBook(b);
       await aiStore.deleteConversation(a + '-chat');
       await aiStore.deleteConversation(b + '-chat');
+    }
+  });
+
+  it('does not let delayed indexing or a new chat resurrect a deleted book', async () => {
+    const paper = crypto.randomUUID();
+    const scope = aiAccountScope(paper, 'account-a');
+    const web = { appPlatform: 'web' } as Parameters<typeof deleteBookAiData>[2];
+    let releaseIndex!: () => void;
+    let indexStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      indexStarted = resolve;
+    });
+    const blocked = new Promise<void>((resolve) => {
+      releaseIndex = resolve;
+    });
+    const work = runBookAiWork(scope, async () => {
+      indexStarted();
+      await blocked;
+      await aiStore.saveMeta({
+        bookHash: scope,
+        bookTitle: 'Deleted paper',
+        authorName: 'Researcher',
+        totalSections: 1,
+        totalChunks: 1,
+        embeddingModel: 'test',
+        lastUpdated: 1,
+      });
+    });
+    await started;
+    try {
+      queueBookAiDataDeletion(paper, 'account-a');
+      const deletion = deleteBookAiData(paper, 'account-a', web);
+      await expect(
+        aiStore.saveConversation({
+          id: scope + '-late-chat',
+          bookHash: scope,
+          title: 'Late chat',
+          createdAt: 1,
+          updatedAt: 1,
+        }),
+      ).rejects.toThrow('being deleted');
+      releaseIndex();
+      await expect(work).rejects.toThrow('being deleted');
+      await deletion;
+      expect(await aiStore.getMeta(scope)).toBeNull();
+      expect(await aiStore.getConversations(scope)).toEqual([]);
+    } finally {
+      releaseIndex();
+      await aiStore.clearBook(scope);
+      await aiStore.deleteConversation(scope + '-late-chat');
     }
   });
 

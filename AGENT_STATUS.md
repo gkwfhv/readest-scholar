@@ -162,3 +162,7 @@ EOF'
 ## Phase 5 Web 密钥保管（2026-10-23）
 
 服务器草稿分支实现按账户的 Web AI 密钥加密存储：迁移 047、AES-256-GCM 保管箱、认证 API、设置与备份明文清理、登录切换隔离和失败提示。服务器完整单测 1,241 文件 / 14,116 项通过（原有 16 项跳过），最终 TypeScript/Biome、31 项定向测试与独立 Web 生产构建通过。合成 staging 的两账户真实 HTTP 隔离、数据库密文、无缓存和无跨域许可通过；390 px 浏览器实际登录后从 AI 设置保存/重载/清除测试密钥通过，localStorage 无明文，桌面和手机宽度无横向溢出。原 staging Web 未切换，临时候选仅绑定回环。详见 [Web 保管箱证据](docs/evidence/phase5/web-ai-credential-vault-2026-10-23.md)。Phase 5 仍需真实论文引文质量、删除/索引竞态、桌面系统钥匙串往返和跨主题/跨端验收，尚未签收。
+
+## Phase 5 删除并发与真实论文抽取（2026-10-23）
+
+服务器草稿 PR #53 追加删除前持久标记、索引任务取消与世代校验、崩溃重试和 PDF.js 展示片段间的词界修复。删除/索引切片完整单测 1,241 文件、14,119 项通过（原有 16 项跳过）；最后改动后定向 99 项、Chromium IndexedDB 3 项、TypeScript/Biome 和 Web 生产构建通过。三篇公开 arXiv 论文经工程 PDF 加载器检查实际页数，9 个预设短语的预期物理页均在 BM25 前三条结果内。临时 PDF 未入库。详见 [并发证据](docs/evidence/phase5/book-ai-deletion-race-2026-10-23.md)和[论文证据](docs/evidence/phase5/real-paper-pdf-retrieval-2026-10-23.md)。跨进程 SQLite 原子栅栏、真实模型声明支持与拒答、原生钥匙串往返仍是 Phase 5 验收门槛，尚未签收。

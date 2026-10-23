@@ -8,6 +8,12 @@ import { migrate } from '@/services/database/migrate';
 import { getMigrations } from '@/services/database/migrations';
 import { ReedyDb } from '@/services/reedy/db/ReedyDb';
 import { BookIndexer } from '@/services/reedy/retrieval/BookIndexer';
+import {
+  advanceBookAiGeneration,
+  cancelBookAiWork,
+  pendingBookAiDeletionKey,
+  waitForBookAiWork,
+} from '@/services/ai/bookAiWork';
 import type { EmbeddingModel } from '@/services/reedy/models/EmbeddingModel';
 import type { BookDoc, SectionItem } from '@/libs/document';
 
@@ -198,6 +204,80 @@ describe('BookIndexer', () => {
     // After all three resolve the row is in a terminal state (indexed/empty).
     const meta = await reedy.getBookMeta('bk-mtx');
     expect(meta?.indexingStatus).toBe('indexed');
+  });
+
+  it('stops a delayed embedding before it can reinsert data after deletion', async () => {
+    const scope = 'user:account-a:book:delayed-paper';
+    let releaseEmbed!: () => void;
+    let embedStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      embedStarted = resolve;
+    });
+    const blocked = new Promise<void>((resolve) => {
+      releaseEmbed = resolve;
+    });
+    const model = fakeModel({
+      async embed(texts) {
+        embedStarted();
+        await blocked;
+        return texts.map(() => [1, 0, 0, 0]);
+      },
+    });
+    const indexing = indexer.indexBook(
+      fakeBook([section('s0', '<p>Content awaiting a slow embedding call.</p>')]),
+      scope,
+      model,
+    );
+    await started;
+    try {
+      localStorage.setItem(pendingBookAiDeletionKey(scope), 'pending');
+      cancelBookAiWork(scope);
+      const settled = waitForBookAiWork(scope);
+      releaseEmbed();
+      await expect(indexing).rejects.toThrow('indexing aborted');
+      await settled;
+      await reedy.purgeBookData(scope);
+      expect(await reedy.getBookMeta(scope)).toBeNull();
+    } finally {
+      releaseEmbed();
+      localStorage.removeItem(pendingBookAiDeletionKey(scope));
+    }
+  });
+
+  it('observes a deletion marker written by another window while embedding', async () => {
+    const scope = 'user:account-b:book:cross-window-delete';
+    let releaseEmbed!: () => void;
+    let embedStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      embedStarted = resolve;
+    });
+    const blocked = new Promise<void>((resolve) => {
+      releaseEmbed = resolve;
+    });
+    const model = fakeModel({
+      async embed(texts) {
+        embedStarted();
+        await blocked;
+        return texts.map(() => [1, 0, 0, 0]);
+      },
+    });
+    const indexing = indexer.indexBook(
+      fakeBook([section('s0', '<p>Evidence from a second window.</p>')]),
+      scope,
+      model,
+    );
+    await started;
+    try {
+      advanceBookAiGeneration(scope);
+      localStorage.setItem(pendingBookAiDeletionKey(scope), 'pending');
+      // Another window can finish its purge before this embedding returns.
+      localStorage.removeItem(pendingBookAiDeletionKey(scope));
+      releaseEmbed();
+      await expect(indexing).rejects.toThrow('changed during indexing');
+    } finally {
+      releaseEmbed();
+      localStorage.removeItem(pendingBookAiDeletionKey(scope));
+    }
   });
 
   it('does NOT serialize indexBook calls across different books', async () => {

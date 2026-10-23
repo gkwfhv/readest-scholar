@@ -634,13 +634,17 @@ describe('BaseAppService', () => {
       expect(clearBookTTSDownloads).toHaveBeenCalledWith(service, 'book-hash');
     });
 
-    test('does not clear queued downloads when local deletion fails', async () => {
+    test('purges regenerable AI data if local deletion fails after possible partial removal', async () => {
       vi.mocked(CloudSvc.deleteBook).mockRejectedValueOnce(new Error('disk failure'));
 
       await expect(service.deleteBook(book, 'local')).rejects.toThrow('disk failure');
       expect(ttsDownloadManager.removeBook).not.toHaveBeenCalled();
       expect(clearBookTTSDownloads).not.toHaveBeenCalled();
-      expect(deleteBookAiData).not.toHaveBeenCalled();
+      expect(queueBookAiDataDeletion).toHaveBeenCalledWith('book-hash', null);
+      expect(deleteBookAiData).toHaveBeenCalledWith('book-hash', null, service);
+      expect(vi.mocked(queueBookAiDataDeletion).mock.invocationCallOrder[0]).toBeLessThan(
+        vi.mocked(CloudSvc.deleteBook).mock.invocationCallOrder[0]!,
+      );
     });
 
     test('quiesces downloads and the live session before purging the cache directory', async () => {

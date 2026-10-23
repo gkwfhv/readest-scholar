@@ -24,6 +24,27 @@ export function extractTextFromDocument(doc: Document): string {
   clone
     .querySelectorAll('script, style, noscript, nav, header, footer')
     .forEach((el) => el.remove());
+  // Foliate/PDF.js positions text runs in presentation spans. textContent
+  // concatenates those runs and ignores visual <br> elements, turning
+  // `80% of` + `the time` into `80% ofthe time` in a real two-column paper.
+  // Preserve a word break between runs while keeping line-end hyphenation.
+  const pdfRuns = clone.querySelectorAll('span[role="presentation"], br[role="presentation"]');
+  if (pdfRuns.length > 0) {
+    let text = '';
+    for (const run of pdfRuns) {
+      if (run.tagName === 'BR') {
+        if (text && !/\s$/.test(text)) text += ' ';
+        continue;
+      }
+      const segment = run.textContent ?? '';
+      if (!segment) continue;
+      if (text && !/\s$/.test(text) && !/^\s/.test(segment) && !text.endsWith('-')) {
+        text += ' ';
+      }
+      text += segment;
+    }
+    return text.replace(/\s+/g, ' ').trim();
+  }
   return clone.textContent?.trim() || '';
 }
 

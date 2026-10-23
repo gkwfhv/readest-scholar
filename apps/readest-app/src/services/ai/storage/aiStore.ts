@@ -1,6 +1,7 @@
 import { TextChunk, ScoredChunk, BookIndexMeta, AIConversation, AIMessage } from '../types';
 import { aiLogger } from '../logger';
 import lunr from 'lunr';
+import { assertBookAiScopeActive } from '../bookAiWork';
 
 const DB_NAME = 'readest-ai';
 const DB_VERSION = 3;
@@ -93,8 +94,10 @@ class AIStore {
     });
   }
 
-  async saveMeta(meta: BookIndexMeta): Promise<void> {
+  async saveMeta(meta: BookIndexMeta, assertCurrent?: () => void): Promise<void> {
     const db = await this.openDB();
+    assertCurrent?.();
+    assertBookAiScopeActive(meta.bookHash);
     return new Promise((resolve, reject) => {
       const tx = db.transaction(META_STORE, 'readwrite');
       tx.objectStore(META_STORE).put(meta);
@@ -128,10 +131,12 @@ class AIStore {
     return meta !== null && meta.totalChunks > 0;
   }
 
-  async saveChunks(chunks: TextChunk[]): Promise<void> {
+  async saveChunks(chunks: TextChunk[], assertCurrent?: () => void): Promise<void> {
     if (chunks.length === 0) return;
     const bookHash = chunks[0]!.bookHash;
     const db = await this.openDB();
+    assertCurrent?.();
+    assertBookAiScopeActive(bookHash);
     return new Promise((resolve, reject) => {
       const tx = db.transaction(CHUNKS_STORE, 'readwrite');
       const store = tx.objectStore(CHUNKS_STORE);
@@ -169,7 +174,11 @@ class AIStore {
     });
   }
 
-  async saveBM25Index(bookHash: string, chunks: TextChunk[]): Promise<void> {
+  async saveBM25Index(
+    bookHash: string,
+    chunks: TextChunk[],
+    assertCurrent?: () => void,
+  ): Promise<void> {
     const index = lunr(function (this: lunr.Builder) {
       this.ref('id');
       this.field('text');
@@ -180,6 +189,8 @@ class AIStore {
         this.add({ id: chunk.id, text: chunk.text, chapterTitle: chunk.chapterTitle });
     });
     const db = await this.openDB();
+    assertCurrent?.();
+    assertBookAiScopeActive(bookHash);
     return new Promise((resolve, reject) => {
       const tx = db.transaction(BM25_STORE, 'readwrite');
       tx.objectStore(BM25_STORE).put({ bookHash, serialized: JSON.stringify(index) });
@@ -327,8 +338,10 @@ class AIStore {
 
   // conversation persistence methods
 
-  async saveConversation(conversation: AIConversation): Promise<void> {
+  async saveConversation(conversation: AIConversation, assertCurrent?: () => void): Promise<void> {
     const db = await this.openDB();
+    assertCurrent?.();
+    assertBookAiScopeActive(conversation.bookHash);
     return new Promise((resolve, reject) => {
       const tx = db.transaction(CONVERSATIONS_STORE, 'readwrite');
       tx.objectStore(CONVERSATIONS_STORE).put(conversation);
@@ -419,8 +432,14 @@ class AIStore {
     });
   }
 
-  async saveMessage(message: AIMessage): Promise<void> {
+  async saveMessage(
+    message: AIMessage,
+    bookScope?: string,
+    assertCurrent?: () => void,
+  ): Promise<void> {
     const db = await this.openDB();
+    assertCurrent?.();
+    if (bookScope) assertBookAiScopeActive(bookScope);
     return new Promise((resolve, reject) => {
       const tx = db.transaction(MESSAGES_STORE, 'readwrite');
       tx.objectStore(MESSAGES_STORE).put(message);

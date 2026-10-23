@@ -1,6 +1,12 @@
 import type { AppService } from '@/types/system';
 import { aiAccountScope } from './accountScope';
 import { aiStore } from './storage/aiStore';
+import {
+  advanceBookAiGeneration,
+  cancelBookAiWork,
+  pendingBookAiDeletionKey,
+  waitForBookAiWork,
+} from './bookAiWork';
 
 const PENDING_PREFIX = 'scholar-ai-pending-book-delete:v1:';
 
@@ -10,12 +16,17 @@ export interface PendingAiDeletion {
 }
 
 function pendingKey(bookHash: string, userId: string | null): string {
-  return PENDING_PREFIX + encodeURIComponent(aiAccountScope(bookHash, userId));
+  return pendingBookAiDeletionKey(aiAccountScope(bookHash, userId));
 }
 
 /** Queue a local cleanup so a database error can be retried after restart. */
 export function queueBookAiDataDeletion(bookHash: string, userId: string | null): void {
-  localStorage.setItem(pendingKey(bookHash, userId), JSON.stringify({ bookHash, userId }));
+  const key = pendingKey(bookHash, userId);
+  if (localStorage.getItem(key) === null) {
+    advanceBookAiGeneration(aiAccountScope(bookHash, userId));
+    localStorage.setItem(key, JSON.stringify({ bookHash, userId }));
+  }
+  cancelBookAiWork(aiAccountScope(bookHash, userId));
 }
 
 export async function deleteBookAiData(
@@ -24,6 +35,10 @@ export async function deleteBookAiData(
   appService: Pick<AppService, 'appPlatform' | 'openDatabase'>,
 ): Promise<void> {
   const scope = aiAccountScope(bookHash, userId);
+  // A direct caller must provide the same durable guard as the app-service path.
+  if (localStorage.getItem(pendingKey(bookHash, userId)) === null) {
+    queueBookAiDataDeletion(bookHash, userId);
+  }
   // Stop the active UI turn before deleting its backing rows.
   const [{ useAIChatStore }, { useReedyStore }] = await Promise.all([
     import('@/store/aiChatStore'),
@@ -34,6 +49,8 @@ export async function deleteBookAiData(
     useReedyStore.getState().reset();
     useReedyStore.setState({ scope: null });
   }
+  // A delayed embedding or IndexedDB/SQLite write must finish before the final purge.
+  await waitForBookAiWork(scope);
   const conversations = await aiStore.getConversations(scope);
   await aiStore.clearBook(scope);
   for (const conversation of conversations) {
@@ -49,7 +66,7 @@ export async function deleteBookAiData(
   localStorage.removeItem(pendingKey(bookHash, userId));
 }
 
-/** Retry only entries that were written after a successful local book deletion. */
+/** Retry durable delete intents, including a crash during physical deletion. */
 export async function retryPendingBookAiDataDeletions(
   appService: Pick<AppService, 'appPlatform' | 'openDatabase'>,
 ): Promise<void> {

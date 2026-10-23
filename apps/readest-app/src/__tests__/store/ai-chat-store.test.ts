@@ -1,11 +1,14 @@
 import { describe, test, expect, beforeEach, vi } from 'vitest';
 import type { AIConversation, AIMessage } from '@/services/ai/types';
+import { advanceBookAiGeneration } from '@/services/ai/bookAiWork';
 
 // Mock the aiStore (IndexedDB-backed persistence)
 const mockGetConversations = vi.fn<(bookHash: string) => Promise<AIConversation[]>>();
 const mockGetMessages = vi.fn<(id: string) => Promise<AIMessage[]>>();
-const mockSaveConversation = vi.fn<(conv: AIConversation) => Promise<void>>();
-const mockSaveMessage = vi.fn<(msg: AIMessage) => Promise<void>>();
+const mockSaveConversation =
+  vi.fn<(conv: AIConversation, assertCurrent?: () => void) => Promise<void>>();
+const mockSaveMessage =
+  vi.fn<(msg: AIMessage, bookScope?: string, assertCurrent?: () => void) => Promise<void>>();
 const mockDeleteConversation = vi.fn<(id: string) => Promise<void>>();
 const mockUpdateConversationTitle = vi.fn<(id: string, title: string) => Promise<void>>();
 
@@ -121,6 +124,25 @@ describe('aiChatStore', () => {
     ]);
     await loading;
     expect(useAIChatStore.getState().currentBookHash).toBeNull();
+    expect(useAIChatStore.getState().conversations).toEqual([]);
+  });
+
+  test('rejects a delayed new conversation after the book deletion generation changes', async () => {
+    const scope = 'book-deleted-while-loading';
+    let finishLoad!: (conversations: AIConversation[]) => void;
+    mockGetConversations.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishLoad = resolve;
+        }),
+    );
+    mockSaveConversation.mockImplementation(async (_conversation, assertCurrent) => {
+      assertCurrent?.();
+    });
+    const creating = useAIChatStore.getState().createConversation(scope, 'Late chat');
+    advanceBookAiGeneration(scope);
+    finishLoad([]);
+    await expect(creating).rejects.toThrow('changed during indexing');
     expect(useAIChatStore.getState().conversations).toEqual([]);
   });
 
