@@ -166,3 +166,5 @@ EOF'
 ## Phase 5 删除并发与真实论文抽取（2026-10-23）
 
 服务器草稿 PR #53 追加删除前持久标记、索引任务取消与世代校验、崩溃重试和 PDF.js 展示片段间的词界修复。删除/索引切片完整单测 1,241 文件、14,119 项通过（原有 16 项跳过）；最后改动后定向 99 项、Chromium IndexedDB 3 项、TypeScript/Biome 和 Web 生产构建通过。三篇公开 arXiv 论文经工程 PDF 加载器检查实际页数，9 个预设短语的预期物理页均在 BM25 前三条结果内。临时 PDF 未入库。详见 [并发证据](docs/evidence/phase5/book-ai-deletion-race-2026-10-23.md)和[论文证据](docs/evidence/phase5/real-paper-pdf-retrieval-2026-10-23.md)。跨进程 SQLite 原子栅栏、真实模型声明支持与拒答、原生钥匙串往返仍是 Phase 5 验收门槛，尚未签收。
+
+Phase 5 的 OpenAI 兼容接口另用服务器回环 HTTP 端点实测：模型列表/健康检查、聊天、向量请求、分别配置的模型 ID 和 Bearer 头均通过；TypeScript/Biome 通过。此项仅证明协议兼容，不证明模型回答质量。见 [HTTP 证据](docs/evidence/phase5/openai-compatible-http-2026-10-23.md)。
