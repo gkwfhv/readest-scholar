@@ -2596,5 +2596,7 @@
   "Page geometry is unavailable for this note": "此筆記缺少頁面位置資料",
   "The note moved after its geometry was captured": "筆記位置已變更，原座標失效",
   "The source PDF no longer has this page": "原始 PDF 已不包含此頁面",
-  "The PDF page has invalid crop or rotation": "PDF 頁面的裁切或旋轉資料無效"
+  "The PDF page has invalid crop or rotation": "PDF 頁面的裁切或旋轉資料無效",
+  "The OS keychain could not save this API key. Try again.": "系統鑰匙圈無法儲存此 API 金鑰，請重試。",
+  "Older AI API keys were removed from local settings for security. Re-enter them to use cloud models.": "為保護安全，舊版 AI API 金鑰已從本機設定中清除。請重新輸入金鑰以使用雲端模型。"
 }
