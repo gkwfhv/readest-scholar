@@ -30,6 +30,11 @@ export const EnvProvider = ({ children }: { children: ReactNode }) => {
         setAppService(service);
         try {
           const settings = await service.loadSettings();
+          // Retry local AI cleanup left by a completed book deletion. Each
+          // entry carries its original account scope, even after login changes.
+          void import('@/services/ai/deleteBookAiData')
+            .then(({ retryPendingBookAiDataDeletions }) => retryPendingBookAiDataDeletions(service))
+            .catch((error) => console.warn('Could not retry pending AI cleanup', error));
           if (settings.replicaDeviceId) {
             const ctx = initReplicaSync({
               deviceId: settings.replicaDeviceId,

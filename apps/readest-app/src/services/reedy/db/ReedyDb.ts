@@ -260,6 +260,39 @@ export class ReedyDb {
   }
 
   /**
+   * Delete derived data for one account-scoped book. This is stronger than
+   * dropBookData (the Reset Index action): deleting a document also removes
+   * its book/session memories, including their vector rows. User-wide memory
+   * and every other account's book key remain intact.
+   */
+  async purgeBookData(bookHash: string): Promise<void> {
+    await this.enqueue(async () => {
+      const rows = await this.db.select<{ name: string }>(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('reedy_book_chunk_embeddings', 'reedy_memory_embeddings')",
+      );
+      const tables = new Set(rows.map((row) => row.name));
+      const key = sqlQuote(bookHash);
+      const statements: string[] = [];
+      if (tables.has('reedy_book_chunk_embeddings')) {
+        statements.push('DELETE FROM reedy_book_chunk_embeddings WHERE book_hash = ' + key);
+      }
+      if (tables.has('reedy_memory_embeddings')) {
+        statements.push(
+          'DELETE FROM reedy_memory_embeddings WHERE memory_id IN (SELECT id FROM reedy_memory WHERE scope_key = ' +
+            key +
+            " AND scope IN ('book', 'session'))",
+        );
+      }
+      statements.push(
+        'DELETE FROM reedy_book_chunks WHERE book_hash = ' + key,
+        'DELETE FROM reedy_book_meta WHERE book_hash = ' + key,
+        'DELETE FROM reedy_memory WHERE scope_key = ' + key + " AND scope IN ('book', 'session')",
+      );
+      await this.db.batch(statements);
+    });
+  }
+
+  /**
    * Wipe every Reedy-managed row across the database. Used when the user
    * switches embedding models — the lazy embeddings table keeps its
    * existing vector32(<old-dim>) shape until something writes to it again,

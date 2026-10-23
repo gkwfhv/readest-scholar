@@ -45,6 +45,11 @@ vi.mock('@/services/cloudService', () => ({
   downloadReplicaFileFromCloud: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('@/services/ai/deleteBookAiData', () => ({
+  queueBookAiDataDeletion: vi.fn(),
+  deleteBookAiData: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('@/services/tts/ttsDownloadManager', () => ({
   ttsDownloadManager: {
     removeBook: vi.fn(),
@@ -121,6 +126,7 @@ import type { ImportedDictionary } from '@/services/dictionaries/types';
 import { evictProvider } from '@/services/dictionaries/registry';
 import { getDictionaryPluginControlStore } from '@/services/dictionaries/plugins/controlService';
 import { ttsDownloadManager } from '@/services/tts/ttsDownloadManager';
+import { queueBookAiDataDeletion, deleteBookAiData } from '@/services/ai/deleteBookAiData';
 import { clearBookTTSDownloads } from '@/services/tts/providers/bookCacheStore';
 import { ttsSessionManager } from '@/services/tts/TTSSessionManager';
 import { requestStoragePermission } from '@/utils/permission';
@@ -615,10 +621,14 @@ describe('BaseAppService', () => {
 
     test('clears queued downloads only when the local copy is deleted', async () => {
       await service.deleteBook(book, 'cloud');
+      expect(queueBookAiDataDeletion).not.toHaveBeenCalled();
+      expect(deleteBookAiData).not.toHaveBeenCalled();
       expect(ttsDownloadManager.removeBook).not.toHaveBeenCalled();
       expect(clearBookTTSDownloads).not.toHaveBeenCalled();
 
       await service.deleteBook(book, 'local');
+      expect(queueBookAiDataDeletion).toHaveBeenCalledWith('book-hash', null);
+      expect(deleteBookAiData).toHaveBeenCalledWith('book-hash', null, service);
       expect(ttsDownloadManager.removeBook).toHaveBeenCalledTimes(1);
       expect(ttsDownloadManager.removeBook).toHaveBeenCalledWith('book-hash');
       expect(clearBookTTSDownloads).toHaveBeenCalledWith(service, 'book-hash');
@@ -630,6 +640,7 @@ describe('BaseAppService', () => {
       await expect(service.deleteBook(book, 'local')).rejects.toThrow('disk failure');
       expect(ttsDownloadManager.removeBook).not.toHaveBeenCalled();
       expect(clearBookTTSDownloads).not.toHaveBeenCalled();
+      expect(deleteBookAiData).not.toHaveBeenCalled();
     });
 
     test('quiesces downloads and the live session before purging the cache directory', async () => {
