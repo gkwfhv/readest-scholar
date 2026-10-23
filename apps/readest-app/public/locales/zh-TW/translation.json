@@ -2600,5 +2600,20 @@
   "The OS keychain could not save this API key. Try again.": "系統鑰匙圈無法儲存此 API 金鑰，請重試。",
   "Older AI API keys were removed from local settings for security. Re-enter them to use cloud models.": "為保護安全，舊版 AI API 金鑰已從本機設定中清除。請重新輸入金鑰以使用雲端模型。",
   "The secure server could not save this API key. Try again.": "安全伺服器無法儲存此 API 金鑰，請重試。",
-  "Sign in to store AI API keys on Web.": "請先登入，再於網頁版儲存 AI API 金鑰。"
+  "Sign in to store AI API keys on Web.": "請先登入，再於網頁版儲存 AI API 金鑰。",
+  "PDF translation": "PDF 翻譯",
+  "Bilingual": "雙語",
+  "Chinese": "中文",
+  "Both": "兩種版本",
+  "Glossary CSV": "術語表 CSV",
+  "Glossary ready": "術語表已就緒",
+  "Upload this PDF to Scholar before translating.": "請先將此 PDF 同步到 Scholar，再開始翻譯。",
+  "Open bilingual PDF": "開啟雙語 PDF",
+  "Open Chinese PDF": "開啟中文 PDF",
+  "Add to library": "加入書庫",
+  "Output": "輸出",
+  "Queued": "排隊中",
+  "Translating": "翻譯中",
+  "Canceled": "已取消",
+  "Create a translated copy while keeping the original PDF": "建立翻譯副本，保留原始 PDF"
 }

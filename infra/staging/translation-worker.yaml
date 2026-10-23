@@ -1,0 +1,46 @@
+# Isolated, synthetic staging translation worker. No public ports.
+services:
+  client:
+    environment:
+      SCHOLAR_TRANSLATION_MODEL: ${SCHOLAR_TRANSLATION_MODEL:?Set the local model ID}
+  translator:
+    image: scholar-translation-worker:phase6
+    build:
+      context: ../..
+      dockerfile: infra/translation-worker/Dockerfile
+    depends_on:
+      - db
+      - minio
+    environment:
+      SCHOLAR_TRANSLATION_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/postgres
+      SCHOLAR_TRANSLATION_BASE_URL: ${SCHOLAR_TRANSLATION_BASE_URL:?Use the local model endpoint}
+      SCHOLAR_TRANSLATION_API_KEY_FILE: /run/secrets/translation_model_key
+      SCHOLAR_TRANSLATION_CACHE_DIR: /cache
+      SCHOLAR_TRANSLATION_TIMEOUT_SECONDS: "1800"
+      S3_ENDPOINT: http://minio:9000
+      S3_REGION: us-east-1
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME}
+      S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+    secrets:
+      - translation_model_key
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=650m
+    volumes:
+      - scholar_translation_cache:/cache
+    cpus: 2.0
+    mem_limit: 4g
+    pids_limit: 128
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+secrets:
+  translation_model_key:
+    file: ${SCHOLAR_TRANSLATION_MODEL_KEY_FILE:?Point to a private 0600 test key}
+
+volumes:
+  scholar_translation_cache:
