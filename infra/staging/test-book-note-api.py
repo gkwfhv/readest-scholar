@@ -9,6 +9,7 @@ import argparse
 import json
 import pathlib
 import subprocess
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -22,6 +23,7 @@ parser.add_argument('--candidate-url', default='http://127.0.0.1:3137')
 parser.add_argument('--supabase-url', default='http://127.0.0.1:8130')
 parser.add_argument('--db-container', default='scholar-staging-db')
 parser.add_argument('--test-restore', action='store_true', help='also exercise the note restore RPC')
+parser.add_argument('--restart-candidate', action='store_true', help='restart the isolated note candidate before a byte-identical retry')
 args = parser.parse_args()
 for url in (args.candidate_url, args.supabase_url):
     parsed = urllib.parse.urlsplit(url)
@@ -82,6 +84,13 @@ def push(text, updated, deleted=None):
         'bookHash': book_hash,
         'id': note_id,
         'type': 'annotation',
+        'cfi': '/6/2[phase3-probe]!/4/2/2',
+        'xpointer0': '/page/2/start',
+        'xpointer1': '/page/2/end',
+        'page': 2,
+        'text': 'Synthetic highlighted passage',
+        'style': 'highlight',
+        'color': 'yellow',
         'note': text,
         'createdAt': updated,
         'updatedAt': updated,
@@ -106,6 +115,27 @@ try:
     now = datetime.now(timezone.utc).replace(microsecond=0)
     first_at = int(now.timestamp() * 1000)
     initial = push('live edit', first_at)
+    row = current()
+    for field, expected in {
+        'type': 'annotation', 'cfi': '/6/2[phase3-probe]!/4/2/2',
+        'xpointer0': '/page/2/start', 'xpointer1': '/page/2/end',
+        'page': 2, 'text': 'Synthetic highlighted passage',
+        'style': 'highlight', 'color': 'yellow',
+    }.items():
+        assert row[field] == expected, (field, row[field])
+    if args.restart_candidate:
+        subprocess.run(['docker', 'restart', 'scholar-phase3-note-candidate'],
+                       check=True, capture_output=True)
+        for _ in range(30):
+            try:
+                with urllib.request.urlopen(args.candidate_url + '/library', timeout=2) as response:
+                    if response.status == 200:
+                        break
+            except (OSError, urllib.error.URLError):
+                pass
+            time.sleep(1)
+        else:
+            raise AssertionError('note candidate did not recover after restart')
     assert push('live edit', first_at)['note'] == 'live edit'
     assert archive_count() == 0, 'identical initial retry created false history'
     server_at = datetime.fromisoformat(initial['updated_at'].replace('Z', '+00:00'))
@@ -123,6 +153,9 @@ try:
     assert push('newer live edit', newer_edit)['note'] == 'newer live edit'
     assert current()['note'] == 'newer live edit' and current()['deleted_at'] is None
     assert archive_count() == 4
+    assert current()['page'] == 2 and current()['cfi'] == '/6/2[phase3-probe]!/4/2/2'
+    assert all(version['row_data']['xpointer0'] == '/page/2/start'
+               for version in request(history_url, token=token)[1])
     if args.test_restore:
         versions = request(history_url, token=token)[1]
         prior = next(v for v in versions if v['source'] == 'previous'
@@ -147,7 +180,7 @@ try:
         else:
             raise AssertionError('stale restore succeeded')
         print('note restore RPC passed: archived version restored; stale CAS rejected')
-    print('note API fault probe passed: retry/stale/delete/tie/revive and four archived versions')
+    print('note API fault probe passed: anchored annotation/retry/stale/delete/tie/revive and four archived versions; candidate_restart=' + str(args.restart_candidate))
 finally:
     sql = (
         "DELETE FROM public.book_note_conflict_versions "
