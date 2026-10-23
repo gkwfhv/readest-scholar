@@ -125,3 +125,7 @@
 服务器上 A/B 两个独立 Linux CEF 客户端以同一合成账户完成不同书签的并发离线/在线删除。B 断开自己的候选 Web 代理后删第 2 页，A 在线删第 1 页；B 网络恢复与重启后侧栏为空，staging 两个书签行都是墓碑。旧客户端对没有 xpointer 的 PDF 书签反复 POST 笔记，新增先失败后通过的五项回归并限制补充 xpointer 的待发送条件，reader hooks 292/292、TypeScript、Biome 及服务器 Web/CEF 构建通过。曾有一次 QA 构建漏载 staging 环境而误连上游认证服务；使用现有 native-build.env 重建后，B 登录态恢复，空闲 43 秒无周期性 POST。详见 docs/evidence/phase3/two-native-clients-bookmark-sync-2026-10-23.md。Phase 3 仍需同一注释的双端并发、服务崩溃及移动网络切换等门槛；未向 GitHub/GHCR 推送。
 
 同日补做候选 Web 重启故障：B 离线复活 Paper 141 第 2 页书签，重启仅供测试的 scholar-phase3-delete-candidate 容器，再恢复 B 本地代理。B 自动重试两次后停止，服务端单行活动书签，A 已打开阅读器自动显示第 2 页。正式 staging Web/数据库未重启；数据库崩溃场景仍未验收。证据追加到 docs/evidence/phase3/two-native-clients-bookmark-sync-2026-10-23.md。
+
+## Phase 3 数据库进程故障演练（2026-10-23）
+
+服务器合成 staging 在完整备份后强制停止数据库进程，带锚点批注已提交数据保留，停机请求失败、恢复后相同请求幂等重放且无虚假冲突；探针还通过恢复 CAS、删除/复活排序。数据库重启策略和四路健康均恢复。标准环境完整 Vitest 为 14035 通过、16 跳过、0 失败。详见 [数据库故障证据](docs/evidence/phase3/staging-db-crash-note-replay-2026-10-23.md)。Phase 3 仍需双真实客户端同一批注并发和二进制冲突等场景；未向 GitHub/GHCR 推送。

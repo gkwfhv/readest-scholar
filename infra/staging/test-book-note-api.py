@@ -24,6 +24,7 @@ parser.add_argument('--supabase-url', default='http://127.0.0.1:8130')
 parser.add_argument('--db-container', default='scholar-staging-db')
 parser.add_argument('--test-restore', action='store_true', help='also exercise the note restore RPC')
 parser.add_argument('--restart-candidate', action='store_true', help='restart the isolated note candidate before a byte-identical retry')
+parser.add_argument('--restart-db', action='store_true', help='force-stop and restart the synthetic staging database before a retry')
 args = parser.parse_args()
 for url in (args.candidate_url, args.supabase_url):
     parsed = urllib.parse.urlsplit(url)
@@ -111,6 +112,47 @@ def archive_count():
     return len(request(history_url, token=token)[1])
 
 
+def restart_database_after_crash():
+    if args.db_container != 'scholar-staging-db':
+        raise AssertionError('database crash probe requires the named synthetic staging DB')
+    inspection = json.loads(subprocess.check_output(['docker', 'inspect', args.db_container]))[0]
+    project = inspection['Config']['Labels'].get('com.docker.compose.project')
+    policy = inspection['HostConfig']['RestartPolicy']['Name']
+    if project != 'scholar-staging' or policy != 'unless-stopped':
+        raise AssertionError('database crash probe refused an unexpected container or restart policy')
+    try:
+        subprocess.run(['docker', 'update', '--restart=no', args.db_container],
+                       check=True, capture_output=True)
+        subprocess.run(['docker', 'kill', '--signal=KILL', args.db_container],
+                       check=True, capture_output=True)
+        if json.loads(subprocess.check_output(['docker', 'inspect', args.db_container]))[0]['State']['Running']:
+            raise AssertionError('database did not stop')
+        try:
+            push('live edit', first_at)
+        except (RuntimeError, urllib.error.URLError, OSError):
+            pass
+        else:
+            raise AssertionError('note push succeeded while the database was down')
+    finally:
+        try:
+            subprocess.run(['docker', 'start', args.db_container], check=True, capture_output=True)
+        finally:
+            subprocess.run(['docker', 'update', '--restart=unless-stopped', args.db_container],
+                           check=True, capture_output=True)
+    for _ in range(45):
+        ready = subprocess.run(['docker', 'exec', args.db_container, 'pg_isready',
+                                '-U', 'supabase_admin', '-d', 'postgres'],
+                               capture_output=True)
+        if ready.returncode == 0:
+            try:
+                current()
+                return
+            except (RuntimeError, urllib.error.URLError, OSError):
+                pass
+        time.sleep(1)
+    raise AssertionError('staging database or REST did not recover after forced stop')
+
+
 try:
     now = datetime.now(timezone.utc).replace(microsecond=0)
     first_at = int(now.timestamp() * 1000)
@@ -138,6 +180,12 @@ try:
             raise AssertionError('note candidate did not recover after restart')
     assert push('live edit', first_at)['note'] == 'live edit'
     assert archive_count() == 0, 'identical initial retry created false history'
+    if args.restart_db:
+        restart_database_after_crash()
+        assert current()['note'] == 'live edit'
+        assert push('live edit', first_at)['note'] == 'live edit'
+        assert archive_count() == 0, 'database restart retry created false history'
+        print('database crash probe passed: committed note survived KILL; failed request retried once')
     server_at = datetime.fromisoformat(initial['updated_at'].replace('Z', '+00:00'))
     stale_at = int((server_at - timedelta(days=2)).timestamp() * 1000)
     stale_delete = int((server_at - timedelta(days=1)).timestamp() * 1000)
