@@ -78,6 +78,8 @@ export function createTauriAdapter(getOptions: () => TauriAdapterOptions): ChatM
         sourceStore,
         onTurnStart,
       } = options;
+      // PDF sections are zero-based; indexed physical page numbers start at one.
+      const visiblePage = isPdf ? currentSectionIndex + 1 : currentPage;
 
       // A fresh per-turn id so the source store can key this turn's
       // citations independently of any prior turn. We expose it via
@@ -140,7 +142,7 @@ export function createTauriAdapter(getOptions: () => TauriAdapterOptions): ChatM
             score: passage.score,
             searchMethod: 'hybrid',
           }));
-          const systemPrompt = buildSystemPrompt(bookTitle, authorName, chunks, currentPage, true);
+          const systemPrompt = buildSystemPrompt(bookTitle, authorName, chunks, visiblePage, true);
           if (useApiRoute) {
             for await (const chunk of streamViaApiRoute(
               aiMessages,
@@ -205,7 +207,7 @@ export function createTauriAdapter(getOptions: () => TauriAdapterOptions): ChatM
               chunks =
                 (await backend.searchForSystemPrompt?.(query, bookHash, {
                   topK: settings.maxContextChunks || 5,
-                  spoilerBoundPosition: settings.spoilerProtection ? currentPage : undefined,
+                  spoilerBoundPosition: settings.spoilerProtection ? visiblePage : undefined,
                 })) ?? [];
               aiLogger.chat.context(chunks.length, chunks.map((c) => c.text).join('').length);
               sourceStore.replace(turnId, chunksToRetrieved(chunks));
@@ -219,7 +221,7 @@ export function createTauriAdapter(getOptions: () => TauriAdapterOptions): ChatM
             yield { content: [{ type: 'text', text: PDF_UNVERIFIED_REPLY }] };
             return;
           }
-          const systemPrompt = buildSystemPrompt(bookTitle, authorName, chunks, currentPage, isPdf);
+          const systemPrompt = buildSystemPrompt(bookTitle, authorName, chunks, visiblePage, isPdf);
 
           if (useApiRoute) {
             for await (const chunk of streamViaApiRoute(
