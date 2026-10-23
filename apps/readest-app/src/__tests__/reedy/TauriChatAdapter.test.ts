@@ -341,6 +341,7 @@ describe('TauriChatAdapter wiring (M1.11)', () => {
     const call = streamTextMock.mock.calls[0]![0] as RunCall;
     expect(call.system).toContain('[p. 8]');
     expect(call.system).toMatch(/untrusted|data only/i);
+    expect(call.system).toMatch(/numeric value.*cited page/i);
     expect(call.system).toContain('The measured value was 42.');
     expect(call.temperature).toBe(0);
   });
@@ -419,6 +420,58 @@ describe('TauriChatAdapter wiring (M1.11)', () => {
     const turnIds = (sourceStore as unknown as { sources: Map<string, unknown[]> }).sources;
     expect([...turnIds.values()][0]).toHaveLength(1);
   });
+  it('refuses a numeric PDF claim cited to a different retrieved page', async () => {
+    streamTextMock.mockImplementationOnce(() => ({
+      textStream: asyncIter(['The replacement rate is 80% [p. 1].']),
+    }));
+    const backend = fakeLegacy({
+      searchResult: [
+        {
+          id: 'pdf-1-0-0',
+          bookHash: 'pdf-1',
+          sectionIndex: 0,
+          chapterTitle: 'Page 1',
+          pageNumber: 1,
+          text: 'BERT is a bidirectional model.',
+          searchMethod: 'bm25',
+          score: 0.4,
+        },
+        {
+          id: 'pdf-1-3-0',
+          bookHash: 'pdf-1',
+          sectionIndex: 3,
+          chapterTitle: 'Page 4',
+          pageNumber: 4,
+          text: 'The [MASK] token is used 80% of the time.',
+          searchMethod: 'bm25',
+          score: 1,
+        },
+      ],
+    });
+    const adapter = createTauriAdapter(() => ({
+      settings: { ...baseSettings, reedy: { enabled: false }, spoilerProtection: false },
+      bookHash: 'pdf-1',
+      bookTitle: 'Synthetic BERT',
+      authorName: '',
+      currentPage: 4,
+      currentSectionIndex: 3,
+      isPdf: true,
+      backend,
+      sourceStore: new ReedySourceStore(),
+    }));
+    const output: string[] = [];
+    for await (const event of adapter.run({
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'How often is MASK used?' }] }],
+      abortSignal: undefined,
+    } as unknown as Parameters<typeof adapter.run>[0]) as AsyncIterable<{
+      content: Array<{ text: string }>;
+    }>) {
+      output.push(event.content[0]!.text);
+    }
+    expect(output).toHaveLength(1);
+    expect(output[0]).toMatch(/cannot verify|can't verify/i);
+  });
+
   it('does not stream an uncited PDF answer into the UI', async () => {
     streamTextMock.mockImplementationOnce(() => ({
       textStream: asyncIter(['The value', ' was 42.']),
