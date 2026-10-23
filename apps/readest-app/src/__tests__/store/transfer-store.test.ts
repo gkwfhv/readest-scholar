@@ -260,6 +260,26 @@ describe('transferStore', () => {
 
   // ── clearFailed ──────────────────────────────────────────────────
   describe('clearFailed', () => {
+    test('keeps unresolved Scholar upload and delete conflicts for review', () => {
+      const upload = useTransferStore.getState().addTransfer('h1', 'Upload', 'upload');
+      const deletion = useTransferStore.getState().addTransfer('h2', 'Delete', 'delete');
+      const other = useTransferStore.getState().addTransfer('h3', 'Other', 'download');
+      useTransferStore.getState().setTransferStatus(
+        upload, 'failed', 'Scholar file conflict; local version retained',
+      );
+      useTransferStore.getState().setTransferStatus(
+        deletion, 'failed', 'Scholar delete conflict; remote version retained',
+      );
+      useTransferStore.getState().setTransferStatus(other, 'failed', 'network');
+
+      useTransferStore.getState().clearFailed();
+
+      const transfers = useTransferStore.getState().transfers;
+      expect(transfers[upload]).toBeDefined();
+      expect(transfers[deletion]).toBeDefined();
+      expect(transfers[other]).toBeUndefined();
+    });
+
     test('removes failed and cancelled transfers', () => {
       const id1 = useTransferStore.getState().addTransfer('h1', 'B1', 'upload');
       const id2 = useTransferStore.getState().addTransfer('h2', 'B2', 'download');

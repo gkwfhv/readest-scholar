@@ -28,6 +28,7 @@ import {
   TransferStatus,
   isFailedLikeTransfer,
   isRetryableTransfer,
+  isUnresolvedScholarConflict,
   useTransferStore,
 } from '@/store/transferStore';
 
@@ -199,6 +200,10 @@ const TransferQueuePanel: React.FC = () => {
 
   const [filter, setFilter] = useState<FilterType>('all');
   const [conflictId, setConflictId] = useState<string | null>(null);
+  const unresolvedConflicts = transfers.filter(isUnresolvedScholarConflict).length;
+  const clearableFailed = transfers.filter(
+    (transfer) => isFailedLikeTransfer(transfer) && !isUnresolvedScholarConflict(transfer),
+  ).length;
 
   const onClose = () => setIsOpen(false);
   const divRef = useKeyDownActions({ onCancel: onClose, onConfirm: onClose });
@@ -392,10 +397,10 @@ const TransferQueuePanel: React.FC = () => {
               {_('Clear Completed')}
             </button>
           )}
-          {stats.failed > 0 && (
+          {clearableFailed > 0 && (
             <button onClick={clearFailed} className='btn btn-ghost btn-sm gap-1'>
               <MdDeleteSweep size={iconSize - 2} />
-              {_('Clear Failed')}
+              {_(unresolvedConflicts ? 'Clear Other Failed' : 'Clear Failed')}
             </button>
           )}
         </div>

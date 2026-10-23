@@ -154,9 +154,12 @@ const generateTransferId = (): string => {
 export const isFailedLikeTransfer = (t: TransferItem): boolean =>
   t.status === 'failed' || (t.status === 'cancelled' && t.cancelReason !== 'policy');
 
+export const isUnresolvedScholarConflict = (t: TransferItem): boolean =>
+  t.status === 'failed' &&
+  ['Scholar file conflict', 'Scholar delete conflict'].some((message) => t.error?.includes(message));
+
 export const isRetryableTransfer = (t: TransferItem): boolean =>
-  isFailedLikeTransfer(t) &&
-  !['Scholar file conflict', 'Scholar delete conflict'].some((message) => t.error?.includes(message)) &&
+  isFailedLikeTransfer(t) && !isUnresolvedScholarConflict(t) &&
   (!t.scholarAccountId || t.type !== 'upload' || !!t.scholarSnapshotPath);
 
 /**
@@ -205,7 +208,7 @@ export const useTransferStore = create<TransferState>((set, get) => ({
       kind: 'book',
       bookHash,
       bookTitle,
-      scholarOpId: (type === 'upload' || type === 'delete') && scholar ? uuidv4() : undefined,
+      scholarOpId: type === 'upload' || (type === 'delete' && !!scholar) ? uuidv4() : undefined,
       scholarAccountId: (type === 'upload' || type === 'delete') ? scholar?.accountId : undefined,
       scholarFilePath: scholar?.filePath,
       scholarExpectedVersionId: (type === 'upload' || type === 'delete')
@@ -423,7 +426,8 @@ export const useTransferStore = create<TransferState>((set, get) => ({
     set((state) => {
       const remaining: Record<string, TransferItem> = {};
       Object.entries(state.transfers).forEach(([id, transfer]) => {
-        if (transfer.status !== 'failed' && transfer.status !== 'cancelled') {
+        if ((transfer.status !== 'failed' && transfer.status !== 'cancelled') ||
+            isUnresolvedScholarConflict(transfer)) {
           remaining[id] = transfer;
         }
       });
