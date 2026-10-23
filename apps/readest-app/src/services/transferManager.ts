@@ -516,7 +516,9 @@ class TransferManager {
     saveScholarFileBaseline(task.scholarAccountId!, task.scholarFilePath!, {
       fileId, versionId: activeVersionId,
     });
-    useTransferStore.getState().setTransferStatus(transferId, 'cancelled', undefined, 'user');
+    // The delete was explicitly abandoned after restoring the library entry.
+    // Remove its failed queue row so the Failed count reflects unresolved work.
+    useTransferStore.getState().removeTransfer(transferId);
     this.persistQueue();
   }
 
@@ -584,7 +586,10 @@ class TransferManager {
   clearFailed(): void {
     const tasks = useTransferStore.getState().getFailedTransfers();
     useTransferStore.getState().clearFailed();
-    this.cleanupScholarSnapshots(tasks);
+    // The store retains unresolved Scholar conflicts; their staged upload
+    // bytes must remain available for the user's eventual resolution.
+    const removed = tasks.filter((task) => !useTransferStore.getState().transfers[task.id]);
+    this.cleanupScholarSnapshots(removed);
     this.persistQueue();
   }
 

@@ -277,7 +277,8 @@ describe('Scholar file queue baseline', () => {
     }));
     expect(saveScholarBaseline).toHaveBeenCalledWith(userA, task.scholarFilePath,
       { fileId: 'file-id', versionId });
-    expect(useTransferStore.getState().transfers[task.id]?.status).toBe('cancelled');
+    expect(useTransferStore.getState().transfers[task.id]).toBeUndefined();
+    expect(useTransferStore.getState().getQueueStats().failed).toBe(0);
   });
 
   test('reviewed delete retry gets a fresh operation ID and current head', async () => {
