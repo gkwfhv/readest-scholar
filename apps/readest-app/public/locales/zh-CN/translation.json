@@ -2604,5 +2604,7 @@
   "Summarize with AI": "用 AI 总结",
   "Summarize selected text with AI": "用 AI 总结选中文字",
   "Translate with AI": "用 AI 翻译",
-  "Translate selected text with AI": "用 AI 翻译选中文字"
+  "Translate selected text with AI": "用 AI 翻译选中文字",
+  "The OS keychain could not save this API key. Try again.": "系统钥匙串无法保存此 API 密钥，请重试。",
+  "Older AI API keys were removed from local settings for security. Re-enter them to use cloud models.": "为保护安全，旧版 AI API 密钥已从本地设置中清除。请重新输入密钥以使用云端模型。"
 }

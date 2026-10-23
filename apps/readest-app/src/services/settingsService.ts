@@ -27,6 +27,13 @@ import {
   DEFAULT_VIEW_SETTINGS_CONFIG,
 } from './constants';
 import { DEFAULT_AI_SETTINGS } from './ai/constants';
+import { aiUserScope } from './ai/accountScope';
+import {
+  LEGACY_AI_CREDENTIAL_NOTICE_KEY,
+  loadNativeAiCredentials,
+  withoutAiCredentials,
+} from './ai/nativeCredentials';
+import { isTauriAppPlatform } from './environment';
 import { getTargetLang, isCJKEnv } from '@/utils/misc';
 import { safeLoadJSON, safeSaveJSON } from './persistence';
 
@@ -163,6 +170,55 @@ export async function loadSettings(ctx: Context): Promise<SystemSettings> {
     ...DEFAULT_AI_SETTINGS,
     ...settings.aiSettings,
   };
+  if (isTauriAppPlatform()) {
+    // Legacy builds persisted API keys in settings.json. Never hydrate an
+    // unowned plaintext key into a signed-in account's keychain: a shared
+    // desktop profile may have been used by a different account.
+    let hadPlaintextKey = !!(
+      settings.aiSettings.aiGatewayApiKey || settings.aiSettings.openrouterApiKey
+    );
+    try {
+      const backup = await ctx.fs.readFile(`${SETTINGS_FILENAME}.bak`, 'Settings', 'text');
+      hadPlaintextKey ||= typeof backup === 'string' &&
+        (backup.includes('"aiGatewayApiKey"') || backup.includes('"openrouterApiKey"'));
+    } catch {
+      // No backup exists yet.
+    }
+    settings = withoutAiCredentials(settings);
+    let userId: string | null = null;
+    try {
+      const user = JSON.parse(localStorage.getItem('user') || 'null') as { id?: unknown } | null;
+      if (typeof user?.id === 'string') userId = user.id;
+    } catch {
+      // Invalid local login metadata cannot select another account's slot.
+    }
+    try {
+      const credentials = await loadNativeAiCredentials(userId);
+      const active = JSON.parse(localStorage.getItem('user') || 'null') as {
+        id?: unknown;
+      } | null;
+      // Startup settings can finish after a login change. Never publish the
+      // previous account's key into the new account's in-memory settings.
+      if ((typeof active?.id === 'string' ? active.id : null) === userId) {
+        settings.aiSettings = {
+          ...settings.aiSettings,
+          ...credentials,
+          credentialScope: aiUserScope(userId),
+        };
+      }
+    } catch {
+      console.warn('AI credentials could not be loaded from the OS keychain');
+    }
+    if (hadPlaintextKey) {
+      await saveSettings(ctx.fs, settings);
+      try {
+        localStorage.setItem(LEGACY_AI_CREDENTIAL_NOTICE_KEY, '1');
+      } catch {
+        // Storage notice is optional; the settings files are already sanitized.
+      }
+      console.warn('Legacy plaintext AI keys were removed; re-enter them in AI settings');
+    }
+  }
 
   settings.localBooksDir = await ctx.fs.getPrefix('Books');
 
@@ -230,7 +286,12 @@ export async function saveSettings(fs: FileSystem, settings: SystemSettings): Pr
       next.bookshelves || disk.bookshelves
         ? { ...next, bookshelves: mergeBookshelfStates(disk.bookshelves, next.bookshelves) }
         : next;
-    await safeSaveJSON(fs, SETTINGS_FILENAME, 'Settings', merged);
+    await safeSaveJSON(
+      fs,
+      SETTINGS_FILENAME,
+      'Settings',
+      isTauriAppPlatform() ? withoutAiCredentials(merged) : merged,
+    );
     if (pendingSettings === next) pendingSettings = null;
   };
   settingsWrites = settingsWrites.catch(() => {}).then(write);

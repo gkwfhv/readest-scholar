@@ -2,7 +2,8 @@ import { mergeBookshelfStates } from '@/services/bookshelves/state';
 import i18n from '@/i18n/i18n';
 import { create } from 'zustand';
 import { SystemSettings } from '@/types/settings';
-import { EnvConfigType } from '@/services/environment';
+import { EnvConfigType, isTauriAppPlatform } from '@/services/environment';
+import { currentAiCredentialScope, withoutAiCredentials } from '@/services/ai/nativeCredentials';
 import { initDayjs } from '@/utils/time';
 import { broadcastGlobalSettings } from '@/utils/settingsSync';
 
@@ -50,16 +51,26 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   requestedSubPage: null,
   setSettings: (settings) =>
     set((state) => ({
+      // A late load from another login must never publish its key to this account.
+      // Native keychain values carry an in-memory owner marker which JSON drops.
+      // An unmarked key is treated as untrusted after the secure-storage migration.
       // An unrelated `{ ...settings, someField }` write carries the very state
       // already stored, so skip the merge and keep the reference stable — the
       // library memoizes whole-shelf derivations on it.
-      settings:
-        state.settings.bookshelves && state.settings.bookshelves !== settings.bookshelves
+      settings: (() => {
+        const incoming =
+          isTauriAppPlatform() &&
+          settings.aiSettings &&
+          settings.aiSettings.credentialScope !== currentAiCredentialScope()
+            ? withoutAiCredentials(settings)
+            : settings;
+        return state.settings.bookshelves && state.settings.bookshelves !== incoming.bookshelves
           ? {
-              ...settings,
-              bookshelves: mergeBookshelfStates(state.settings.bookshelves, settings.bookshelves),
+              ...incoming,
+              bookshelves: mergeBookshelfStates(state.settings.bookshelves, incoming.bookshelves),
             }
-          : settings,
+          : incoming;
+      })(),
     })),
   saveSettings: async (envConfig: EnvConfigType, settings: SystemSettings) => {
     const appService = await envConfig.getAppService();

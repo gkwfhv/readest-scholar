@@ -6,9 +6,12 @@ const mocks = vi.hoisted(() => ({
   fetchModels: vi.fn(async () => [{ id: 'embedding-first' }, { id: 'chat-second' }]),
   saveSettings: vi.fn(async () => {}),
   setSettings: vi.fn(),
+  saveNativeCredential: vi.fn(async () => {}),
+  native: false,
 }));
 
 vi.mock('@/hooks/useTranslation', () => ({ useTranslation: () => (text: string) => text }));
+vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'alice' } }) }));
 vi.mock('@/context/EnvContext', () => ({
   useEnv: () => ({ envConfig: {}, appService: {} }),
 }));
@@ -33,7 +36,11 @@ vi.mock('@/services/ai/providers/OpenRouterProvider', () => ({
   fetchOpenRouterModels: mocks.fetchModels,
 }));
 vi.mock('@/services/ai/providers', () => ({ getAIProvider: vi.fn() }));
-vi.mock('@/services/environment', () => ({ isTauriAppPlatform: () => false }));
+vi.mock('@/services/environment', () => ({ isTauriAppPlatform: () => mocks.native }));
+vi.mock('@/services/ai/nativeCredentials', () => ({
+  LEGACY_AI_CREDENTIAL_NOTICE_KEY: 'scholar-ai-legacy-key-reentry:v1',
+  saveNativeAiCredential: mocks.saveNativeCredential,
+}));
 
 import AIPanel from '@/components/settings/AIPanel';
 
@@ -41,6 +48,8 @@ describe('OpenAI-compatible model settings', () => {
   afterEach(cleanup);
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.native = false;
+    localStorage.setItem('user', JSON.stringify({ id: 'alice' }));
     mocks.fetchModels.mockResolvedValue([{ id: 'embedding-first' }, { id: 'chat-second' }]);
   });
 
@@ -53,6 +62,38 @@ describe('OpenAI-compatible model settings', () => {
       expect.objectContaining({
         aiSettings: expect.objectContaining({ openrouterModel: 'embedding-first' }),
       }),
+    );
+  });
+
+  it('explains why older plaintext keys must be entered again', () => {
+    mocks.native = true;
+    localStorage.setItem('scholar-ai-legacy-key-reentry:v1', '1');
+    render(<AIPanel />);
+    expect(screen.getByText(/Older AI API keys were removed/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(localStorage.getItem('scholar-ai-legacy-key-reentry:v1')).toBeNull();
+  });
+
+  it('saves a native API key to the account keychain only after editing ends', async () => {
+    mocks.native = true;
+    render(<AIPanel />);
+    const input = screen.getByDisplayValue('synthetic-key');
+    fireEvent.change(input, { target: { value: 'new-key' } });
+    expect(mocks.saveNativeCredential).not.toHaveBeenCalled();
+    fireEvent.blur(input);
+    await waitFor(() =>
+      expect(mocks.saveNativeCredential).toHaveBeenCalledWith(
+        'alice',
+        'openrouterApiKey',
+        'new-key',
+      ),
+    );
+    await waitFor(() =>
+      expect(mocks.setSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          aiSettings: expect.objectContaining({ openrouterApiKey: 'new-key' }),
+        }),
+      ),
     );
   });
 
