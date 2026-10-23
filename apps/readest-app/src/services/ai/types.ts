@@ -78,6 +78,8 @@ export interface BookIndexMeta {
   totalSections: number;
   totalChunks: number;
   embeddingModel: string;
+  /** PDF physical pages must not reuse an older character-estimated index. */
+  pageNumberScheme?: 'estimated' | 'pdf-section';
   lastUpdated: number;
 }
 

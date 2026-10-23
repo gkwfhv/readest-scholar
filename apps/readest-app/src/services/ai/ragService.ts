@@ -25,8 +25,10 @@ export interface BookDocType {
   metadata?: { title?: string | { [key: string]: string }; author?: string | { name?: string } };
 }
 
-export async function isBookIndexed(bookHash: string): Promise<boolean> {
-  const indexed = await aiStore.isIndexed(bookHash);
+export async function isBookIndexed(bookHash: string, pdfPageSections = false): Promise<boolean> {
+  const meta = await aiStore.getMeta(bookHash);
+  const indexed =
+    !!meta && meta.totalChunks > 0 && (!pdfPageSections || meta.pageNumberScheme === 'pdf-section');
   aiLogger.rag.isIndexed(bookHash, indexed);
   return indexed;
 }
@@ -61,13 +63,16 @@ export async function indexBook(
   bookHash: string,
   settings: AISettings,
   onProgress?: (progress: EmbeddingProgress) => void,
+  pdfPageSections = false,
 ): Promise<void> {
   const startTime = Date.now();
   const title = extractTitle(bookDoc.metadata);
 
-  if (await aiStore.isIndexed(bookHash)) {
-    aiLogger.rag.isIndexed(bookHash, true);
-    return;
+  if (await isBookIndexed(bookHash, pdfPageSections)) return;
+  // A pre-Phase-5 PDF index used estimated 1500-character pages. Replace its
+  // chunks and BM25 data before storing physical page citations.
+  if (pdfPageSections && (await aiStore.getMeta(bookHash))) {
+    await aiStore.clearBook(bookHash);
   }
 
   aiLogger.rag.indexStart(bookHash, title);
@@ -101,6 +106,7 @@ export async function indexBook(
           getChapterTitle(toc, i),
           bookHash,
           cumulativeSizes[i] ?? 0,
+          pdfPageSections ? { pageNumber: i + 1 } : undefined,
         );
         aiLogger.chunker.section(i, text.length, sectionChunks.length);
         allChunks.push(...sectionChunks);
@@ -162,6 +168,7 @@ export async function indexBook(
       totalSections: sections.length,
       totalChunks: allChunks.length,
       embeddingModel: embeddingModelName,
+      pageNumberScheme: pdfPageSections ? 'pdf-section' : 'estimated',
       lastUpdated: Date.now(),
     };
     aiLogger.store.saveMeta(meta);

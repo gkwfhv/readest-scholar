@@ -132,6 +132,7 @@ const AIAssistantChat = ({
     authorName,
     currentPage,
     currentSectionIndex,
+    isPdf,
     backend,
     sourceStore,
     onTurnStart: handleTurnStart,
@@ -146,6 +147,7 @@ const AIAssistantChat = ({
       authorName,
       currentPage,
       currentSectionIndex,
+      isPdf,
       backend,
       sourceStore,
       onTurnStart: handleTurnStart,
@@ -384,13 +386,13 @@ const LegacyAIAssistant = ({ bookKey }: AIAssistantProps) => {
   const sourceStore = useMemo(() => new ReedySourceStore(), []);
   const backend = useMemo<RetrievalBackend | null>(() => {
     if (!aiSettings) return null;
-    const legacy = new LegacyIdbBackend(aiSettings);
+    const legacy = new LegacyIdbBackend(aiSettings, bookData?.book?.format === 'PDF');
     const reedy: RetrievalBackend | null =
       appService && isTauriAppPlatform()
         ? new ReedyBackend(appService as AppService, aiSettings)
         : null;
     return selectBackend({ settings: aiSettings, isTauri: isTauriAppPlatform(), legacy, reedy });
-  }, [aiSettings, appService]);
+  }, [aiSettings, appService, bookData?.book?.format]);
 
   // check if book is indexed on mount
   useEffect(() => {

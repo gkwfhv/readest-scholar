@@ -3,7 +3,7 @@ import type { BookDoc } from '@/libs/document';
 import type { AppService } from '@/types/system';
 import { ReedyDb } from '@/services/reedy/db/ReedyDb';
 import { BookIndexer } from '@/services/reedy/retrieval/BookIndexer';
-import { BookRetriever } from '@/services/reedy/retrieval/BookRetriever';
+import { BookRetriever, type RetrieverResult } from '@/services/reedy/retrieval/BookRetriever';
 import type { EmbeddingModel as ReedyEmbeddingModel } from '@/services/reedy/models/EmbeddingModel';
 import { buildLookupTool, createTurnState } from '@/services/reedy/tools/lookupPassage';
 import {
@@ -121,6 +121,21 @@ export class ReedyBackend implements RetrievalBackend {
   async clearBook(bookHash: string): Promise<void> {
     const { reedy } = await this.reedyReady;
     await reedy.dropBookData(bookHash);
+  }
+
+  async searchPdfEvidence(
+    query: string,
+    bookHash: string,
+    options: { topK: number; spoilerBoundSectionIndex?: number },
+  ): Promise<RetrieverResult> {
+    const { retriever } = await this.reedyReady;
+    return retriever.search({
+      bookHash,
+      query,
+      k: options.topK,
+      spoilerBoundSectionIndex: options.spoilerBoundSectionIndex,
+      activeEmbeddingModel: this.model,
+    });
   }
 
   buildLookupTool(args: {

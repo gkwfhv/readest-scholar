@@ -3,6 +3,7 @@ import type { ChatModelAdapter, ChatModelRunResult } from '@assistant-ui/react';
 import { getAIProvider } from '../providers';
 import { aiLogger } from '../logger';
 import { buildSystemPrompt } from '../prompts';
+import { PDF_UNVERIFIED_REPLY, verifyPdfAnswer } from '../pdfGrounding';
 import type { AISettings, ScoredChunk } from '../types';
 import type { RetrievalBackend } from './retrievalBackend';
 import type { ReedySourceStore } from './reedySourceStore';
@@ -20,6 +21,7 @@ export interface TauriAdapterOptions {
   authorName: string;
   currentPage: number;
   currentSectionIndex: number;
+  isPdf?: boolean;
   backend: RetrievalBackend;
   /** Per-adapter-instance source store; the same one the UI subscribes to. */
   sourceStore: ReedySourceStore;
@@ -71,6 +73,7 @@ export function createTauriAdapter(getOptions: () => TauriAdapterOptions): ChatM
         authorName,
         currentPage,
         currentSectionIndex,
+        isPdf,
         backend,
         sourceStore,
         onTurnStart,
@@ -108,7 +111,63 @@ export function createTauriAdapter(getOptions: () => TauriAdapterOptions): ChatM
       try {
         let text = '';
 
-        if (backend.kind === 'reedy' && backend.buildLookupTool) {
+        if (isPdf && backend.searchPdfEvidence) {
+          let passages: RetrievedChunk[] = [];
+          try {
+            const evidence = await backend.searchPdfEvidence(query, bookHash, {
+              topK: settings.maxContextChunks || 5,
+              spoilerBoundSectionIndex: settings.spoilerProtection
+                ? currentSectionIndex
+                : undefined,
+            });
+            passages = evidence.passages;
+          } catch (error) {
+            aiLogger.chat.error('PDF retrieval failed: ' + (error as Error).message);
+          }
+          sourceStore.replace(turnId, passages);
+          if (passages.length === 0) {
+            aiLogger.chat.complete(PDF_UNVERIFIED_REPLY.length);
+            yield { content: [{ type: 'text', text: PDF_UNVERIFIED_REPLY }] };
+            return;
+          }
+          const chunks: ScoredChunk[] = passages.map((passage) => ({
+            id: passage.id,
+            bookHash: passage.bookHash,
+            sectionIndex: passage.sectionIndex,
+            chapterTitle: passage.chapterTitle || 'Page ' + (passage.sectionIndex + 1),
+            text: passage.text,
+            pageNumber: passage.sectionIndex + 1,
+            score: passage.score,
+            searchMethod: 'hybrid',
+          }));
+          const systemPrompt = buildSystemPrompt(bookTitle, authorName, chunks, currentPage, true);
+          if (useApiRoute) {
+            for await (const chunk of streamViaApiRoute(
+              aiMessages,
+              systemPrompt,
+              settings,
+              abortSignal,
+            )) {
+              text += chunk;
+            }
+          } else {
+            const provider = getAIProvider(settings);
+            const result = streamText({
+              model: provider.getModel(),
+              system: systemPrompt,
+              messages: aiMessages,
+              abortSignal,
+            });
+            for await (const chunk of result.textStream) {
+              text += chunk;
+            }
+          }
+          text = verifyPdfAnswer(
+            text,
+            chunks.map((chunk) => chunk.pageNumber),
+          );
+          yield { content: [{ type: 'text', text }] };
+        } else if (backend.kind === 'reedy' && backend.buildLookupTool) {
           // Reedy path: model calls lookupPassage on demand; sources flow
           // into the store via the tool's onResult hook. We never use the
           // API route here because the route would need to be extended to
@@ -140,8 +199,8 @@ export function createTauriAdapter(getOptions: () => TauriAdapterOptions): ChatM
           // Legacy IDB path: chunks go into the system prompt before the
           // first stream tick; no tool calls.
           let chunks: ScoredChunk[] = [];
-          if (await backend.isIndexed(bookHash)) {
-            try {
+          try {
+            if (await backend.isIndexed(bookHash)) {
               chunks =
                 (await backend.searchForSystemPrompt?.(query, bookHash, {
                   topK: settings.maxContextChunks || 5,
@@ -149,12 +208,17 @@ export function createTauriAdapter(getOptions: () => TauriAdapterOptions): ChatM
                 })) ?? [];
               aiLogger.chat.context(chunks.length, chunks.map((c) => c.text).join('').length);
               sourceStore.replace(turnId, chunksToRetrieved(chunks));
-            } catch (e) {
-              aiLogger.chat.error(`RAG failed: ${(e as Error).message}`);
             }
+          } catch (e) {
+            aiLogger.chat.error('RAG failed: ' + (e as Error).message);
           }
 
-          const systemPrompt = buildSystemPrompt(bookTitle, authorName, chunks, currentPage);
+          if (isPdf && chunks.length === 0) {
+            aiLogger.chat.complete(PDF_UNVERIFIED_REPLY.length);
+            yield { content: [{ type: 'text', text: PDF_UNVERIFIED_REPLY }] };
+            return;
+          }
+          const systemPrompt = buildSystemPrompt(bookTitle, authorName, chunks, currentPage, isPdf);
 
           if (useApiRoute) {
             for await (const chunk of streamViaApiRoute(
@@ -164,7 +228,7 @@ export function createTauriAdapter(getOptions: () => TauriAdapterOptions): ChatM
               abortSignal,
             )) {
               text += chunk;
-              yield { content: [{ type: 'text', text }] };
+              if (!isPdf) yield { content: [{ type: 'text', text }] };
             }
           } else {
             const provider = getAIProvider(settings);
@@ -176,8 +240,15 @@ export function createTauriAdapter(getOptions: () => TauriAdapterOptions): ChatM
             });
             for await (const chunk of result.textStream) {
               text += chunk;
-              yield { content: [{ type: 'text', text }] };
+              if (!isPdf) yield { content: [{ type: 'text', text }] };
             }
+          }
+          if (isPdf) {
+            text = verifyPdfAnswer(
+              text,
+              chunks.map((chunk) => chunk.pageNumber),
+            );
+            yield { content: [{ type: 'text', text }] };
           }
         }
 
