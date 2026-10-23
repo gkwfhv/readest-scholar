@@ -22,6 +22,8 @@ export class MemoryService {
   constructor(
     private readonly reedy: ReedyDb,
     private readonly model: EmbeddingModel | null,
+    private readonly bookScope?: string,
+    private readonly bookGeneration?: string,
   ) {}
 
   async write(args: {
@@ -31,27 +33,40 @@ export class MemoryService {
     summary: string;
     sourceMessageId?: string;
   }): Promise<MemoryRow> {
+    let generation: string | undefined;
+    if (args.scope !== 'user' && this.bookScope) {
+      if (args.scopeKey !== this.bookScope || !this.bookGeneration) {
+        throw new Error('Book memory scope changed');
+      }
+      generation = this.bookGeneration;
+    }
     if (this.model) {
       // Embed first so we can lazy-create the embeddings table at the
       // right dim before we issue the insert.
       const [embedding] = await this.model.embed([args.summary]);
       await this.reedy.ensureMemoryEmbeddingsTable(this.model.dim);
-      return this.reedy.upsertMemory({
+      return this.reedy.upsertMemory(
+        {
+          scope: args.scope,
+          scopeKey: args.scopeKey,
+          key: args.key,
+          summary: args.summary,
+          sourceMessageId: args.sourceMessageId,
+          embedding,
+        },
+        generation,
+      );
+    }
+    return this.reedy.upsertMemory(
+      {
         scope: args.scope,
         scopeKey: args.scopeKey,
         key: args.key,
         summary: args.summary,
         sourceMessageId: args.sourceMessageId,
-        embedding,
-      });
-    }
-    return this.reedy.upsertMemory({
-      scope: args.scope,
-      scopeKey: args.scopeKey,
-      key: args.key,
-      summary: args.summary,
-      sourceMessageId: args.sourceMessageId,
-    });
+      },
+      generation,
+    );
   }
 
   async search(args: {

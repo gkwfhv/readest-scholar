@@ -107,7 +107,8 @@ export function ReedyAssistant({
         const db = new ReedyDb(svc);
         const skills = new SkillRegistry(svc);
         await skills.init();
-        const memory = new MemoryService(db, models.embedding);
+        const generation = await db.captureBookGeneration(bookHash);
+        const memory = new MemoryService(db, models.embedding, bookHash, generation);
         const enabledSkills = await skills.listEnabled();
         if (!alive) return;
         setReedy({
@@ -125,7 +126,7 @@ export function ReedyAssistant({
     return () => {
       alive = false;
     };
-  }, [appService, models.embedding]);
+  }, [appService, models.embedding, bookHash]);
 
   // Active skill selection — null means no skill (the model gets the
   // default Policy + Reading + ToolCatalog system prompt).

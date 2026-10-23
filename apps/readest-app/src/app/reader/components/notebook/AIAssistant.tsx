@@ -605,6 +605,7 @@ const ReedyAgentAssistantBridge = ({ bookKey }: AIAssistantProps) => {
 
   return (
     <ReedyAssistant
+      key={bookHash}
       appService={appService as AppService}
       bookDoc={bookData.bookDoc}
       bookHash={bookHash}

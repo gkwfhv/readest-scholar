@@ -104,20 +104,25 @@ export class BookIndexer {
     options: IndexBookOptions,
   ): Promise<void> {
     throwIfStopped(bookHash, options.signal, options.assertActive);
-    await this.reedy.upsertBookMeta({
-      bookHash,
-      indexingStatus: 'indexing',
-      chunkCount: 0,
-      embeddingModel: model.id,
-      embeddingDim: model.dim,
-      indexedAt: null,
-      error: null,
-    });
+    const generation = await this.reedy.beginBookIndex(bookHash);
+    throwIfStopped(bookHash, options.signal, options.assertActive);
+    await this.reedy.upsertBookMeta(
+      {
+        bookHash,
+        indexingStatus: 'indexing',
+        chunkCount: 0,
+        embeddingModel: model.id,
+        embeddingDim: model.dim,
+        indexedAt: null,
+        error: null,
+      },
+      generation,
+    );
     // Re-indexing must replace, not duplicate — drop any prior chunks +
     // embeddings for this book before writing the new ones. The meta row
     // upserted above is preserved (clearBookChunks only touches the chunk
     // and embedding tables).
-    await this.reedy.clearBookChunks(bookHash);
+    await this.reedy.clearBookChunks(bookHash, generation);
 
     try {
       throwIfStopped(bookHash, options.signal, options.assertActive);
@@ -125,29 +130,39 @@ export class BookIndexer {
       throwIfStopped(bookHash, options.signal, options.assertActive);
 
       if (chunks.length === 0) {
-        await this.reedy.setIndexingStatus(bookHash, 'empty_index', {
-          chunkCount: 0,
-          indexedAt: Date.now(),
-          error: null,
-        });
+        await this.reedy.setIndexingStatus(
+          bookHash,
+          'empty_index',
+          {
+            chunkCount: 0,
+            indexedAt: Date.now(),
+            error: null,
+          },
+          generation,
+        );
         return;
       }
 
       await this.reedy.ensureEmbeddingsTable(model.dim);
       throwIfStopped(bookHash, options.signal, options.assertActive);
-      await this.reedy.insertChunks(chunks);
+      await this.reedy.insertChunks(chunks, generation);
 
-      await this.embedAndStore(chunks, model, options);
+      await this.embedAndStore(chunks, model, options, generation);
       throwIfStopped(bookHash, options.signal, options.assertActive);
 
-      await this.reedy.setIndexingStatus(bookHash, 'indexed', {
-        chunkCount: chunks.length,
-        indexedAt: Date.now(),
-        error: null,
-      });
+      await this.reedy.setIndexingStatus(
+        bookHash,
+        'indexed',
+        {
+          chunkCount: chunks.length,
+          indexedAt: Date.now(),
+          error: null,
+        },
+        generation,
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      await this.reedy.setIndexingStatus(bookHash, 'failed', { error: message });
+      await this.reedy.setIndexingStatus(bookHash, 'failed', { error: message }, generation);
       throw err;
     }
   }
@@ -187,6 +202,7 @@ export class BookIndexer {
     chunks: ChunkRow[],
     model: EmbeddingModel,
     options: IndexBookOptions,
+    generation: string,
   ): Promise<void> {
     const batchSize = Math.max(1, model.batchSize ?? DEFAULT_BATCH_SIZE);
     const total = chunks.length;
@@ -213,7 +229,7 @@ export class BookIndexer {
         }
         return { chunkId: c.id, bookHash: c.bookHash, embedding: v };
       });
-      await this.reedy.insertEmbeddings(rows);
+      await this.reedy.insertEmbeddings(rows, generation);
       done += batch.length;
       options.onProgress?.({ phase: 'embedding', current: done, total });
     }

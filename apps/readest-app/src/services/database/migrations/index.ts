@@ -313,6 +313,17 @@ const migrations: Record<SchemaType, MigrationEntry[]> = {
         );
       `,
     },
+
+    {
+      name: '2026102301_reedy_book_deletion_fence',
+      sql: `
+        CREATE TABLE IF NOT EXISTS reedy_book_fence (
+          book_hash TEXT PRIMARY KEY,
+          generation TEXT NOT NULL,
+          deleted INTEGER NOT NULL DEFAULT 0
+        );
+      `,
+    },
   ],
 };
 
