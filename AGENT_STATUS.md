@@ -137,3 +137,7 @@ QA-B 在真实 PDF 阅读器创建并离线编辑同一高亮批注，第二条�
 ## Phase 3 双桌面批注冲突与远端落盘（2026-10-23）
 
 服务器 QA-B/QA-C 两个独立 Linux CEF 容器完成同一 PDF 批注的真实图形界面并发：C 离线编辑、B 在线编辑，恢复网络后较新 B 版生效，C 版进入可恢复历史；C 在界面恢复旧版后，B 重开 PDF 收到恢复内容。另复现并修复“远端批注只在内存、进程崩溃后离线丢失”：新构建立即保存每本书配置，QA-C 和 QA-B 均用 SIGKILL、断网、重启验证内容仍在。完整 Vitest 14,036 通过、16 跳过，Web/CEF 构建、TypeScript/Biome 通过。详见 [双客户端批注证据](docs/evidence/phase3/two-native-annotation-conflict-durability-2026-10-23.md)。Phase 3 仍需不可变文件离线快照、双设备故障和按需缓存等；未向 GitHub/GHCR 推送。
+
+## Phase 3 集成候选 staging 往返（2026-10-23）
+
+服务器最终 Scholar Web 生产构建通过，本地镜像 `sha256:3b1d265be2dbf0ce3e8f0bd59055b54389276f8d231f2023d0552da9e1c4ba2a` 在独立回环端口通过书库、PDF worker、匿名拒绝及合成账户两项接口探针。升级前完成私有备份，Compose 比较只变 Web 镜像；短暂切换 staging 后四路健康与登录态增量/文件版本接口均通过，随后恢复原镜像 `sha256:f5a0ddae78db6365b5dcce8138434292e548a75b8f71004dc138ad2b44c024cd`，其他五容器不变。见 [集成候选往返](docs/evidence/phase3/integrated-candidate-staging-2026-10-23.md)。Phase 3 尚未签收；无 GitHub/GHCR 推送。
