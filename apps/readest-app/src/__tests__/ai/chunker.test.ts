@@ -80,6 +80,18 @@ describe('AI Chunker', () => {
       expect(chunks).toEqual([]);
     });
 
+    test('uses the physical PDF page for every chunk in a page section', () => {
+      const doc = createDocument('<p>' + 'Two column evidence. '.repeat(100) + '</p>');
+      const chunks = chunkSection(doc, 7, 'Page 8', 'pdf-hash', 100_000, {
+        maxChunkSize: 180,
+        minChunkSize: 50,
+        pageNumber: 8,
+      });
+
+      expect(chunks.length).toBeGreaterThan(2);
+      expect(chunks.every((chunk) => chunk.pageNumber === 8)).toBe(true);
+    });
+
     test('should respect custom chunk options', () => {
       const longText = 'Word '.repeat(100);
       const doc = createDocument(`<p>${longText}</p>`);

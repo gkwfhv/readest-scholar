@@ -14,10 +14,13 @@ import type { BackendIndexOptions, RetrievalBackend } from './retrievalBackend';
 export class LegacyIdbBackend implements RetrievalBackend {
   readonly kind = 'legacy-idb' as const;
 
-  constructor(private readonly settings: AISettings) {}
+  constructor(
+    private readonly settings: AISettings,
+    private readonly pdfPageSections = false,
+  ) {}
 
   isIndexed(bookHash: string): Promise<boolean> {
-    return isBookIndexed(bookHash);
+    return isBookIndexed(bookHash, this.pdfPageSections);
   }
 
   async indexBook(
@@ -30,6 +33,7 @@ export class LegacyIdbBackend implements RetrievalBackend {
       bookHash,
       this.settings,
       options?.onProgress,
+      this.pdfPageSections,
     );
   }
 

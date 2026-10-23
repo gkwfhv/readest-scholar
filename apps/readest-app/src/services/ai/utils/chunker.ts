@@ -7,6 +7,8 @@ interface ChunkingOptions {
   maxChunkSize: number;
   overlapSize: number;
   minChunkSize: number;
+  /** Physical PDF page (1-based) when each section is exactly one PDF page. */
+  pageNumber?: number;
 }
 
 const DEFAULT_OPTIONS: ChunkingOptions = {
@@ -62,7 +64,7 @@ export function chunkSection(
             sectionIndex,
             chapterTitle,
             text: text.trim(),
-            pageNumber: Math.floor(cumulativeSizeBeforeSection / SIZE_PER_PAGE),
+            pageNumber: opts.pageNumber ?? Math.floor(cumulativeSizeBeforeSection / SIZE_PER_PAGE),
           },
         ]
       : [];
@@ -84,7 +86,8 @@ export function chunkSection(
           sectionIndex,
           chapterTitle,
           text: remaining,
-          pageNumber: Math.floor((cumulativeSizeBeforeSection + position) / SIZE_PER_PAGE),
+          pageNumber:
+            opts.pageNumber ?? Math.floor((cumulativeSizeBeforeSection + position) / SIZE_PER_PAGE),
         });
       } else if (chunks.length > 0) {
         chunks[chunks.length - 1]!.text += ' ' + remaining;
@@ -102,7 +105,8 @@ export function chunkSection(
         sectionIndex,
         chapterTitle,
         text: chunkText,
-        pageNumber: Math.floor((cumulativeSizeBeforeSection + position) / SIZE_PER_PAGE),
+        pageNumber:
+          opts.pageNumber ?? Math.floor((cumulativeSizeBeforeSection + position) / SIZE_PER_PAGE),
       });
       chunkIndex++;
     }
