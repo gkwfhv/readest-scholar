@@ -141,3 +141,9 @@ QA-B 在真实 PDF 阅读器创建并离线编辑同一高亮批注，第二条�
 ## Phase 3 集成候选 staging 往返（2026-10-23）
 
 服务器最终 Scholar Web 生产构建通过，本地镜像 `sha256:3b1d265be2dbf0ce3e8f0bd59055b54389276f8d231f2023d0552da9e1c4ba2a` 在独立回环端口通过书库、PDF worker、匿名拒绝及合成账户两项接口探针。升级前完成私有备份，Compose 比较只变 Web 镜像；短暂切换 staging 后四路健康与登录态增量/文件版本接口均通过，随后恢复原镜像 `sha256:f5a0ddae78db6365b5dcce8138434292e548a75b8f71004dc138ad2b44c024cd`，其他五容器不变。见 [集成候选往返](docs/evidence/phase3/integrated-candidate-staging-2026-10-23.md)。Phase 3 尚未签收；无 GitHub/GHCR 推送。
+
+## Phase 3 认证刷新隔离与双桌面文件冲突（2026-10-23）
+
+QA-B 发现独立登录后的刷新令牌争用：每个阅读窗口强制刷新，以及查询客户端共享交互会话。已加两项先失败后通过的回归，隔离查询客户端并移除装载时强制刷新。两台修复版 CEF 各自登录，B 双阅读窗口及进程重启、C 进程重启后仍登录；05:26–05:44 UTC 未见新增 `refresh_token_already_used`。服务器完整 Vitest 1,223 文件、14,038 项通过（16 跳过），Web/CEF 构建与类型、Biome 检查通过。一小时自然过期刷新仍需覆盖。
+
+Paper 145 双客户端二进制并发：C 离线入队，B 上传不同 PDF 形成活动版本；C 恢复后在桌面界面看到显式冲突，选择使用此次上传后 C 版成为活动版，B 版仍为可恢复的已验证版本。最初 QA 缺少 MinIO 回环代理导致上传不完整；恢复隔离容器代理并从持久任务重试成功，无公网端口变化。详见 [认证与文件冲突证据](docs/evidence/phase3/native-auth-and-two-client-file-conflict-2026-10-23.md)。Phase 3 尚未签收，未向 GitHub/GHCR 推送。

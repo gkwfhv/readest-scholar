@@ -62,19 +62,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         transferManager.setScholarAccountId(null);
       }
     };
-    const refreshSession = async () => {
-      try {
-        await supabase.auth.refreshSession();
-      } catch {
-        syncSession(null);
-      }
-    };
-
     const { data: subscription } = supabase.auth.onAuthStateChange((_, session) => {
       syncSession(session);
     });
 
-    refreshSession();
+    // onAuthStateChange emits INITIAL_SESSION and the SDK refreshes expiring
+    // sessions under its own lock; forcing another rotation on mount races
+    // with other reader windows.
     return () => {
       subscription?.subscription.unsubscribe();
     };
