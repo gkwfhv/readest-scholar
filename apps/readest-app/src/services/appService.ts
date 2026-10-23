@@ -445,6 +445,24 @@ export abstract class BaseAppService implements AppService {
     }
     await CloudSvc.deleteBook(this.fs, book, deleteAction);
     if (deleteAction === 'cloud') return;
+
+    // The current login owns the AI index/chat scope. Capture it after the
+    // local delete succeeds; a failed AI cleanup stays queued for the next
+    // app launch rather than silently retaining deleted-book passages.
+    const { queueBookAiDataDeletion, deleteBookAiData } = await import('./ai/deleteBookAiData');
+    let aiUserId: string | null = null;
+    try {
+      const user = JSON.parse(localStorage.getItem('user') || 'null') as { id?: unknown } | null;
+      aiUserId = typeof user?.id === 'string' ? user.id : null;
+      queueBookAiDataDeletion(book.hash, aiUserId);
+    } catch (error) {
+      console.warn('Could not queue book AI data cleanup', error);
+    }
+    try {
+      await deleteBookAiData(book.hash, aiUserId, this);
+    } catch (error) {
+      console.warn('Book AI data cleanup failed; will retry on next launch', error);
+    }
     ttsCleanup ??= await loadTTSCleanup();
 
     // Keep cleanup at the shared local-deletion boundary so library actions,

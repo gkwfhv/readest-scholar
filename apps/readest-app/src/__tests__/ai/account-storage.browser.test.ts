@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { aiAccountScope } from '@/services/ai/accountScope';
 import { aiStore } from '@/services/ai/storage/aiStore';
+import {
+  deleteBookAiData,
+  queueBookAiDataDeletion,
+  retryPendingBookAiDataDeletions,
+} from '@/services/ai/deleteBookAiData';
 import type { AIConversation, BookIndexMeta, TextChunk } from '@/services/ai/types';
 
 describe('AI IndexedDB account isolation and deletion', () => {
@@ -51,8 +56,9 @@ describe('AI IndexedDB account isolation and deletion', () => {
       expect(await aiStore.getConversations(a)).toHaveLength(1);
       expect(await aiStore.getConversations(b)).toHaveLength(1);
 
-      await aiStore.clearBook(a);
-      await aiStore.deleteConversation(a + '-chat');
+      const web = { appPlatform: 'web' } as Parameters<typeof deleteBookAiData>[2];
+      queueBookAiDataDeletion(paper, 'account-a');
+      await deleteBookAiData(paper, 'account-a', web);
 
       expect(await aiStore.getMeta(a)).toBeNull();
       expect(await aiStore.getChunks(a)).toEqual([]);
@@ -67,6 +73,33 @@ describe('AI IndexedDB account isolation and deletion', () => {
       await aiStore.clearBook(b);
       await aiStore.deleteConversation(a + '-chat');
       await aiStore.deleteConversation(b + '-chat');
+    }
+  });
+
+  it('retries a pending account-scoped deletion after restart', async () => {
+    const paper = crypto.randomUUID();
+    const scope = aiAccountScope(paper, 'account-a');
+    await aiStore.saveMeta({
+      bookHash: scope,
+      bookTitle: 'Paper',
+      authorName: 'Researcher',
+      totalSections: 0,
+      totalChunks: 0,
+      embeddingModel: 'test',
+      lastUpdated: 1,
+    });
+    const web = { appPlatform: 'web' } as Parameters<typeof deleteBookAiData>[2];
+    try {
+      queueBookAiDataDeletion(paper, 'account-a');
+      await retryPendingBookAiDataDeletions(web);
+      expect(await aiStore.getMeta(scope)).toBeNull();
+      expect(
+        Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i)).filter((key) =>
+          key?.startsWith('scholar-ai-pending-book-delete:'),
+        ),
+      ).toEqual([]);
+    } finally {
+      await aiStore.clearBook(scope);
     }
   });
 });
