@@ -1,3 +1,4 @@
+import type { PdfAnnotationAnchor } from '@/types/book';
 import type { InkStroke } from '@/services/handwriting/model';
 export interface DBBook {
   user_id: string;
@@ -59,6 +60,7 @@ export interface DBBookNote {
   global?: boolean;
   /** Handwriting strokes of an `ink` note; null for every other type. */
   ink?: InkStroke[] | null;
+  pdf_anchor?: PdfAnnotationAnchor | null;
 
   created_at?: string;
   updated_at?: string;

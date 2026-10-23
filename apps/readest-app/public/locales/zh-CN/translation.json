@@ -2587,5 +2587,14 @@
   "Download a book when you open it.": "打开书籍时下载。",
   "Full mirror": "完整镜像",
   "Download every cloud book for offline reading in the background.": "在后台下载所有云端书籍，以便离线阅读。",
-  "On mobile, background mirroring runs only when Wi-Fi is detected; if network type is unavailable, open books to download them on demand.": "在移动设备上，只有检测到 Wi-Fi 时才会后台镜像；无法识别网络类型时，请打开书籍按需下载。"
+  "On mobile, background mirroring runs only when Wi-Fi is detected; if network type is unavailable, open books to download them on demand.": "在移动设备上，只有检测到 Wi-Fi 时才会后台镜像；无法识别网络类型时，请打开书籍按需下载。",
+  "Export annotated PDF": "导出带批注的 PDF",
+  "No PDF annotations with a page anchor to export": "没有可导出的已定位 PDF 批注",
+  "Exported {{count}} PDF annotations; skipped {{skipped}}": "已导出 {{count}} 条 PDF 批注，跳过 {{skipped}} 条",
+  "This note type has no PDF text markup equivalent": "此笔记类型没有等价的 PDF 文本批注",
+  "This highlight style has no PDF text markup equivalent": "此高亮样式没有等价的 PDF 文本批注",
+  "Page geometry is unavailable for this note": "此笔记缺少页面位置数据",
+  "The note moved after its geometry was captured": "笔记位置已变化，原坐标失效",
+  "The source PDF no longer has this page": "原 PDF 已不包含此页面",
+  "The PDF page has invalid crop or rotation": "PDF 页面的裁剪或旋转数据无效"
 }

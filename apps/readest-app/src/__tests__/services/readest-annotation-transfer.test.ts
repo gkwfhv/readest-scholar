@@ -187,6 +187,34 @@ describe('buildAnnotationExport', () => {
   });
 });
 
+describe('PDF geometry in portable Readest annotation JSON', () => {
+  it('keeps page geometry only for the same PDF file and unchanged CFI', async () => {
+    const cfi = makeEntry().cfi;
+    const pdfAnchor = {
+      version: 1 as const,
+      pageIndex: 0,
+      cfi,
+      rects: [[0.1, 0.2, 0.4, 0.3]] as [number, number, number, number][],
+    };
+    const exported = buildAnnotationExport({
+      book: { title: 'Paper', author: '', hash: 'oldhash', format: 'PDF' },
+      groups: [makeGroup([makeNote({ cfi, text: 'quick brown fox', pdfAnchor })])],
+      exportedAt: 7000,
+    });
+    const payload = parseAnnotationExport(JSON.stringify(exported))!;
+    expect(payload.annotations[0]?.pdfAnchor).toEqual(pdfAnchor);
+    const sameFile = await convertAnnotationExportToBookNotes(payload, makeBookDoc(), {
+      expectedBookHash: 'oldhash',
+    });
+    expect(sameFile.notes[0]?.pdfAnchor).toEqual(pdfAnchor);
+    expect(sameFile.notes[0]?.page).toBe(1);
+    const differentFile = await convertAnnotationExportToBookNotes(payload, makeBookDoc(), {
+      expectedBookHash: 'different-hash',
+    });
+    expect(differentFile.notes[0]?.pdfAnchor).toBeUndefined();
+  });
+});
+
 describe('parseAnnotationExport', () => {
   it('round-trips a built payload', () => {
     const payload = buildAnnotationExport({

@@ -114,7 +114,10 @@ vi.mock('@/store/bookDataStore', () => {
 
 vi.mock('@/store/readerStore', () => {
   const state = {
-    getView: () => ({ deselect: h.deselect, getCFI: () => 'epubcfi(/6/2!/4/2)' }),
+    getView: () => ({
+      deselect: h.deselect,
+      getCFI: (index: number) => `epubcfi(/6/${2 + index * 2}!/4/2)`,
+    }),
     getViewsById: () => [],
     getViewSettings: () => h.viewSettings,
   };
@@ -318,6 +321,51 @@ beforeEach(() => {
 });
 
 afterEach(cleanup);
+
+describe('fixed-layout cross-page highlights', () => {
+  test('stores each selected page on its own note', async () => {
+    h.book = { format: 'PDF', isFixedLayout: true };
+    render(<Annotator bookKey='book-1' contentInsets={{ top: 0, right: 0, bottom: 0, left: 0 }} />);
+
+    const makeRange = (text: string) => {
+      const paragraph = document.createElement('p');
+      paragraph.textContent = text;
+      document.body.append(paragraph);
+      const range = document.createRange();
+      range.selectNodeContents(paragraph);
+      return range;
+    };
+    const first = makeRange('first page');
+    const second = makeRange('second page');
+    await act(async () => {
+      h.setSelection?.(() => ({
+        key: 'book-1',
+        text: 'first page second page',
+        range: first,
+        index: 1,
+        page: 2,
+        segments: [
+          { range: first, index: 1, text: 'first page' },
+          { range: second, index: 2, text: 'second page' },
+        ],
+      }));
+    });
+    await act(async () => {
+      expect(h.actions?.['onHighlightSelection']?.()).toBe(true);
+    });
+
+    expect(
+      (h.config.booknotes as { page: number; text: string }[]).map(({ page, text }) => ({
+        page,
+        text,
+      })),
+    ).toEqual([
+      { page: 2, text: 'first page' },
+      { page: 3, text: 'second page' },
+    ]);
+    expect(h.saveConfig).toHaveBeenCalled();
+  });
+});
 
 describe('a lookup surface survives the selection it is anchored to being republished', () => {
   test.each([

@@ -1,7 +1,7 @@
 -- Register a Scholar book file without writing a mutable legacy object.
 -- The first immutable version supplies the bytes after its verified CAS.
 BEGIN;
-CREATE FUNCTION public.register_scholar_file_v1(
+CREATE OR REPLACE FUNCTION public.register_scholar_file_v1(
   p_user_id uuid,p_file_key text,p_book_hash text
 ) RETURNS TABLE(file_id uuid,active_version_id uuid)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$

@@ -8,6 +8,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { useBookDataStore } from '@/store/bookDataStore';
 import { eventDispatcher } from '@/utils/event';
 import { nextBooknoteStamp } from '@/utils/booknoteStamp';
+import { capturePdfAnnotationAnchor } from '../utils/pdfAnnotationAnchor';
 import {
   getHandlePositionsFromRange as getHandlePositionsForBook,
   HandlePositions,
@@ -31,7 +32,7 @@ export const useAnnotationEditor = ({
 }: UseAnnotationEditorProps) => {
   const { envConfig } = useEnv();
   const { settings } = useSettingsStore();
-  const { getConfig, saveConfig, updateBooknotes } = useBookDataStore();
+  const { getConfig, getBookData, saveConfig, updateBooknotes } = useBookDataStore();
   const { getView, getProgress, getViewsById } = useReaderStore();
 
   const view = getView(bookKey);
@@ -82,6 +83,12 @@ export const useAnnotationEditor = ({
             ...existingAnnotation,
             cfi: newCfi,
             text: newText,
+            ...(getBookData(bookKey)?.book?.format === 'PDF'
+              ? {
+                  page: targetIndex + 1,
+                  pdfAnchor: capturePdfAnnotationAnchor(targetIndex, newRange, newCfi) ?? null,
+                }
+              : {}),
             updatedAt: nextBooknoteStamp(existingAnnotation),
           };
 

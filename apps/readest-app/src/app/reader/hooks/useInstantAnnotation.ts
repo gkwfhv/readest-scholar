@@ -8,6 +8,7 @@ import { useBookDataStore } from '@/store/bookDataStore';
 import { mergeRestyledAnnotation, toParentViewportPoint } from '../utils/annotatorUtil';
 import { nextBooknoteStamp } from '@/utils/booknoteStamp';
 import { uniqueId } from '@/utils/misc';
+import { capturePdfAnnotationAnchor } from '../utils/pdfAnnotationAnchor';
 
 interface UseInstantAnnotationProps {
   bookKey: string;
@@ -208,23 +209,30 @@ export const useInstantAnnotation = ({
     [bookKey, getBookData, findPositionAtPoint, rangeFromPositions],
   );
 
-  const createAnnotation = useCallback((cfi: string, text?: string) => {
-    const style = settings.globalReadSettings.highlightStyle;
-    const color = settings.globalReadSettings.highlightStyles[style];
-    const annotation: BookNote = {
-      id: annotationIdRef.current,
-      type: 'annotation',
-      cfi,
-      style,
-      color,
-      text: text ?? '',
-      note: '',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-    return annotation;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const createAnnotation = useCallback(
+    (cfi: string, text?: string, range?: Range, index?: number) => {
+      const style = settings.globalReadSettings.highlightStyle;
+      const color = settings.globalReadSettings.highlightStyles[style];
+      const annotation: BookNote = {
+        id: annotationIdRef.current,
+        type: 'annotation',
+        cfi,
+        style,
+        color,
+        text: text ?? '',
+        note: '',
+        ...(getBookData(bookKey)?.isFixedLayout && index !== undefined ? { page: index + 1 } : {}),
+        ...(getBookData(bookKey)?.book?.format === 'PDF' && range && index !== undefined
+          ? { pdfAnchor: capturePdfAnnotationAnchor(index, range, cfi) }
+          : {}),
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      return annotation;
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    },
+    [],
+  );
 
   // Store a finished annotation in the booknotes (restyling an existing record
   // with the same cfi in place, keeping its id and note) and save. Returns the record
@@ -244,12 +252,12 @@ export const useInstantAnnotation = ({
         const existing = annotations[existingIndex]!;
         stored = {
           ...mergeRestyledAnnotation(existing, annotation),
-          page: progress.page,
+          page: annotation.page ?? progress.page,
           updatedAt: nextBooknoteStamp(existing),
         };
         annotations[existingIndex] = stored;
       } else {
-        stored = { ...annotation, page: progress.page };
+        stored = { ...annotation, page: annotation.page ?? progress.page };
         annotations.push(stored);
       }
 
@@ -273,7 +281,7 @@ export const useInstantAnnotation = ({
       if (!cfi) return false;
 
       clearPreviewAnnotation();
-      const annotation = createAnnotation(cfi);
+      const annotation = createAnnotation(cfi, undefined, newRange, index);
       const views = getViewsById(bookKey.split('-')[0]!);
       views.forEach((v) => v?.addAnnotation(annotation));
       previewAnnotationRef.current = annotation;
@@ -424,6 +432,7 @@ export const useInstantAnnotation = ({
       // page at all, which dropped the whole highlight. Build the fallback
       // before clearing the anchor (it reads startPosRef).
       const previewed = dragPaintedRef.current ? previewRangeRef.current : null;
+      const previewAnchor = previewed ? previewAnnotationRef.current?.pdfAnchor : undefined;
       let newRange = previewed?.range ?? buildRangeFromAnchor(doc, endPoint);
       if (previewed?.range.collapsed) {
         newRange = doc.createRange();
@@ -451,7 +460,7 @@ export const useInstantAnnotation = ({
         const cfi = view.getCFI(index, heldWordRange);
         if (text && cfi && text.trim().length > 0) {
           clearPreviewAnnotation();
-          const annotation = createAnnotation(cfi, text);
+          const annotation = createAnnotation(cfi, text, heldWordRange, index);
           const views = getViewsById(bookKey.split('-')[0]!);
           views.forEach((v) => v?.addAnnotation(annotation));
           const stored = persistAnnotation(annotation);
@@ -461,7 +470,7 @@ export const useInstantAnnotation = ({
             key: bookKey,
             text,
             cfi,
-            page: progress?.page || 0,
+            page: stored.page ?? progress?.page ?? 0,
             range: heldWordRange,
             index,
             annotated: true,
@@ -493,7 +502,11 @@ export const useInstantAnnotation = ({
       }
 
       clearInstantAnnotationState();
-      const annotation = createAnnotation(cfi, text);
+      const annotation = createAnnotation(cfi, text, newRange, index);
+      if (!annotation.pdfAnchor && previewAnchor && previewed?.cfi === cfi) {
+        annotation.pdfAnchor = previewAnchor;
+        annotation.page = previewAnchor.pageIndex + 1;
+      }
       const views = getViewsById(bookKey.split('-')[0]!);
       views.forEach((v) => v?.addAnnotation(annotation));
       persistAnnotation(annotation);
