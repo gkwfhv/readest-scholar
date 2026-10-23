@@ -22,4 +22,4 @@ QA-C 的 Account → Manage Sync → Recoverable note versions 显示 CB 版为 
 
 ## 测试会话边界
 
-QA-C 最初从 QA-B 合成数据目录克隆，连同旧刷新令牌一起复制。虽然 B 后续通过界面重新登录并取得独立会话，C 在恢复操作约九分钟后刷新时被 staging Auth 以 `refresh_token_already_used` 拒绝，菜单变为 Sign In。因此，C 恢复操作后的再次拉取不能作为已验证项；上述恢复后客户端收敛以 B 的独立会话、磁盘配置和离线重启为证据。今后的多端验收必须在每个 QA 容器分别登录，不复制认证存储。
+QA-C 最初从 QA-B 合成数据目录克隆，连同旧刷新令牌一起复制。虽然 B 后续通过界面重新登录并取得独立会话，C 在恢复操作约九分钟后刷新时被 staging Auth 以 `refresh_token_already_used` 拒绝，菜单变为 Sign In。当时 C 的再次拉取不能作证。随后在 QA-C 的图形界面用同一合成账户独立登录，账户菜单显示 Logged in；重开 Paper 141 后，批注侧栏与本地 config.json 均变为恢复的 CB 版，与 QA-B 和服务端一致。今后的多端验收必须在每个 QA 容器分别登录，不复制认证存储。
