@@ -7,11 +7,14 @@ const mocks = vi.hoisted(() => ({
   saveSettings: vi.fn(async () => {}),
   setSettings: vi.fn(),
   saveNativeCredential: vi.fn(async () => {}),
+  saveWebCredential: vi.fn(async () => {}),
   native: false,
 }));
 
 vi.mock('@/hooks/useTranslation', () => ({ useTranslation: () => (text: string) => text }));
-vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'alice' } }) }));
+vi.mock('@/context/AuthContext', () => ({
+  useAuth: () => ({ user: { id: 'alice' }, token: 'alice-token' }),
+}));
 vi.mock('@/context/EnvContext', () => ({
   useEnv: () => ({ envConfig: {}, appService: {} }),
 }));
@@ -37,6 +40,7 @@ vi.mock('@/services/ai/providers/OpenRouterProvider', () => ({
 }));
 vi.mock('@/services/ai/providers', () => ({ getAIProvider: vi.fn() }));
 vi.mock('@/services/environment', () => ({ isTauriAppPlatform: () => mocks.native }));
+vi.mock('@/services/ai/webCredentials', () => ({ saveWebAiCredential: mocks.saveWebCredential }));
 vi.mock('@/services/ai/nativeCredentials', () => ({
   LEGACY_AI_CREDENTIAL_NOTICE_KEY: 'scholar-ai-legacy-key-reentry:v1',
   saveNativeAiCredential: mocks.saveNativeCredential,
@@ -94,6 +98,35 @@ describe('OpenAI-compatible model settings', () => {
           aiSettings: expect.objectContaining({ openrouterApiKey: 'new-key' }),
         }),
       ),
+    );
+  });
+
+  it('saves a Web API key to the authenticated vault only after editing ends', async () => {
+    render(<AIPanel />);
+    const input = screen.getByDisplayValue('synthetic-key');
+    fireEvent.change(input, { target: { value: 'new-web-key' } });
+    expect(mocks.saveWebCredential).not.toHaveBeenCalled();
+    fireEvent.blur(input);
+    await waitFor(() =>
+      expect(mocks.saveWebCredential).toHaveBeenCalledWith(
+        'alice-token',
+        'openrouterApiKey',
+        'new-web-key',
+      ),
+    );
+  });
+
+  it('does not publish a Web key when the vault rejects it', async () => {
+    mocks.saveWebCredential.mockRejectedValueOnce(new Error('unavailable'));
+    render(<AIPanel />);
+    const input = screen.getByDisplayValue('synthetic-key');
+    fireEvent.change(input, { target: { value: 'rejected-web-key' } });
+    fireEvent.blur(input);
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/could not save/i));
+    expect(mocks.setSettings).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        aiSettings: expect.objectContaining({ openrouterApiKey: 'rejected-web-key' }),
+      }),
     );
   });
 

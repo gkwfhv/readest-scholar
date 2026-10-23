@@ -1,0 +1,29 @@
+# Phase 5 Web AI credential vault (2026-10-23)
+
+Status: implementation slice on the draft Phase 5 branch. Phase 5 is **not accepted**.
+
+## Design
+
+- The browser saves AI Gateway and OpenAI-compatible keys through an authenticated Scholar API. The global middleware excludes this route from cross-origin permissions; the API returns `Cache-Control: no-store` and revalidates the bearer token on every request.
+- The server encrypts each value with AES-256-GCM using a fresh 96-bit nonce. Authenticated data binds the account ID, credential field and envelope version. The encryption key is read only from `SCHOLAR_AI_VAULT_KEY_FILE`; the file must contain a base64-encoded 32-byte key and allow no group or other access. The key is absent from the public runtime configuration, repository and database.
+- Migration 047 stores only the encrypted envelope and field name, with an auth-user foreign key and cascading deletion. Browser and ordinary authenticated SQL roles have no table grant. The service role is used only behind the authenticated API.
+- Web settings and backups no longer persist either AI API key. The browser holds its own decrypted key in memory for the existing direct model clients, clears it on account change, and retries hydration after a same-account token refresh. Old unowned plaintext keys are scrubbed from local settings and require re-entry.
+- Key edits save on field blur. A vault failure is shown in the AI settings panel without publishing the attempted key to app settings. An unsigned Web user must sign in before entering a cloud AI key.
+
+## Verification
+
+- Red/green tests reproduced missing encryption, API authorization, plaintext settings persistence, account-switch leakage, key input autosave, cross-origin access and missed token-refresh hydration before the fixes. Focused server-builder tests pass for the envelope, key-file permissions, API, Web client, settings, account/store isolation, rendered panel and middleware.
+- Migration 047 passed in temporary PostgreSQL databases on the server. An ordinary authenticated role was denied table read; the service role read the encrypted row; deleting a synthetic auth user removed its row. The temporary probe databases were dropped.
+- Before staging migration, a private PostgreSQL dump was written and validated at `/home/gavin/scholar-staging-backups/phase5-before-ai-vault-2026-10-23/postgres.dump` (0600; 526,266 bytes). Migration 047 then applied to the synthetic staging database. The original Web, Auth, REST and object-storage readiness checks all passed; the original staging Web image was not switched.
+- The server-built Scholar standalone candidate image is `sha256:6502415aa408013cbb9b72f53f99ba42a14211a1941a21cafbc53f0793199c23`, served only on `127.0.0.1:3157` in an isolated container. A private 0600 key file is bind-mounted read-only; no key material entered Git or the image. The actual authenticated HTTP probe used two existing synthetic staging accounts: an anonymous request was rejected, A wrote and read its key, B saw no key, the service-role database view contained ciphertext but no plaintext, the response was non-cacheable and did not grant a cross-origin origin. The probe cleared its row; the vault table returned to 0 rows. All original staging services remained healthy.
+- TypeScript and Biome lint passed across 2,930 files. The server standalone production build with Scholar branding passed. The final one-shot unit run passed 1,241 test files and 14,116 tests, with 4 files and 16 tests skipped by existing configuration and 0 failures. After formatter-only changes, all 31 focused Web vault tests and final TypeScript/Biome lint across 2,931 files passed.
+
+- Server Chromium rendered the AI settings panel at 1280×900 and 390×844 in light mode, and at 390×844 in dark and E-Ink modes: the brain tab and controls remained inside the dialog, with no document-level horizontal overflow. See [desktop](images/ai-settings-1280.png), [mobile](images/ai-settings-390.png), [dark](images/ai-settings-dark-390.png), [E-Ink](images/ai-settings-eink-390.png) and [signed-in key field](images/ai-settings-auth-390.png). With a real synthetic staging login, the OpenAI-compatible key field was enabled at 390 px. A fresh test key saved through field blur (HTTP 200), appeared after reload, was absent from browser localStorage, and cleared through the UI (HTTP 200); the field was empty after a second reload. A forced HTTP 503 on key save displayed the vault error and left the attempted key out of localStorage. No provider model request was made.
+
+## Remaining limits
+
+- A real native OS keychain round trip remains outstanding. The rendered Web UI check covered light desktop and phone widths plus dark/E-Ink mobile layouts and a forced vault write failure.
+- The browser necessarily receives its own decrypted key for existing direct provider clients. This protects storage and account isolation, but a compromised same-origin script could still read the key from browser memory. A model proxy would be required to keep provider keys exclusively on the server.
+- Vault key rotation, restoration after a lost key and an externally reachable HTTPS deployment need procedures and tests before stable release. Old plaintext keys are intentionally not auto-migrated because their account owner is unknown.
+- Full Phase 5 acceptance also needs a real-paper claim-support evaluation, end-to-end citation/navigation checks, and deletion/indexing race closure.
+EOF'

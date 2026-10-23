@@ -13,6 +13,7 @@ import {
 } from '@/services/ai/providers/OpenRouterProvider';
 import { DEFAULT_AI_SETTINGS, GATEWAY_MODELS, MODEL_PRICING } from '@/services/ai/constants';
 import { aiUserScope } from '@/services/ai/accountScope';
+import { saveWebAiCredential } from '@/services/ai/webCredentials';
 import {
   LEGACY_AI_CREDENTIAL_NOTICE_KEY,
   saveNativeAiCredential,
@@ -76,7 +77,7 @@ const getModelOptions = (): ModelOption[] => [
 const AIPanel: React.FC = () => {
   const _ = useTranslation();
   const { envConfig, appService } = useEnv();
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const { settings, setSettings, saveSettings } = useSettingsStore();
 
   const aiSettings: AISettings = settings?.aiSettings ?? DEFAULT_AI_SETTINGS;
@@ -104,7 +105,6 @@ const AIPanel: React.FC = () => {
     aiSettings.openrouterEmbeddingModel ?? '',
   );
   useEffect(() => {
-    if (!isTauriAppPlatform()) return;
     setGatewayKey(aiSettings.aiGatewayApiKey ?? '');
     setOpenrouterKey(aiSettings.openrouterApiKey ?? '');
   }, [aiSettings.aiGatewayApiKey, aiSettings.openrouterApiKey, user?.id]);
@@ -136,7 +136,6 @@ const AIPanel: React.FC = () => {
   const [credentialError, setCredentialError] = useState('');
   const [legacyCredentialNotice, setLegacyCredentialNotice] = useState(
     () =>
-      isTauriAppPlatform() &&
       typeof window !== 'undefined' &&
       localStorage.getItem(LEGACY_AI_CREDENTIAL_NOTICE_KEY) === '1',
   );
@@ -151,20 +150,26 @@ const AIPanel: React.FC = () => {
 
   const saveAiSetting = useCallback(
     async (key: keyof AISettings, value: AISettings[keyof AISettings]) => {
-      if (
-        isTauriAppPlatform() &&
-        (key === 'aiGatewayApiKey' || key === 'openrouterApiKey')
-      ) {
+      if (key === 'aiGatewayApiKey' || key === 'openrouterApiKey') {
         try {
           const owner = user?.id ?? null;
-          await saveNativeAiCredential(owner, key, String(value ?? ''));
+          if (isTauriAppPlatform()) {
+            await saveNativeAiCredential(owner, key, String(value ?? ''));
+          } else {
+            if (!owner || !token) throw new Error('Sign in to store AI API keys on Web.');
+            await saveWebAiCredential(token, key, String(value ?? ''));
+          }
           const activeUser = JSON.parse(localStorage.getItem('user') || 'null') as {
             id?: string;
           } | null;
           if ((activeUser?.id ?? null) !== owner) return;
           setCredentialError('');
         } catch {
-          setCredentialError(_('The OS keychain could not save this API key. Try again.'));
+          setCredentialError(
+            isTauriAppPlatform()
+              ? _('The OS keychain could not save this API key. Try again.')
+              : _('The secure server could not save this API key. Try again.'),
+          );
           return;
         }
       }
@@ -172,10 +177,7 @@ const AIPanel: React.FC = () => {
       if (!currentSettings) return;
       const currentAiSettings: AISettings = currentSettings.aiSettings ?? DEFAULT_AI_SETTINGS;
       const newAiSettings: AISettings = { ...currentAiSettings, [key]: value };
-      if (
-        isTauriAppPlatform() &&
-        (key === 'aiGatewayApiKey' || key === 'openrouterApiKey')
-      ) {
+      if (key === 'aiGatewayApiKey' || key === 'openrouterApiKey') {
         newAiSettings.credentialScope = aiUserScope(user?.id ?? null);
       }
       const newSettings = { ...currentSettings, aiSettings: newAiSettings };
@@ -183,7 +185,7 @@ const AIPanel: React.FC = () => {
       setSettings(newSettings);
       await saveSettings(envConfig, newSettings);
     },
-    [envConfig, setSettings, saveSettings, user?.id, _],
+    [envConfig, setSettings, saveSettings, user?.id, token, _],
   );
 
   const fetchOllamaModels = useCallback(async () => {
@@ -293,23 +295,6 @@ const AIPanel: React.FC = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ollamaEmbeddingModel]);
-
-  useEffect(() => {
-    if (!isMounted.current || isTauriAppPlatform()) return;
-    if (gatewayKey !== (aiSettings.aiGatewayApiKey ?? '')) {
-      saveAiSetting('aiGatewayApiKey', gatewayKey);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gatewayKey]);
-
-  // ---- OpenRouter save effects ----
-  useEffect(() => {
-    if (!isMounted.current || isTauriAppPlatform()) return;
-    if (openrouterKey !== (aiSettings.openrouterApiKey ?? '')) {
-      saveAiSetting('openrouterApiKey', openrouterKey);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openrouterKey]);
 
   useEffect(() => {
     if (!isMounted.current) return;
@@ -493,13 +478,22 @@ const AIPanel: React.FC = () => {
         </SettingsRow>
       </BoxedList>
 
-      {credentialError && isTauriAppPlatform() && (
-        <p role='alert' className='text-error px-4 text-sm'>{credentialError}</p>
+      {credentialError && (
+        <p role='alert' className='text-error px-4 text-sm'>
+          {credentialError}
+        </p>
+      )}
+      {!isTauriAppPlatform() && !user && (
+        <p className='px-4 text-sm'>{_('Sign in to store AI API keys on Web.')}</p>
       )}
       {legacyCredentialNotice && (
         <div role='alert' className='text-warning flex flex-wrap items-center gap-2 px-4 text-sm'>
           <PiWarningCircle aria-hidden='true' className='size-4 shrink-0' />
-          <span>{_('Older AI API keys were removed from local settings for security. Re-enter them to use cloud models.')}</span>
+          <span>
+            {_(
+              'Older AI API keys were removed from local settings for security. Re-enter them to use cloud models.',
+            )}
+          </span>
           <button
             type='button'
             className='btn btn-ghost btn-xs'
@@ -608,12 +602,12 @@ const AIPanel: React.FC = () => {
               value={gatewayKey}
               onChange={(e) => setGatewayKey(e.target.value)}
               onBlur={() => {
-                if (isTauriAppPlatform() && gatewayKey !== (aiSettings.aiGatewayApiKey ?? '')) {
+                if (gatewayKey !== (aiSettings.aiGatewayApiKey ?? '')) {
                   void saveAiSetting('aiGatewayApiKey', gatewayKey);
                 }
               }}
               placeholder='vck_...'
-              disabled={!enabled}
+              disabled={!enabled || (!isTauriAppPlatform() && !user)}
             />
           </div>
           <div className='flex flex-col gap-2 pe-4 py-3'>
@@ -703,12 +697,12 @@ const AIPanel: React.FC = () => {
               value={openrouterKey}
               onChange={(e) => setOpenrouterKey(e.target.value)}
               onBlur={() => {
-                if (isTauriAppPlatform() && openrouterKey !== (aiSettings.openrouterApiKey ?? '')) {
+                if (openrouterKey !== (aiSettings.openrouterApiKey ?? '')) {
                   void saveAiSetting('openrouterApiKey', openrouterKey);
                 }
               }}
               placeholder='sk-or-...'
-              disabled={!enabled}
+              disabled={!enabled || (!isTauriAppPlatform() && !user)}
               autoComplete='off'
             />
           </div>

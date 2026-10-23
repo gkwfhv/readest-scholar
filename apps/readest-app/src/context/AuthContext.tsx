@@ -15,6 +15,7 @@ import posthog from 'posthog-js';
 import { transferManager } from '@/services/transferManager';
 import { isTauriAppPlatform } from '@/services/environment';
 import { loadNativeAiCredentials, withoutAiCredentials } from '@/services/ai/nativeCredentials';
+import { loadWebAiCredentials } from '@/services/ai/webCredentials';
 import { useSettingsStore } from '@/store/settingsStore';
 import { aiUserScope } from '@/services/ai/accountScope';
 
@@ -37,31 +38,42 @@ function storedAccountId(): string | null {
     return null;
   }
 }
-function reloadNativeAiCredentials(userId: string | null): void {
-  if (!isTauriAppPlatform()) return;
+function reloadAiCredentials(
+  userId: string | null,
+  token: string | null,
+  preserveCurrent = false,
+): void {
   const version = ++aiCredentialReloadVersion;
   const store = useSettingsStore.getState();
   if (!store.settings.aiSettings) return;
   // Clear the previous account synchronously, before publishing the new user.
-  store.setSettings(withoutAiCredentials(store.settings));
-  void loadNativeAiCredentials(userId)
+  if (!preserveCurrent) store.setSettings(withoutAiCredentials(store.settings));
+  const loading = isTauriAppPlatform()
+    ? loadNativeAiCredentials(userId)
+    : userId && token
+      ? loadWebAiCredentials(token)
+      : Promise.resolve({});
+  void loading
     .then((credentials) => {
       if (version !== aiCredentialReloadVersion) return;
-      const activeUser = JSON.parse(localStorage.getItem('user') || 'null') as { id?: string } | null;
+      const activeUser = JSON.parse(localStorage.getItem('user') || 'null') as {
+        id?: string;
+      } | null;
       if ((activeUser?.id ?? null) !== userId) return;
       const current = useSettingsStore.getState();
       if (!current.settings.aiSettings) return;
+      const base = withoutAiCredentials(current.settings);
       current.setSettings({
-        ...current.settings,
+        ...base,
         aiSettings: {
-          ...current.settings.aiSettings,
+          ...base.aiSettings,
           ...credentials,
           credentialScope: aiUserScope(userId),
         },
       });
     })
     .catch(() => {
-      console.warn('AI credentials could not be loaded from the OS keychain');
+      console.warn('AI credentials could not be loaded from secure storage');
     });
 }
 
@@ -81,17 +93,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   });
 
   useEffect(() => {
+    let initialSessionSeen = false;
     const syncSession = (
       session: { access_token: string; refresh_token: string; user: User } | null,
     ) => {
       if (session) {
         console.log('Syncing session');
         const previousAccount = storedAccountId();
+        const previousToken = localStorage.getItem('token');
         const { access_token, refresh_token, user } = session;
         localStorage.setItem('token', access_token);
         localStorage.setItem('refresh_token', refresh_token);
         localStorage.setItem('user', JSON.stringify(user));
-        if (previousAccount !== user.id) reloadNativeAiCredentials(user.id);
+        if (previousAccount !== user.id || !initialSessionSeen) {
+          reloadAiCredentials(user.id, access_token);
+        } else if (!isTauriAppPlatform() && previousToken !== access_token) {
+          reloadAiCredentials(user.id, access_token, true);
+        }
+        initialSessionSeen = true;
         posthog.identify(user.id);
         setToken(access_token);
         setUser(user);
@@ -101,7 +120,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         localStorage.removeItem('token');
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('user');
-        if (previousAccount !== null) reloadNativeAiCredentials(null);
+        if (previousAccount !== null) reloadAiCredentials(null, null);
+        initialSessionSeen = true;
         setToken(null);
         setUser(null);
         transferManager.setScholarAccountId(null);
@@ -127,11 +147,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const login = useCallback((newToken: string, newUser: User) => {
     console.log('Logging in');
     const previousAccount = storedAccountId();
+    const previousToken = localStorage.getItem('token');
     setToken(newToken);
     setUser(newUser);
     localStorage.setItem('token', newToken);
     localStorage.setItem('user', JSON.stringify(newUser));
-    if (previousAccount !== newUser.id) reloadNativeAiCredentials(newUser.id);
+    if (previousAccount !== newUser.id) {
+      reloadAiCredentials(newUser.id, newToken);
+    } else if (!isTauriAppPlatform() && previousToken !== newToken) {
+      reloadAiCredentials(newUser.id, newToken, true);
+    }
     transferManager.setScholarAccountId(newUser.id);
   }, []);
 
@@ -145,7 +170,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       await supabase.auth.signOut({ scope: 'local' });
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      if (previousAccount !== null) reloadNativeAiCredentials(null);
+      if (previousAccount !== null) reloadAiCredentials(null, null);
       setToken(null);
       setUser(null);
       transferManager.setScholarAccountId(null);
