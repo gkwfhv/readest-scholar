@@ -123,3 +123,5 @@
 ## Phase 3 离线书签收敛与 PDF 重推修复（2026-10-23）
 
 服务器上 A/B 两个独立 Linux CEF 客户端以同一合成账户完成不同书签的并发离线/在线删除。B 断开自己的候选 Web 代理后删第 2 页，A 在线删第 1 页；B 网络恢复与重启后侧栏为空，staging 两个书签行都是墓碑。旧客户端对没有 xpointer 的 PDF 书签反复 POST 笔记，新增先失败后通过的五项回归并限制补充 xpointer 的待发送条件，reader hooks 292/292、TypeScript、Biome 及服务器 Web/CEF 构建通过。曾有一次 QA 构建漏载 staging 环境而误连上游认证服务；使用现有 native-build.env 重建后，B 登录态恢复，空闲 43 秒无周期性 POST。详见 docs/evidence/phase3/two-native-clients-bookmark-sync-2026-10-23.md。Phase 3 仍需同一注释的双端并发、服务崩溃及移动网络切换等门槛；未向 GitHub/GHCR 推送。
+
+同日补做候选 Web 重启故障：B 离线复活 Paper 141 第 2 页书签，重启仅供测试的 scholar-phase3-delete-candidate 容器，再恢复 B 本地代理。B 自动重试两次后停止，服务端单行活动书签，A 已打开阅读器自动显示第 2 页。正式 staging Web/数据库未重启；数据库崩溃场景仍未验收。证据追加到 docs/evidence/phase3/two-native-clients-bookmark-sync-2026-10-23.md。

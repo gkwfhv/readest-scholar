@@ -25,3 +25,7 @@
 B 的代理日志在旧客户端空闲时每几秒重复出现 POST /api/sync，随后 GET 相同论文的 notes；PDF 书签及删除墓碑本来没有 xpointer，但旧逻辑把缺少 xpointer 一律当作待同步。新增五个回归用例：未变化的 PDF 书签不重推、新 PDF 书签和墓碑仍上推、旧 EPUB 墓碑不重推、活动 EPUB 笔记仍补充 xpointer。修复前未变化 PDF 用例失败，修复后 reader hooks 套件 292/292、TypeScript 和 Biome 通过。
 
 服务器专用构建容器的 Web 静态构建与 Linux CEF debug 构建均通过。第一次构建命令遗漏 staging 构建环境，客户端连接到上游默认认证服务，合成账号登录失败；此错误只发生在 QA 构建。使用服务器现有 native-build.env 重建后，B 客户端菜单显示 Logged in，登录请求经过 B 的 8130 本地代理并返回 200，Paper 141 在重启后显示 No Bookmarks。该次新二进制于 02:57:18 UTC 后没有再次 POST /api/sync；检查至 02:58:01 UTC，仍有一次普通 notes GET，不再有旧版周期性 POST。构建日志保留在服务器私有测试目录，未向 GitHub 推送。正式 staging Web 保持原镜像。
+
+## 候选 Web 进程重启与离线重放
+
+B 保持 Paper 141 阅读器打开，只停止 B 本地代理后，在第 2 页重新加入书签。B 本地 config.json 显示原 ID fdsqyj6 已复活且 deletedAt 为空；此时服务端该行仍为墓碑。随后重启隔离的 scholar-phase3-delete-candidate Web 容器，B 从同一 Docker 网络取得候选 /library 200，再恢复 B 代理。B 的自动重试在 03:00:12 和 03:00:17 UTC 对笔记发出两次同步 POST，随后停止周期性 POST；03:00:50 UTC 数据库只保留一行 ID fdsqyj6，deleted_at 为空。A 的已打开阅读器自动出现第 2 页书签。此场景只重启候选 Web 进程，staging 正式 Web 和数据库未重启；数据库进程崩溃仍待独立验收。
