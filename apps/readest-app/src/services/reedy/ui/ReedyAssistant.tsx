@@ -38,6 +38,7 @@ import { sliceSinceLastId } from '../memory/consolidatorCursor';
 import { SkillRegistry } from '../skills/SkillRegistry';
 import type { Skill } from '../skills/types';
 import { useReedyStore } from '../store/reedyStore';
+import { useNotebookStore } from '@/store/notebookStore';
 import { useReedyTurn } from './useReedyTurn';
 import { AgentThread } from './AgentThread';
 import { Composer } from './Composer';
@@ -75,6 +76,14 @@ export function ReedyAssistant({
   onNavigateToCfi,
 }: ReedyAssistantProps) {
   const models = useMemo(() => createReedyModels(aiSettings), [aiSettings]);
+  const pendingPrompt = useNotebookStore((state) => state.aiSelectionPrompt);
+  const setAiSelectionPrompt = useNotebookStore((state) => state.setAiSelectionPrompt);
+  const [selectionDraft, setSelectionDraft] = useState<{ id: string; text: string } | null>(null);
+  useEffect(() => {
+    if (!pendingPrompt || pendingPrompt.scope !== bookHash) return;
+    setSelectionDraft({ id: pendingPrompt.id, text: pendingPrompt.text });
+    setAiSelectionPrompt(null);
+  }, [bookHash, pendingPrompt, setAiSelectionPrompt]);
 
   // Lazily open reedy.db on first mount. The promise resolves once and
   // we share the same ReedyDb + Indexer + Retriever + MemoryService +
@@ -378,6 +387,7 @@ export function ReedyAssistant({
         />
       </div>
       <Composer
+        draft={selectionDraft}
         isRunning={isRunning}
         onSend={handleSend}
         onAbort={abort}
