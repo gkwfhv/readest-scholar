@@ -1,6 +1,6 @@
 # Phase 5 local-model PDF answer probe (2026-10-23)
 
-Status: live OpenAI-compatible answer and citation probe passed; **Phase 5 is not yet signed off** because the corpus excerpts and the citation navigation UI were exercised in separate probes, not in one complete native reader flow.
+Status: live OpenAI-compatible answer and citation probe passed. A later complete native reader flow is recorded in [native paper QA](native-paper-answer-qa-2026-10-23.md). The final full regression and Web production build passed; GitHub checks remain.
 
 ## Private server setup
 
@@ -18,7 +18,7 @@ Status: live OpenAI-compatible answer and citation probe passed; **Phase 5 is no
 | LoRA, p. 1 | Trainable-parameter reduction factor | `The factor by which LoRA can reduce trainable parameters is 10,000 times [p. 1].` | Supported and correct page |
 | Each of the same three papers | Three absent biographical/cost questions | `I can't verify that from the indexed PDF. Try re-indexing or ask about a passage in the document.` | 3/3 refused |
 
-The first baseline with full page text returned the fallback for all three supported prompts. Short retrieved-sized excerpts improved this to 1/3. An exact citation format instruction improved it to 2/3. Setting PDF generation temperature to zero and stripping model `<think>` blocks produced the result above: 3/3 supported, 3/3 absent refused. This is a small deterministic smoke set, not a statistical accuracy claim. The citation gate still checks cited page membership, not claim-level entailment.
+The first baseline with full page text returned the fallback for all three supported prompts. Short retrieved-sized excerpts improved this to 1/3. An exact citation format instruction improved it to 2/3. Setting PDF generation temperature to zero and stripping model `<think>` blocks produced the result above: 3/3 supported, 3/3 absent refused. This is a small deterministic smoke set, not a statistical accuracy claim. The subsequent native BERT probe found a wrong-page citation; the gate now checks that material numeric values occur on each cited page. It still cannot establish general semantic entailment.
 
 ## Two-page adversarial citation probe
 
@@ -32,4 +32,4 @@ This local chat model does not provide a usable OpenAI embedding response by def
 
 - Focused tests: `pdf-index.test.ts`, `pdf-grounding.test.ts`, `TauriChatAdapter.test.ts`: 22/22 passed after red tests for reasoning leakage, deterministic temperature, and missing/malformed embeddings.
 - TypeScript `tsc --noEmit` and Biome check of all changed files: passed.
-- Full server unit run: 1,243 files / 14,130 tests passed, four files / 16 tests skipped by existing configuration; `/tmp/scholar-phase5-final-unit-v6.log`, exit 0. Web and Tauri static production builds passed; native build and native reader UI citation navigation checks remain to be recorded.
+- Full server unit run: 1,243 files / 14,130 tests passed, four files / 16 tests skipped by existing configuration; `/tmp/scholar-phase5-final-unit-v6.log`, exit 0. Web and Tauri static production builds passed on this revision. The later CEF and native reader evidence, including source navigation and the wrong-page correction, is in [native paper QA](native-paper-answer-qa-2026-10-23.md).
