@@ -2580,5 +2580,12 @@
   "Restoring this version will make it the current note on other devices.": "復原後，此版本將成為其他裝置上的目前筆記。",
   "Restore this note": "復原此筆記",
   "This note changed on another device. Refresh before restoring it.": "此筆記已在另一台裝置上變更。請重新整理後再復原。",
-  "Could not restore this note version.": "無法復原此筆記版本。"
+  "Could not restore this note version.": "無法復原此筆記版本。",
+  "File cache on this device": "此裝置的檔案快取",
+  "Choose when this device downloads cloud book files. This choice applies only to the current account on this device.": "選擇此裝置何時下載雲端書籍檔案。此設定僅適用於本裝置上的目前帳戶。",
+  "On demand": "按需下載",
+  "Download a book when you open it.": "開啟書籍時下載。",
+  "Full mirror": "完整鏡像",
+  "Download every cloud book for offline reading in the background.": "在背景下載所有雲端書籍，以便離線閱讀。"
+  "On mobile, background mirroring runs only when Wi-Fi is detected; if network type is unavailable, open books to download them on demand.": "在行動裝置上，只有偵測到 Wi-Fi 時才會在背景鏡像；無法辨識網路類型時，請開啟書籍按需下載。",
 }

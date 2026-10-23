@@ -206,6 +206,61 @@ describe('Scholar file queue baseline', () => {
     expect(transferManager.queueUpload(makeBook({ hash: "other" }))).toBeNull();
   });
 
+  test('full mirror downloads stay bound to the account that queued them', async () => {
+    scholarRelease.mockReturnValue(true);
+    scholarAccountId.mockResolvedValue(userA);
+    const book = makeBook({ uploadedAt: 1000, downloadedAt: null });
+    transferManager.pauseQueue();
+    const service = await initManager(makeAppService(), [book]);
+    const oldId = transferManager.queueDownload(book, 20, true)!;
+    expect(useTransferStore.getState().transfers[oldId]?.scholarAccountId).toBe(userA);
+
+    transferManager.setScholarAccountId(userB);
+    scholarAccountId.mockResolvedValue(userB);
+    const newId = transferManager.queueDownload(book, 20, true)!;
+    expect(newId).not.toBe(oldId);
+    expect(useTransferStore.getState().transfers[oldId]?.cancelReason).toBe('policy');
+    expect(useTransferStore.getState().transfers[newId]?.scholarAccountId).toBe(userB);
+    transferManager.resumeQueue();
+    await flushAsync();
+    expect(service['downloadBook']).toHaveBeenCalledTimes(1);
+    expect(useTransferStore.getState().transfers[newId]?.status).toBe('completed');
+  });
+
+  test('full mirror replaces a stale local copy and records the remote timestamp', async () => {
+    scholarRelease.mockReturnValue(true);
+    scholarAccountId.mockResolvedValue(userA);
+    const book = makeBook({ uploadedAt: Date.now() + 1000, downloadedAt: 1 });
+    transferManager.pauseQueue();
+    const service = await initManager(makeAppService(), [book]);
+    const id = transferManager.queueDownload(book, 20, true, true)!;
+    transferManager.resumeQueue();
+    await flushAsync();
+    expect(service['downloadBook']).toHaveBeenCalledWith(book, false, true, expect.any(Function));
+    expect(useTransferStore.getState().transfers[id]?.status).toBe('completed');
+    expect(book.downloadedAt).toBeGreaterThanOrEqual(book.uploadedAt!);
+  });
+
+  test('turning off full mirror cancels only this account automatic downloads', async () => {
+    scholarRelease.mockReturnValue(true);
+    scholarAccountId.mockResolvedValue(userA);
+    const book = makeBook({ uploadedAt: 1000, downloadedAt: null });
+    transferManager.pauseQueue();
+    await initManager(makeAppService(), [book]);
+    const mirrorId = transferManager.queueDownload(book, 20, true, true)!;
+    const otherId = useTransferStore.getState().addTransfer(
+      'other-book', 'Other book', 'download', 10, false,
+      { accountId: userA, expectedVersionId: null },
+    );
+    expect(useTransferStore.getState().transfers[mirrorId]?.scholarMirror).toBe(true);
+    expect(useTransferStore.getState().transfers[otherId]?.scholarMirror).toBe(false);
+
+    transferManager.stopScholarFullMirror(userA);
+    expect(useTransferStore.getState().transfers[mirrorId]?.status).toBe('cancelled');
+    expect(useTransferStore.getState().transfers[mirrorId]?.cancelReason).toBe('policy');
+    expect(useTransferStore.getState().transfers[otherId]?.status).toBe('pending');
+  });
+
   test('captures a stable delete operation and never invokes the legacy object remover', async () => {
     scholarRelease.mockReturnValue(true);
     scholarAccountId.mockResolvedValue(userA);

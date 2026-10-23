@@ -33,6 +33,8 @@ export interface TransferItem {
   scholarExpectedVersionId?: string | null;
   scholarSnapshotPath?: string;
   scholarSnapshotRequired?: boolean;
+  /** Device-local full-mirror download; can be cancelled when the preference is turned off. */
+  scholarMirror?: boolean;
   replicaKind?: string;
   replicaId?: string;
   replicaReincarnation?: string;
@@ -72,7 +74,7 @@ interface TransferState {
     type: TransferType,
     priority?: number,
     isBackground?: boolean,
-    scholar?: { accountId: string; expectedVersionId: string | null; filePath?: string },
+    scholar?: { accountId: string; expectedVersionId: string | null; filePath?: string; mirror?: boolean },
   ) => string;
   addReplicaTransfer: (
     replicaKind: string,
@@ -209,11 +211,12 @@ export const useTransferStore = create<TransferState>((set, get) => ({
       bookHash,
       bookTitle,
       scholarOpId: type === 'upload' || (type === 'delete' && !!scholar) ? uuidv4() : undefined,
-      scholarAccountId: (type === 'upload' || type === 'delete') ? scholar?.accountId : undefined,
+      scholarAccountId: scholar?.accountId,
       scholarFilePath: scholar?.filePath,
       scholarExpectedVersionId: (type === 'upload' || type === 'delete')
         ? scholar?.expectedVersionId : undefined,
       scholarSnapshotRequired: type === 'upload' && !!scholar,
+      scholarMirror: type === 'download' && !!scholar?.mirror,
       type,
       status: 'pending',
       progress: 0,

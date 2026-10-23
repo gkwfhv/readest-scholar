@@ -262,7 +262,7 @@ class TransferManager {
     }
   }
 
-  queueDownload(book: Book, priority: number = 10, isBackground: boolean = false): string | null {
+  queueDownload(book: Book, priority: number = 10, isBackground: boolean = false, scholarMirror = false): string | null {
     if (!this.isReady()) {
       console.warn('TransferManager not initialized');
       return null;
@@ -272,16 +272,36 @@ class TransferManager {
     if (isAudiobook(book)) return null;
 
     const store = useTransferStore.getState();
+    const scholar = isScholarReleaseBundle() || isScholarTestBundle()
+      ? this.scholarAccountId ? { accountId: this.scholarAccountId, expectedVersionId: null, mirror: scholarMirror } : null
+      : undefined;
+    if (scholar === null) return null;
 
     const existing = store.getTransferByBookHash(book.hash, 'download');
     if (existing) {
-      return existing.id;
+      if (!scholar || existing.scholarAccountId === scholar.accountId) return existing.id;
+      this.abortControllers.get(existing.id)?.abort();
+      store.setTransferStatus(existing.id, 'cancelled', undefined, 'policy');
     }
 
-    const transferId = store.addTransfer(book.hash, book.title, 'download', priority, isBackground);
+    const transferId = store.addTransfer(book.hash, book.title, 'download', priority, isBackground, scholar);
     this.persistQueue();
     this.processQueue();
     return transferId;
+  }
+
+  /** Stop unfinished automatic mirror downloads when this account opts out. */
+  stopScholarFullMirror(accountId: string): void {
+    const store = useTransferStore.getState();
+    let changed = false;
+    for (const task of Object.values(store.transfers)) {
+      if (!task.scholarMirror || task.scholarAccountId !== accountId ||
+          !['pending', 'in_progress'].includes(task.status)) continue;
+      this.abortControllers.get(task.id)?.abort();
+      store.setTransferStatus(task.id, 'cancelled', undefined, 'policy');
+      changed = true;
+    }
+    if (changed) this.persistQueue();
   }
 
   /**
@@ -727,6 +747,8 @@ class TransferManager {
         'Scholar delete conflict',
         'Legacy Scholar delete queue needs requeue',
         'Scholar upload account changed',
+        'Scholar download account changed',
+        'Legacy Scholar download queue needs requeue',
         'Legacy upload queue needs requeue',
         'Scholar upload snapshot',
       ].some((message) => errorMessage.includes(message));
@@ -860,8 +882,21 @@ class TransferManager {
       book.uploadedAt = Date.now();
       await this.updateBook!(book);
     } else if (transfer.type === 'download') {
-      await this.appService!.downloadBook(book, false, false, progressHandler);
-      book.downloadedAt = Date.now();
+      if ((isScholarReleaseBundle() || isScholarTestBundle()) && !transfer.scholarAccountId) {
+        throw new Error('Legacy Scholar download queue needs requeue');
+      }
+      if (transfer.scholarAccountId &&
+          (await getScholarAccountId()) !== transfer.scholarAccountId) {
+        throw new Error('Scholar download account changed; requeue under the current account');
+      }
+      const refreshMirror = !!transfer.scholarMirror && !!book.uploadedAt &&
+        book.uploadedAt > (book.downloadedAt ?? 0);
+      await this.appService!.downloadBook(book, false, refreshMirror, progressHandler);
+      if (abortController.signal.aborted || (transfer.scholarAccountId &&
+          (await getScholarAccountId()) !== transfer.scholarAccountId)) {
+        throw new Error('Scholar download account changed; requeue under the current account');
+      }
+      book.downloadedAt = Math.max(Date.now(), book.uploadedAt ?? 0);
       await this.updateBook!(book);
     } else if (transfer.type === 'delete') {
       if (isScholarReleaseBundle() || isScholarTestBundle()) {
