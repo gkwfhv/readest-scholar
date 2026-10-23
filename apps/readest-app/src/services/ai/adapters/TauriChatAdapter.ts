@@ -165,10 +165,7 @@ export function createTauriAdapter(getOptions: () => TauriAdapterOptions): ChatM
               text += chunk;
             }
           }
-          text = verifyPdfAnswer(
-            text,
-            chunks.map((chunk) => chunk.pageNumber),
-          );
+          text = verifyPdfAnswer(text, chunks);
           yield { content: [{ type: 'text', text }] };
         } else if (backend.kind === 'reedy' && backend.buildLookupTool) {
           // Reedy path: model calls lookupPassage on demand; sources flow
@@ -248,10 +245,7 @@ export function createTauriAdapter(getOptions: () => TauriAdapterOptions): ChatM
             }
           }
           if (isPdf) {
-            text = verifyPdfAnswer(
-              text,
-              chunks.map((chunk) => chunk.pageNumber),
-            );
+            text = verifyPdfAnswer(text, chunks);
             yield { content: [{ type: 'text', text }] };
           }
         }
