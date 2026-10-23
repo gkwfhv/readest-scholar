@@ -1,11 +1,14 @@
 import { describe, test, expect, beforeEach, vi } from 'vitest';
 import type { AIConversation, AIMessage } from '@/services/ai/types';
+import { advanceBookAiGeneration } from '@/services/ai/bookAiWork';
 
 // Mock the aiStore (IndexedDB-backed persistence)
 const mockGetConversations = vi.fn<(bookHash: string) => Promise<AIConversation[]>>();
 const mockGetMessages = vi.fn<(id: string) => Promise<AIMessage[]>>();
-const mockSaveConversation = vi.fn<(conv: AIConversation) => Promise<void>>();
-const mockSaveMessage = vi.fn<(msg: AIMessage) => Promise<void>>();
+const mockSaveConversation =
+  vi.fn<(conv: AIConversation, assertCurrent?: () => void) => Promise<void>>();
+const mockSaveMessage =
+  vi.fn<(msg: AIMessage, bookScope?: string, assertCurrent?: () => void) => Promise<void>>();
 const mockDeleteConversation = vi.fn<(id: string) => Promise<void>>();
 const mockUpdateConversationTitle = vi.fn<(id: string, title: string) => Promise<void>>();
 
@@ -106,6 +109,43 @@ describe('aiChatStore', () => {
     });
   });
 
+  test('invalidating a deleted book hides an in-flight conversation load', async () => {
+    let finishLoad!: (conversations: AIConversation[]) => void;
+    mockGetConversations.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishLoad = resolve;
+        }),
+    );
+    const loading = useAIChatStore.getState().loadConversations('deleted-book');
+    useAIChatStore.getState().invalidateBookScope('deleted-book');
+    finishLoad([
+      { id: 'old', bookHash: 'deleted-book', title: 'Private', createdAt: 1, updatedAt: 1 },
+    ]);
+    await loading;
+    expect(useAIChatStore.getState().currentBookHash).toBeNull();
+    expect(useAIChatStore.getState().conversations).toEqual([]);
+  });
+
+  test('rejects a delayed new conversation after the book deletion generation changes', async () => {
+    const scope = 'book-deleted-while-loading';
+    let finishLoad!: (conversations: AIConversation[]) => void;
+    mockGetConversations.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishLoad = resolve;
+        }),
+    );
+    mockSaveConversation.mockImplementation(async (_conversation, assertCurrent) => {
+      assertCurrent?.();
+    });
+    const creating = useAIChatStore.getState().createConversation(scope, 'Late chat');
+    advanceBookAiGeneration(scope);
+    finishLoad([]);
+    await expect(creating).rejects.toThrow('changed during indexing');
+    expect(useAIChatStore.getState().conversations).toEqual([]);
+  });
+
   // ── setActiveConversation ──────────────────────────────────────
   describe('setActiveConversation', () => {
     test('sets null to clear active conversation', async () => {
@@ -127,6 +167,10 @@ describe('aiChatStore', () => {
         { id: 'm2', conversationId: 'c1', role: 'assistant', content: 'hi', createdAt: 200 },
       ];
       mockGetMessages.mockResolvedValue(msgs);
+      useAIChatStore.setState({
+        currentBookHash: 'book1',
+        conversations: [{ id: 'c1', bookHash: 'book1', title: 'Conv', createdAt: 1, updatedAt: 1 }],
+      });
 
       await useAIChatStore.getState().setActiveConversation('c1');
 
@@ -138,6 +182,10 @@ describe('aiChatStore', () => {
 
     test('handles error when loading messages', async () => {
       mockGetMessages.mockRejectedValue(new Error('DB error'));
+      useAIChatStore.setState({
+        currentBookHash: 'book1',
+        conversations: [{ id: 'c1', bookHash: 'book1', title: 'Conv', createdAt: 1, updatedAt: 1 }],
+      });
 
       await useAIChatStore.getState().setActiveConversation('c1');
 
@@ -218,6 +266,13 @@ describe('aiChatStore', () => {
       ];
       mockSaveMessage.mockResolvedValue(undefined);
       mockGetMessages.mockImplementation(async () => [mockSaveMessage.mock.calls[0]![0]]);
+      useAIChatStore.setState({
+        activeConversationId: 'conversation-1',
+        currentBookHash: 'book1',
+        conversations: [
+          { id: 'conversation-1', bookHash: 'book1', title: 'Conv', createdAt: 1, updatedAt: 1 },
+        ],
+      });
 
       await useAIChatStore.getState().addMessage({
         id: 'runtime-assistant-1',
@@ -312,7 +367,7 @@ describe('aiChatStore', () => {
       expect(mockSaveConversation).toHaveBeenCalledTimes(1);
     });
 
-    test('does not update conversation when no active conversation', async () => {
+    test('rejects a message when no conversation is active', async () => {
       mockSaveMessage.mockResolvedValue(undefined);
 
       useAIChatStore.setState({
@@ -321,12 +376,15 @@ describe('aiChatStore', () => {
         conversations: [],
       });
 
-      await useAIChatStore.getState().addMessage({
-        conversationId: 'c1',
-        role: 'user',
-        content: 'msg',
-      });
+      await expect(
+        useAIChatStore.getState().addMessage({
+          conversationId: 'c1',
+          role: 'user',
+          content: 'msg',
+        }),
+      ).rejects.toThrow('outside');
 
+      expect(mockSaveMessage).not.toHaveBeenCalled();
       expect(mockSaveConversation).not.toHaveBeenCalled();
     });
 
@@ -409,7 +467,7 @@ describe('aiChatStore', () => {
       expect(state.conversations).toEqual(remainingConvs);
     });
 
-    test('does not reload conversations when currentBookHash is null', async () => {
+    test('rejects deletion when no account/book scope is active', async () => {
       mockDeleteConversation.mockResolvedValue(undefined);
 
       useAIChatStore.setState({
@@ -418,8 +476,9 @@ describe('aiChatStore', () => {
         conversations: [],
       });
 
-      await useAIChatStore.getState().deleteConversation('c1');
+      await expect(useAIChatStore.getState().deleteConversation('c1')).rejects.toThrow('outside');
 
+      expect(mockDeleteConversation).not.toHaveBeenCalled();
       expect(mockGetConversations).not.toHaveBeenCalled();
     });
   });
@@ -446,13 +505,16 @@ describe('aiChatStore', () => {
       expect(useAIChatStore.getState().conversations).toEqual(updated);
     });
 
-    test('does not reload when currentBookHash is null', async () => {
+    test('rejects rename when no account/book scope is active', async () => {
       mockUpdateConversationTitle.mockResolvedValue(undefined);
 
       useAIChatStore.setState({ currentBookHash: null });
 
-      await useAIChatStore.getState().renameConversation('c1', 'New Title');
+      await expect(useAIChatStore.getState().renameConversation('c1', 'New Title')).rejects.toThrow(
+        'outside',
+      );
 
+      expect(mockUpdateConversationTitle).not.toHaveBeenCalled();
       expect(mockGetConversations).not.toHaveBeenCalled();
     });
   });
@@ -481,5 +543,75 @@ describe('aiChatStore', () => {
       expect(state.activeConversationId).toBeNull();
       expect(state.messages).toEqual([]);
     });
+  });
+});
+
+describe('AI account scope isolation', () => {
+  test('a login switch clears visible messages before the new lookup resolves', async () => {
+    const old = {
+      id: 'old',
+      bookHash: 'user-a:book',
+      title: 'Private',
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    useAIChatStore.setState({
+      currentBookHash: 'user-a:book',
+      conversations: [old],
+      activeConversationId: 'old',
+      messages: [
+        { id: 'm', conversationId: 'old', role: 'user', content: 'Private', createdAt: 1 },
+      ],
+    });
+    let resolveLookup!: (convs: AIConversation[]) => void;
+    mockGetConversations.mockReturnValue(
+      new Promise((resolve) => {
+        resolveLookup = resolve;
+      }),
+    );
+    const pending = useAIChatStore.getState().loadConversations('user-b:book');
+    expect(useAIChatStore.getState()).toMatchObject({
+      currentBookHash: 'user-b:book',
+      conversations: [],
+      activeConversationId: null,
+      messages: [],
+    });
+    resolveLookup([]);
+    await pending;
+  });
+
+  test('a stale lookup cannot restore another account after a switch', async () => {
+    let resolveOld!: (convs: AIConversation[]) => void;
+    mockGetConversations.mockImplementation((scope) =>
+      scope === 'user-a:book'
+        ? new Promise((resolve) => {
+            resolveOld = resolve;
+          })
+        : Promise.resolve([]),
+    );
+    const oldPending = useAIChatStore.getState().loadConversations('user-a:book');
+    await useAIChatStore.getState().loadConversations('user-b:book');
+    resolveOld([
+      { id: 'old', bookHash: 'user-a:book', title: 'Private', createdAt: 1, updatedAt: 1 },
+    ]);
+    await oldPending;
+    expect(useAIChatStore.getState().conversations).toEqual([]);
+    expect(useAIChatStore.getState().currentBookHash).toBe('user-b:book');
+  });
+
+  test('a guessed conversation id cannot read, rename or delete another scope', async () => {
+    useAIChatStore.setState({ currentBookHash: 'user-b:book', conversations: [] });
+    await expect(useAIChatStore.getState().setActiveConversation('user-a-conv')).rejects.toThrow(
+      'outside',
+    );
+    await expect(useAIChatStore.getState().renameConversation('user-a-conv', 'X')).rejects.toThrow(
+      'outside',
+    );
+    await expect(useAIChatStore.getState().deleteConversation('user-a-conv')).rejects.toThrow(
+      'outside',
+    );
+    expect(mockGetMessages).not.toHaveBeenCalled();
+    expect(mockDeleteConversation).not.toHaveBeenCalled();
+    expect(mockUpdateConversationTitle).not.toHaveBeenCalled();
   });
 });

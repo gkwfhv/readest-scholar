@@ -34,6 +34,9 @@ export interface AISettings {
   openrouterModel?: string;
   openrouterEmbeddingModel?: string;
 
+  /** In-memory owner of native keychain values; never persisted. */
+  credentialScope?: string;
+
   spoilerProtection: boolean;
   maxContextChunks: number;
   indexingMode: 'on-demand' | 'background';
@@ -78,6 +81,8 @@ export interface BookIndexMeta {
   totalSections: number;
   totalChunks: number;
   embeddingModel: string;
+  /** PDF physical pages must not reuse an older character-estimated index. */
+  pageNumberScheme?: 'estimated' | 'pdf-section';
   lastUpdated: number;
 }
 

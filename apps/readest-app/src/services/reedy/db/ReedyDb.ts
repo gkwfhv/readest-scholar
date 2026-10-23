@@ -56,34 +56,99 @@ export class ReedyDb {
     });
   }
 
+  /**
+   * A generation is persisted in SQLite so independent app windows cannot
+   * revive a book after deletion, even when an already queued write reaches
+   * the database after the localStorage deletion marker has been cleared.
+   */
+  async captureBookGeneration(bookHash: string): Promise<string> {
+    const proposed = crypto.randomUUID();
+    return this.enqueue(async () => {
+      await this.db.execute(
+        'INSERT OR IGNORE INTO reedy_book_fence (book_hash, generation, deleted) VALUES (?, ?, 0)',
+        [bookHash, proposed],
+      );
+      const rows = await this.db.select<{ generation: string; deleted: number }>(
+        'SELECT generation, deleted FROM reedy_book_fence WHERE book_hash = ?',
+        [bookHash],
+      );
+      if (!rows[0] || rows[0].deleted !== 0) {
+        throw new Error('Book AI data was deleted');
+      }
+      return rows[0].generation;
+    });
+  }
+
+  beginBookIndex(bookHash: string): Promise<string> {
+    return this.captureBookGeneration(bookHash);
+  }
+
+  /** A completed import is the only operation that reopens a deleted scope. */
+  async reopenImportedBook(bookHash: string): Promise<void> {
+    const generation = crypto.randomUUID();
+    await this.enqueue(() =>
+      this.db.execute(
+        'INSERT INTO reedy_book_fence (book_hash, generation, deleted) VALUES (?, ?, 0) ' +
+          'ON CONFLICT(book_hash) DO UPDATE SET generation = excluded.generation, deleted = 0 ' +
+          'WHERE reedy_book_fence.deleted = 1',
+        [bookHash, generation],
+      ),
+    );
+  }
+
+  private fenceCondition(bookHash: string, generation: string): string {
+    return (
+      'EXISTS (SELECT 1 FROM reedy_book_fence WHERE book_hash = ' +
+      sqlQuote(bookHash) +
+      ' AND generation = ' +
+      sqlQuote(generation) +
+      ' AND deleted = 0)'
+    );
+  }
+
+  private async assertBookGeneration(bookHash: string, generation?: string): Promise<void> {
+    if (!generation) return;
+    const rows = await this.db.select<{ generation: string; deleted: number }>(
+      'SELECT generation, deleted FROM reedy_book_fence WHERE book_hash = ?',
+      [bookHash],
+    );
+    if (rows[0]?.generation !== generation || rows[0].deleted !== 0) {
+      throw new Error('Book AI index changed or was deleted');
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // book meta
   // ---------------------------------------------------------------------------
 
-  async upsertBookMeta(meta: BookMeta): Promise<void> {
+  async upsertBookMeta(meta: BookMeta, generation?: string): Promise<void> {
+    const values = [
+      meta.bookHash,
+      meta.indexingStatus,
+      meta.chunkCount,
+      meta.embeddingModel,
+      meta.embeddingDim,
+      meta.indexedAt,
+      meta.error,
+    ];
+    const guard = generation ? ' WHERE ' + this.fenceCondition(meta.bookHash, generation) : '';
     await this.enqueue(() =>
       this.db.execute(
-        `INSERT INTO reedy_book_meta
-         (book_hash, indexing_status, chunk_count, embedding_model, embedding_dim, indexed_at, error)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(book_hash) DO UPDATE SET
-         indexing_status = excluded.indexing_status,
-         chunk_count     = excluded.chunk_count,
-         embedding_model = excluded.embedding_model,
-         embedding_dim   = excluded.embedding_dim,
-         indexed_at      = excluded.indexed_at,
-         error           = excluded.error`,
-        [
-          meta.bookHash,
-          meta.indexingStatus,
-          meta.chunkCount,
-          meta.embeddingModel,
-          meta.embeddingDim,
-          meta.indexedAt,
-          meta.error,
-        ],
+        'INSERT INTO reedy_book_meta ' +
+          '(book_hash, indexing_status, chunk_count, embedding_model, embedding_dim, indexed_at, error) ' +
+          'SELECT ?, ?, ?, ?, ?, ?, ?' +
+          guard +
+          ' ON CONFLICT(book_hash) DO UPDATE SET ' +
+          'indexing_status = excluded.indexing_status, ' +
+          'chunk_count = excluded.chunk_count, ' +
+          'embedding_model = excluded.embedding_model, ' +
+          'embedding_dim = excluded.embedding_dim, ' +
+          'indexed_at = excluded.indexed_at, ' +
+          'error = excluded.error',
+        values,
       ),
     );
+    await this.assertBookGeneration(meta.bookHash, generation);
   }
 
   async getBookMeta(bookHash: string): Promise<BookMeta | null> {
@@ -113,6 +178,7 @@ export class ReedyDb {
     bookHash: string,
     status: IndexingStatus,
     partial?: Partial<Pick<BookMeta, 'chunkCount' | 'indexedAt' | 'error'>>,
+    generation?: string,
   ): Promise<void> {
     const sets: string[] = ['indexing_status = ?'];
     const params: unknown[] = [status];
@@ -129,9 +195,14 @@ export class ReedyDb {
       params.push(partial!.error ?? null);
     }
     params.push(bookHash);
+    const guard = generation ? ' AND ' + this.fenceCondition(bookHash, generation) : '';
     await this.enqueue(() =>
-      this.db.execute(`UPDATE reedy_book_meta SET ${sets.join(', ')} WHERE book_hash = ?`, params),
+      this.db.execute(
+        'UPDATE reedy_book_meta SET ' + sets.join(', ') + ' WHERE book_hash = ?' + guard,
+        params,
+      ),
     );
+    await this.assertBookGeneration(bookHash, generation);
   }
 
   // ---------------------------------------------------------------------------
@@ -181,22 +252,39 @@ export class ReedyDb {
   // bulk writes
   // ---------------------------------------------------------------------------
 
-  async insertChunks(chunks: ChunkRow[]): Promise<void> {
+  async insertChunks(chunks: ChunkRow[], generation?: string): Promise<void> {
     if (chunks.length === 0) return;
-    const stmts = chunks.map(
-      (c) =>
-        `INSERT INTO reedy_book_chunks
-           (id, book_hash, section_index, chapter_title, start_cfi, end_cfi, position_index, text, token_count)
-         VALUES (${sqlQuote(c.id)}, ${sqlQuote(c.bookHash)}, ${c.sectionIndex}, ${sqlQuoteNullable(c.chapterTitle)}, ${sqlQuote(c.startCfi)}, ${sqlQuote(c.endCfi)}, ${c.positionIndex}, ${sqlQuote(c.text)}, ${c.tokenCount})`,
-    );
+    const bookHash = chunks[0]!.bookHash;
+    const stmts = chunks.map((c) => {
+      const values = [
+        sqlQuote(c.id),
+        sqlQuote(c.bookHash),
+        String(c.sectionIndex),
+        sqlQuoteNullable(c.chapterTitle),
+        sqlQuote(c.startCfi),
+        sqlQuote(c.endCfi),
+        String(c.positionIndex),
+        sqlQuote(c.text),
+        String(c.tokenCount),
+      ].join(', ');
+      const selection = generation
+        ? 'SELECT ' + values + ' WHERE ' + this.fenceCondition(c.bookHash, generation)
+        : 'VALUES (' + values + ')';
+      return (
+        'INSERT INTO reedy_book_chunks ' +
+        '(id, book_hash, section_index, chapter_title, start_cfi, end_cfi, position_index, text, token_count) ' +
+        selection
+      );
+    });
     await this.enqueue(() => this.db.batch(stmts));
+    await this.assertBookGeneration(bookHash, generation);
   }
 
   /**
    * Insert embedding rows. Asserts every row's vector matches the existing
    * table's dim (queried once from sqlite_master) before issuing SQL.
    */
-  async insertEmbeddings(rows: EmbeddingRow[]): Promise<void> {
+  async insertEmbeddings(rows: EmbeddingRow[], generation?: string): Promise<void> {
     if (rows.length === 0) return;
     const dimRows = await this.db.select<{ sql: string | null }>(
       "SELECT sql FROM sqlite_master WHERE type='table' AND name='reedy_book_chunk_embeddings'",
@@ -212,16 +300,30 @@ export class ReedyDb {
     for (const r of rows) {
       if (r.embedding.length !== dim) {
         throw new Error(
-          `insertEmbeddings: embedding for chunk ${r.chunkId} has length ${r.embedding.length}, expected dim ${dim}`,
+          'insertEmbeddings: embedding for chunk ' +
+            r.chunkId +
+            ' has length ' +
+            r.embedding.length +
+            ', expected dim ' +
+            dim,
         );
       }
     }
-    const stmts = rows.map(
-      (r) =>
-        `INSERT INTO reedy_book_chunk_embeddings (chunk_id, book_hash, embedding)
-         VALUES (${sqlQuote(r.chunkId)}, ${sqlQuote(r.bookHash)}, vector32(${sqlQuote(serializeVector(r.embedding))}))`,
-    );
+    const stmts = rows.map((r) => {
+      const values = [
+        sqlQuote(r.chunkId),
+        sqlQuote(r.bookHash),
+        'vector32(' + sqlQuote(serializeVector(r.embedding)) + ')',
+      ].join(', ');
+      const selection = generation
+        ? 'SELECT ' + values + ' WHERE ' + this.fenceCondition(r.bookHash, generation)
+        : 'VALUES (' + values + ')';
+      return (
+        'INSERT INTO reedy_book_chunk_embeddings (chunk_id, book_hash, embedding) ' + selection
+      );
+    });
     await this.enqueue(() => this.db.batch(stmts));
+    await this.assertBookGeneration(rows[0]!.bookHash, generation);
   }
 
   // ---------------------------------------------------------------------------
@@ -233,20 +335,23 @@ export class ReedyDb {
    * Used by BookIndexer when re-indexing — the meta row has just been set to
    * 'indexing' and must be preserved.
    */
-  async clearBookChunks(bookHash: string): Promise<void> {
+  async clearBookChunks(bookHash: string, generation?: string): Promise<void> {
     await this.enqueue(async () => {
-      // Embeddings reference chunks via ON DELETE CASCADE, but the embeddings
-      // table may not exist yet on first index — guard with sqlite_master.
       const has = await this.db.select<{ name: string }>(
         "SELECT name FROM sqlite_master WHERE type='table' AND name='reedy_book_chunk_embeddings'",
       );
+      const guard = generation ? ' AND ' + this.fenceCondition(bookHash, generation) : '';
       if (has.length > 0) {
-        await this.db.execute('DELETE FROM reedy_book_chunk_embeddings WHERE book_hash = ?', [
-          bookHash,
-        ]);
+        await this.db.execute(
+          'DELETE FROM reedy_book_chunk_embeddings WHERE book_hash = ?' + guard,
+          [bookHash],
+        );
       }
-      await this.db.execute('DELETE FROM reedy_book_chunks WHERE book_hash = ?', [bookHash]);
+      await this.db.execute('DELETE FROM reedy_book_chunks WHERE book_hash = ?' + guard, [
+        bookHash,
+      ]);
     });
+    await this.assertBookGeneration(bookHash, generation);
   }
 
   async dropBookData(bookHash: string): Promise<void> {
@@ -260,6 +365,47 @@ export class ReedyDb {
   }
 
   /**
+   * Delete derived data for one account-scoped book. This is stronger than
+   * dropBookData (the Reset Index action): deleting a document also removes
+   * its book/session memories, including their vector rows. User-wide memory
+   * and every other account's book key remain intact.
+   */
+  async purgeBookData(bookHash: string): Promise<void> {
+    await this.enqueue(async () => {
+      const rows = await this.db.select<{ name: string }>(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('reedy_book_chunk_embeddings', 'reedy_memory_embeddings')",
+      );
+      const tables = new Set(rows.map((row) => row.name));
+      const key = sqlQuote(bookHash);
+      const statements: string[] = [];
+      if (tables.has('reedy_book_chunk_embeddings')) {
+        statements.push('DELETE FROM reedy_book_chunk_embeddings WHERE book_hash = ' + key);
+      }
+      if (tables.has('reedy_memory_embeddings')) {
+        statements.push(
+          'DELETE FROM reedy_memory_embeddings WHERE memory_id IN (SELECT id FROM reedy_memory WHERE scope_key = ' +
+            key +
+            " AND scope IN ('book', 'session'))",
+        );
+      }
+      statements.push(
+        'DELETE FROM reedy_book_chunks WHERE book_hash = ' + key,
+        'DELETE FROM reedy_book_meta WHERE book_hash = ' + key,
+        'DELETE FROM reedy_memory WHERE scope_key = ' + key + " AND scope IN ('book', 'session')",
+      );
+      statements.unshift(
+        'INSERT INTO reedy_book_fence (book_hash, generation, deleted) VALUES (' +
+          key +
+          ', ' +
+          sqlQuote(crypto.randomUUID()) +
+          ', 1) ' +
+          'ON CONFLICT(book_hash) DO UPDATE SET generation = excluded.generation, deleted = 1',
+      );
+      await this.db.batch(statements);
+    });
+  }
+
+  /**
    * Wipe every Reedy-managed row across the database. Used when the user
    * switches embedding models — the lazy embeddings table keeps its
    * existing vector32(<old-dim>) shape until something writes to it again,
@@ -268,6 +414,7 @@ export class ReedyDb {
    */
   async wipeAllData(): Promise<void> {
     await this.enqueue(async () => {
+      await this.db.execute('UPDATE reedy_book_fence SET generation = lower(hex(randomblob(16)))');
       await this.db.execute('DELETE FROM reedy_book_meta');
       // Drop embeddings tables so a future ensure*EmbeddingsTable(newDim)
       // is free to recreate them with a different vector32 width.
@@ -323,53 +470,68 @@ export class ReedyDb {
    * is also upserted — caller must have called ensureMemoryEmbeddingsTable
    * with the same dim already.
    */
-  async upsertMemory(args: MemoryWriteArgs): Promise<MemoryRow> {
-    const id = await this.upsertMemoryRow(args);
+  async upsertMemory(args: MemoryWriteArgs, generation?: string): Promise<MemoryRow> {
+    const id = await this.upsertMemoryRow(args, generation);
     if (args.embedding != null) {
       if (args.embedding.length === 0) {
         throw new Error('upsertMemory: empty embedding array');
       }
-      await this.upsertMemoryEmbedding(id, args.embedding);
+      await this.upsertMemoryEmbedding(id, args.scopeKey, args.embedding, generation);
     }
     const row = await this.getMemoryById(id);
     if (!row) throw new Error(`upsertMemory: row vanished after write (id=${id})`);
     return row;
   }
 
-  private async upsertMemoryRow(args: MemoryWriteArgs): Promise<string> {
+  private async upsertMemoryRow(args: MemoryWriteArgs, generation?: string): Promise<string> {
     const now = Date.now();
     return this.enqueue(async () => {
       const existing = await this.db.select<{ id: string }>(
         'SELECT id FROM reedy_memory WHERE scope = ? AND scope_key = ? AND key = ?',
         [args.scope, args.scopeKey, args.key],
       );
+      const guard = generation ? ' AND ' + this.fenceCondition(args.scopeKey, generation) : '';
       if (existing[0]) {
         const id = existing[0].id;
         await this.db.execute(
-          `UPDATE reedy_memory SET summary = ?, source_message_id = ?, updated_at = ?
-             WHERE id = ?`,
+          'UPDATE reedy_memory SET summary = ?, source_message_id = ?, updated_at = ? ' +
+            'WHERE id = ?' +
+            guard,
           [args.summary, args.sourceMessageId ?? null, now, id],
         );
+        await this.assertBookGeneration(args.scopeKey, generation);
         return id;
       }
       const id = randomMemoryId();
       await this.db.execute(
-        `INSERT INTO reedy_memory (id, scope, scope_key, key, summary, source_message_id, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        'INSERT INTO reedy_memory (id, scope, scope_key, key, summary, source_message_id, updated_at) ' +
+          'SELECT ?, ?, ?, ?, ?, ?, ?' +
+          (generation ? ' WHERE ' + this.fenceCondition(args.scopeKey, generation) : ''),
         [id, args.scope, args.scopeKey, args.key, args.summary, args.sourceMessageId ?? null, now],
       );
+      await this.assertBookGeneration(args.scopeKey, generation);
       return id;
     });
   }
 
-  private async upsertMemoryEmbedding(memoryId: string, embedding: number[]): Promise<void> {
+  private async upsertMemoryEmbedding(
+    memoryId: string,
+    bookHash: string,
+    embedding: number[],
+    generation?: string,
+  ): Promise<void> {
+    const values = sqlQuote(memoryId) + ', vector32(' + sqlQuote(serializeVector(embedding)) + ')';
+    const selection = generation
+      ? 'SELECT ' + values + ' WHERE ' + this.fenceCondition(bookHash, generation)
+      : 'VALUES (' + values + ')';
     await this.enqueue(() =>
       this.db.batch([
-        `INSERT INTO reedy_memory_embeddings (memory_id, embedding)
-           VALUES (${sqlQuote(memoryId)}, vector32(${sqlQuote(serializeVector(embedding))}))
-         ON CONFLICT(memory_id) DO UPDATE SET embedding = excluded.embedding`,
+        'INSERT INTO reedy_memory_embeddings (memory_id, embedding) ' +
+          selection +
+          ' ON CONFLICT(memory_id) DO UPDATE SET embedding = excluded.embedding',
       ]),
     );
+    await this.assertBookGeneration(bookHash, generation);
   }
 
   async getMemory(scope: MemoryScope, scopeKey: string, key: string): Promise<MemoryRow | null> {

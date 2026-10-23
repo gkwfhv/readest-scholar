@@ -11,6 +11,8 @@ import { useAIChatStore } from '@/store/aiChatStore';
 import { useNotebookStore } from '@/store/notebookStore';
 import type { AIConversation } from '@/services/ai/types';
 import { useEnv } from '@/context/EnvContext';
+import { useAuth } from '@/context/AuthContext';
+import { aiAccountScope } from '@/services/ai/accountScope';
 
 interface ChatHistoryViewProps {
   bookKey: string;
@@ -19,10 +21,12 @@ interface ChatHistoryViewProps {
 const ChatHistoryView: React.FC<ChatHistoryViewProps> = ({ bookKey }) => {
   const _ = useTranslation();
   const { appService } = useEnv();
+  const { user } = useAuth();
   const { getBookData } = useBookDataStore();
   const {
     conversations,
     isLoadingHistory,
+    currentBookHash,
     loadConversations,
     setActiveConversation,
     deleteConversation,
@@ -35,7 +39,7 @@ const ChatHistoryView: React.FC<ChatHistoryViewProps> = ({ bookKey }) => {
   const [editTitle, setEditTitle] = useState('');
 
   const bookData = getBookData(bookKey);
-  const bookHash = bookKey.split('-')[0] || '';
+  const bookHash = aiAccountScope(bookKey.split('-')[0] || '', user?.id);
   const bookTitle = bookData?.book?.title || 'Unknown';
 
   // Load conversations for this book
@@ -107,7 +111,7 @@ const ChatHistoryView: React.FC<ChatHistoryViewProps> = ({ bookKey }) => {
     [handleSaveRename],
   );
 
-  if (isLoadingHistory) {
+  if (isLoadingHistory || currentBookHash !== bookHash) {
     return (
       <div className='flex h-full items-center justify-center p-4'>
         <div className='border-primary size-5 animate-spin rounded-full border-2 border-t-transparent' />

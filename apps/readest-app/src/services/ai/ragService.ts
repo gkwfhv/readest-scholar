@@ -1,9 +1,11 @@
 import { embed, embedMany } from 'ai';
 import { aiStore } from './storage/aiStore';
+import { runBookAiWork } from './bookAiWork';
 import { chunkSection, extractTextFromDocument } from './utils/chunker';
 import { withRetryAndTimeout, AI_TIMEOUTS, AI_RETRY_CONFIGS } from './utils/retry';
 import { getAIProvider } from './providers';
 import { aiLogger } from './logger';
+import { stubTranslation as _ } from '@/utils/misc';
 import type { AISettings, TextChunk, ScoredChunk, EmbeddingProgress, BookIndexMeta } from './types';
 
 interface SectionItem {
@@ -25,8 +27,10 @@ export interface BookDocType {
   metadata?: { title?: string | { [key: string]: string }; author?: string | { name?: string } };
 }
 
-export async function isBookIndexed(bookHash: string): Promise<boolean> {
-  const indexed = await aiStore.isIndexed(bookHash);
+export async function isBookIndexed(bookHash: string, pdfPageSections = false): Promise<boolean> {
+  const meta = await aiStore.getMeta(bookHash);
+  const indexed =
+    !!meta && meta.totalChunks > 0 && (!pdfPageSections || meta.pageNumberScheme === 'pdf-section');
   aiLogger.rag.isIndexed(bookHash, indexed);
   return indexed;
 }
@@ -61,13 +65,30 @@ export async function indexBook(
   bookHash: string,
   settings: AISettings,
   onProgress?: (progress: EmbeddingProgress) => void,
+  pdfPageSections = false,
+): Promise<void> {
+  return runBookAiWork(bookHash, (_signal, assertCurrent) =>
+    indexBookInner(bookDoc, bookHash, settings, onProgress, pdfPageSections, assertCurrent),
+  );
+}
+
+async function indexBookInner(
+  bookDoc: BookDocType,
+  bookHash: string,
+  settings: AISettings,
+  onProgress: ((progress: EmbeddingProgress) => void) | undefined,
+  pdfPageSections: boolean,
+  assertCurrent: () => void,
 ): Promise<void> {
   const startTime = Date.now();
   const title = extractTitle(bookDoc.metadata);
 
-  if (await aiStore.isIndexed(bookHash)) {
-    aiLogger.rag.isIndexed(bookHash, true);
-    return;
+  if (await isBookIndexed(bookHash, pdfPageSections)) return;
+  assertCurrent();
+  // A pre-Phase-5 PDF index used estimated 1500-character pages. Replace its
+  // chunks and BM25 data before storing physical page citations.
+  if (pdfPageSections && (await aiStore.getMeta(bookHash))) {
+    await aiStore.clearBook(bookHash);
   }
 
   aiLogger.rag.indexStart(bookHash, title);
@@ -90,9 +111,11 @@ export async function indexBook(
     const allChunks: TextChunk[] = [];
 
     for (let i = 0; i < sections.length; i++) {
+      assertCurrent();
       const section = sections[i]!;
       try {
         const doc = await section.createDocument();
+        assertCurrent();
         const text = extractTextFromDocument(doc);
         if (text.length < 100) continue;
         const sectionChunks = chunkSection(
@@ -101,6 +124,7 @@ export async function indexBook(
           getChapterTitle(toc, i),
           bookHash,
           cumulativeSizes[i] ?? 0,
+          pdfPageSections ? { pageNumber: i + 1 } : undefined,
         );
         aiLogger.chunker.section(i, text.length, sectionChunks.length);
         allChunks.push(...sectionChunks);
@@ -112,12 +136,19 @@ export async function indexBook(
     aiLogger.chunker.complete(bookHash, allChunks.length);
 
     if (allChunks.length === 0) {
+      if (pdfPageSections) {
+        throw new Error(
+          _(
+            'This PDF has no extractable text. It may be scanned; run OCR before indexing it for AI search.',
+          ),
+        );
+      }
       aiLogger.rag.indexComplete(bookHash, 0, Date.now() - startTime);
       return;
     }
 
     onProgress?.({ current: 0, total: allChunks.length, phase: 'embedding' });
-    const embeddingModelName =
+    let embeddingModelName =
       settings.provider === 'ollama'
         ? settings.ollamaEmbeddingModel
         : settings.provider === 'openrouter'
@@ -137,6 +168,17 @@ export async function indexBook(
         AI_RETRY_CONFIGS.EMBEDDING,
       );
 
+      if (
+        embeddings.length !== allChunks.length ||
+        embeddings.some(
+          (embedding) =>
+            !Array.isArray(embedding) ||
+            embedding.length === 0 ||
+            embedding.some((value) => !Number.isFinite(value)),
+        )
+      ) {
+        throw new Error('Embedding endpoint returned invalid vectors');
+      }
       for (let i = 0; i < allChunks.length; i++) {
         allChunks[i]!.embedding = embeddings[i];
       }
@@ -144,16 +186,18 @@ export async function indexBook(
       aiLogger.embedding.complete(embeddings.length, allChunks.length, embeddings[0]?.length || 0);
     } catch (e) {
       aiLogger.embedding.error('batch', (e as Error).message);
-      throw e;
+      if (!pdfPageSections) throw e;
+      embeddingModelName = 'bm25-only';
     }
 
+    assertCurrent();
     onProgress?.({ current: 0, total: 2, phase: 'indexing' });
     aiLogger.store.saveChunks(bookHash, allChunks.length);
-    await aiStore.saveChunks(allChunks);
+    await aiStore.saveChunks(allChunks, assertCurrent);
 
     onProgress?.({ current: 1, total: 2, phase: 'indexing' });
     aiLogger.store.saveBM25(bookHash);
-    await aiStore.saveBM25Index(bookHash, allChunks);
+    await aiStore.saveBM25Index(bookHash, allChunks, assertCurrent);
 
     const meta: BookIndexMeta = {
       bookHash,
@@ -162,10 +206,11 @@ export async function indexBook(
       totalSections: sections.length,
       totalChunks: allChunks.length,
       embeddingModel: embeddingModelName,
+      pageNumberScheme: pdfPageSections ? 'pdf-section' : 'estimated',
       lastUpdated: Date.now(),
     };
     aiLogger.store.saveMeta(meta);
-    await aiStore.saveMeta(meta);
+    await aiStore.saveMeta(meta, assertCurrent);
 
     onProgress?.({ current: 2, total: 2, phase: 'indexing' });
     aiLogger.rag.indexComplete(bookHash, allChunks.length, Date.now() - startTime);
@@ -183,23 +228,25 @@ export async function hybridSearch(
   maxPage?: number,
 ): Promise<ScoredChunk[]> {
   aiLogger.search.query(query, maxPage);
-  const provider = getAIProvider(settings);
   let queryEmbedding: number[] | null = null;
-
-  try {
-    // use AI SDK embed with provider's embedding model
-    const { embedding } = await withRetryAndTimeout(
-      () =>
-        embed({
-          model: provider.getEmbeddingModel(),
-          value: query,
-        }),
-      AI_TIMEOUTS.EMBEDDING_SINGLE,
-      AI_RETRY_CONFIGS.EMBEDDING,
-    );
-    queryEmbedding = embedding;
-  } catch {
-    // bm25 only fallback
+  const meta = await aiStore.getMeta(bookHash);
+  if (meta?.embeddingModel !== 'bm25-only') {
+    const provider = getAIProvider(settings);
+    try {
+      // use AI SDK embed with provider's embedding model
+      const { embedding } = await withRetryAndTimeout(
+        () =>
+          embed({
+            model: provider.getEmbeddingModel(),
+            value: query,
+          }),
+        AI_TIMEOUTS.EMBEDDING_SINGLE,
+        AI_RETRY_CONFIGS.EMBEDDING,
+      );
+      queryEmbedding = embedding;
+    } catch {
+      // bm25 only fallback
+    }
   }
 
   const results = await aiStore.hybridSearch(bookHash, queryEmbedding, query, topK, maxPage);

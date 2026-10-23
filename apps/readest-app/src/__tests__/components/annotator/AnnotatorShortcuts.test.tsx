@@ -2,9 +2,12 @@ import { act, cleanup, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { useNotebookDocumentStore } from '@/store/notebookDocumentStore';
 import { eventDispatcher } from '@/utils/event';
+import { aiAccountScope } from '@/services/ai/accountScope';
 
 const h = vi.hoisted(() => ({
   actions: null as null | Record<string, () => boolean>,
+  popupButtons: [] as Array<{ tooltipText: string; onClick: () => void; disabled?: boolean }>,
+  queuePrompt: vi.fn(),
   config: { booknotes: [] as unknown[], viewSettings: {} },
   viewSettings: {
     annotationToolbarItems: [] as string[],
@@ -19,6 +22,7 @@ const h = vi.hoisted(() => ({
 }));
 
 const settings = {
+  aiSettings: { enabled: false },
   globalReadSettings: {
     highlightStyle: 'highlight',
     highlightStyles: { highlight: 'yellow', underline: 'green', squiggly: 'blue' },
@@ -29,6 +33,10 @@ vi.mock('@/hooks/useShortcuts', () => ({
   default: (actions: Record<string, () => boolean>) => {
     h.actions = actions;
   },
+}));
+
+vi.mock('@/context/AuthContext', () => ({
+  useAuth: () => ({ user: null }),
 }));
 
 vi.mock('@/context/EnvContext', () => ({
@@ -101,6 +109,7 @@ vi.mock('@/store/notebookStore', () => ({
     setNotebookVisible: vi.fn(),
     setNotebookActiveTab: vi.fn(),
     setNotebookNewAnnotation: vi.fn(),
+    setAiSelectionPrompt: h.queuePrompt,
     setNotebookNewHighlightIds: vi.fn(),
   }),
 }));
@@ -110,9 +119,10 @@ vi.mock('@/store/sidebarStore', () => ({
 }));
 
 vi.mock('@/store/customDictionaryStore', () => ({
-  useCustomDictionaryStore: () => ({
-    loadCustomDictionaries: vi.fn().mockResolvedValue(undefined),
-  }),
+  useCustomDictionaryStore: Object.assign(
+    () => ({ loadCustomDictionaries: vi.fn().mockResolvedValue(undefined) }),
+    { getState: () => ({ settings: { providerEnabled: {} } }) },
+  ),
 }));
 
 vi.mock('@/store/deviceStore', () => ({
@@ -161,13 +171,26 @@ vi.mock('@/app/reader/hooks/useTextSelector', () => ({
   }),
 }));
 
+vi.mock('@/utils/sel', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/utils/sel')>();
+  return {
+    ...actual,
+    getPosition: () => ({ point: { x: 120, y: 200 }, dir: 'up' as const }),
+  };
+});
+
 vi.mock('@/services/transformService', () => ({
   transformContent: ({ content }: { content: string }) => Promise.resolve(content),
 }));
 
 vi.mock('@/app/reader/components/annotator/AnnotationRangeEditor', () => ({ default: () => null }));
 vi.mock('@/app/reader/components/annotator/SelectionRangeEditor', () => ({ default: () => null }));
-vi.mock('@/app/reader/components/annotator/AnnotationPopup', () => ({ default: () => null }));
+vi.mock('@/app/reader/components/annotator/AnnotationPopup', () => ({
+  default: ({ buttons }: { buttons: typeof h.popupButtons }) => {
+    h.popupButtons = buttons;
+    return null;
+  },
+}));
 vi.mock('@/app/reader/components/annotator/DictionaryPopup', () => ({ default: () => null }));
 vi.mock('@/app/reader/components/annotator/DictionarySheet', () => ({ default: () => null }));
 vi.mock('@/app/reader/components/annotator/TranslatorPopup', () => ({ default: () => null }));
@@ -180,6 +203,11 @@ vi.mock('@/app/reader/components/annotator/ImportAnnotationsDialog', () => ({
 import Annotator from '@/app/reader/components/annotator/Annotator';
 
 const selectPopupText = async (cfi?: string) => {
+  if (!document.querySelector('#gridcell-book-1')) {
+    const gridCell = document.createElement('div');
+    gridCell.id = 'gridcell-book-1';
+    document.body.append(gridCell);
+  }
   const paragraph = document.createElement('p');
   paragraph.textContent = 'selected text';
   document.body.append(paragraph);
@@ -227,7 +255,10 @@ const selectMainViewText = async (text = 'the river rounded a steep shoulder of 
 describe('Annotator popup shortcuts', () => {
   beforeEach(() => {
     h.actions = null;
+    h.popupButtons = [];
     h.view = null;
+    settings.aiSettings.enabled = false;
+    h.viewSettings.annotationToolbarItems = [];
     h.config.booknotes = [];
     h.viewSettings.copyToNotebook = false;
     h.updateBooknotes.mockImplementation(() => h.config);
@@ -237,6 +268,25 @@ describe('Annotator popup shortcuts', () => {
 
   afterEach(() => {
     cleanup();
+  });
+
+  test('selected-text AI tool queues an account-scoped draft in the notebook', async () => {
+    settings.aiSettings.enabled = true;
+    h.viewSettings.annotationToolbarItems = ['ai-explain'];
+    render(<Annotator bookKey='book-1' contentInsets={{ top: 0, right: 0, bottom: 0, left: 0 }} />);
+    await selectPopupText('epubcfi(/6/2!/4/2)');
+
+    const button = h.popupButtons.find((item) => item.tooltipText === 'Explain with AI');
+    expect(h.popupButtons.map((item) => item.tooltipText)).toContain('Explain with AI');
+    expect(button?.disabled).toBe(false);
+    act(() => button?.onClick());
+
+    expect(h.queuePrompt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scope: aiAccountScope('book', null),
+        text: expect.stringContaining('selected text'),
+      }),
+    );
   });
 
   test.each([

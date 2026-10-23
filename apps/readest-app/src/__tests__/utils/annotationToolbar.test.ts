@@ -63,11 +63,22 @@ describe('annotationToolbar helpers', () => {
       'search',
       'dictionary',
       'translate',
+      'ai-explain',
+      'ai-summarize',
+      'ai-translate',
       'tts',
       'proofread',
       'share',
       'quotecard',
     ]);
+  });
+
+  test('selected-text AI actions are available without changing the default toolbar', () => {
+    for (const action of ['ai-explain', 'ai-summarize', 'ai-translate'] as const) {
+      expect(DEFAULT_ANNOTATION_TOOLBAR_ITEMS).not.toContain(action);
+      expect(getAvailableToolTypes(DEFAULT_ANNOTATION_TOOLBAR_ITEMS, true)).toContain(action);
+      expect(getToolbarToolTypes(['copy', action], true)).toContain(action);
+    }
   });
 
   test('quotecard is opt-in and offered even when text share is unavailable', () => {

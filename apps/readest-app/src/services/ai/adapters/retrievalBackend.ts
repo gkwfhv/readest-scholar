@@ -2,6 +2,7 @@ import type { Tool } from 'ai';
 import type { BookDoc } from '@/libs/document';
 import type { AISettings, EmbeddingProgress, ScoredChunk } from '../types';
 import type { ReedySourceStore } from './reedySourceStore';
+import type { RetrieverResult } from '@/services/reedy/retrieval/BookRetriever';
 
 export type RetrievalBackendKind = 'legacy-idb' | 'reedy';
 
@@ -40,6 +41,16 @@ export interface RetrievalBackend {
     bookHash: string,
     options: { topK: number; spoilerBoundPosition?: number },
   ): Promise<ScoredChunk[]>;
+
+  /**
+   * PDF research mode retrieves evidence before generation. The caller refuses
+   * without passages, so the model cannot answer from an empty corpus.
+   */
+  searchPdfEvidence?(
+    query: string,
+    bookHash: string,
+    options: { topK: number; spoilerBoundSectionIndex?: number },
+  ): Promise<RetrieverResult>;
 
   /**
    * Reedy path only. Returns the Vercel `ai`-SDK Tool the adapter passes

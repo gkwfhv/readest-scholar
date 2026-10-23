@@ -7,6 +7,8 @@ interface ChunkingOptions {
   maxChunkSize: number;
   overlapSize: number;
   minChunkSize: number;
+  /** Physical PDF page (1-based) when each section is exactly one PDF page. */
+  pageNumber?: number;
 }
 
 const DEFAULT_OPTIONS: ChunkingOptions = {
@@ -22,6 +24,27 @@ export function extractTextFromDocument(doc: Document): string {
   clone
     .querySelectorAll('script, style, noscript, nav, header, footer')
     .forEach((el) => el.remove());
+  // Foliate/PDF.js positions text runs in presentation spans. textContent
+  // concatenates those runs and ignores visual <br> elements, turning
+  // `80% of` + `the time` into `80% ofthe time` in a real two-column paper.
+  // Preserve a word break between runs while keeping line-end hyphenation.
+  const pdfRuns = clone.querySelectorAll('span[role="presentation"], br[role="presentation"]');
+  if (pdfRuns.length > 0) {
+    let text = '';
+    for (const run of pdfRuns) {
+      if (run.tagName === 'BR') {
+        if (text && !/\s$/.test(text)) text += ' ';
+        continue;
+      }
+      const segment = run.textContent ?? '';
+      if (!segment) continue;
+      if (text && !/\s$/.test(text) && !/^\s/.test(segment) && !text.endsWith('-')) {
+        text += ' ';
+      }
+      text += segment;
+    }
+    return text.replace(/\s+/g, ' ').trim();
+  }
   return clone.textContent?.trim() || '';
 }
 
@@ -62,7 +85,7 @@ export function chunkSection(
             sectionIndex,
             chapterTitle,
             text: text.trim(),
-            pageNumber: Math.floor(cumulativeSizeBeforeSection / SIZE_PER_PAGE),
+            pageNumber: opts.pageNumber ?? Math.floor(cumulativeSizeBeforeSection / SIZE_PER_PAGE),
           },
         ]
       : [];
@@ -84,7 +107,8 @@ export function chunkSection(
           sectionIndex,
           chapterTitle,
           text: remaining,
-          pageNumber: Math.floor((cumulativeSizeBeforeSection + position) / SIZE_PER_PAGE),
+          pageNumber:
+            opts.pageNumber ?? Math.floor((cumulativeSizeBeforeSection + position) / SIZE_PER_PAGE),
         });
       } else if (chunks.length > 0) {
         chunks[chunks.length - 1]!.text += ' ' + remaining;
@@ -102,7 +126,8 @@ export function chunkSection(
         sectionIndex,
         chapterTitle,
         text: chunkText,
-        pageNumber: Math.floor((cumulativeSizeBeforeSection + position) / SIZE_PER_PAGE),
+        pageNumber:
+          opts.pageNumber ?? Math.floor((cumulativeSizeBeforeSection + position) / SIZE_PER_PAGE),
       });
       chunkIndex++;
     }

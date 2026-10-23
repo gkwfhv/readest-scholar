@@ -409,7 +409,7 @@ export abstract class BaseAppService implements AppService {
     books: Book[],
     options: ImportBookOptions = {},
   ): Promise<Book | null> {
-    return BookSvc.importBook(this.fs, file, books, {
+    const imported = await BookSvc.importBook(this.fs, file, books, {
       saveBookConfig: this.saveBookConfig.bind(this),
       generateCoverImageUrl: this.generateCoverImageUrl.bind(this),
       // Pass the host platform through so the in-place fast path and the
@@ -418,6 +418,36 @@ export abstract class BaseAppService implements AppService {
       osPlatform: this.osPlatform,
       ...options,
     });
+    if (
+      imported &&
+      this.appPlatform === 'tauri' &&
+      !options.transient &&
+      options.saveBook !== false
+    ) {
+      const [{ aiAccountScope }, { pendingBookAiDeletionKey }, aiCleanup, { ReedyDb }] =
+        await Promise.all([
+          import('./ai/accountScope'),
+          import('./ai/bookAiWork'),
+          import('./ai/deleteBookAiData'),
+          import('./reedy/db/ReedyDb'),
+        ]);
+      let userId: string | null = null;
+      try {
+        const user = JSON.parse(localStorage.getItem('user') || 'null') as { id?: unknown } | null;
+        userId = typeof user?.id === 'string' ? user.id : null;
+      } catch {
+        userId = null;
+      }
+      const scope = aiAccountScope(imported.hash, userId);
+      if (localStorage.getItem(pendingBookAiDeletionKey(scope)) !== null) {
+        await aiCleanup.deleteBookAiData(imported.hash, userId, this);
+      }
+      const db = await this.openDatabase('reedy', 'reedy.db', 'Data', {
+        experimental: ['index_method'],
+      });
+      await new ReedyDb(db).reopenImportedBook(scope);
+    }
+    return imported;
   }
 
   async deleteBook(book: Book, deleteAction: DeleteAction): Promise<void> {
@@ -443,8 +473,40 @@ export abstract class BaseAppService implements AppService {
       await ttsCleanup.downloadManager.removeBook(book.hash);
       await ttsCleanup.sessionManager.stopBook(book.hash, 'deleted');
     }
-    await CloudSvc.deleteBook(this.fs, book, deleteAction);
+    // Mark the account's AI scope before removing local bytes. If the app
+    // crashes during deletion, startup cleanup still removes the AI copy.
+    const aiCleanup = deleteAction === 'cloud' ? null : await import('./ai/deleteBookAiData');
+    let aiUserId: string | null = null;
+    if (aiCleanup) {
+      try {
+        const user = JSON.parse(localStorage.getItem('user') || 'null') as { id?: unknown } | null;
+        aiUserId = typeof user?.id === 'string' ? user.id : null;
+      } catch {
+        aiUserId = null;
+      }
+      aiCleanup.queueBookAiDataDeletion(book.hash, aiUserId);
+    }
+    try {
+      await CloudSvc.deleteBook(this.fs, book, deleteAction);
+    } catch (error) {
+      // A filesystem error may occur after some bytes were removed. The AI
+      // index is regenerable; clear it rather than expose stale passages.
+      if (aiCleanup) {
+        try {
+          await aiCleanup.deleteBookAiData(book.hash, aiUserId, this);
+        } catch (cleanupError) {
+          console.warn('Book AI data cleanup failed; will retry on next launch', cleanupError);
+        }
+      }
+      throw error;
+    }
     if (deleteAction === 'cloud') return;
+
+    try {
+      await aiCleanup!.deleteBookAiData(book.hash, aiUserId, this);
+    } catch (error) {
+      console.warn('Book AI data cleanup failed; will retry on next launch', error);
+    }
     ttsCleanup ??= await loadTTSCleanup();
 
     // Keep cleanup at the shared local-deletion boundary so library actions,
