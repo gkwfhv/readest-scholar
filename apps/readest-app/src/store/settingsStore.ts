@@ -2,7 +2,7 @@ import { mergeBookshelfStates } from '@/services/bookshelves/state';
 import i18n from '@/i18n/i18n';
 import { create } from 'zustand';
 import { SystemSettings } from '@/types/settings';
-import { EnvConfigType, isTauriAppPlatform } from '@/services/environment';
+import { EnvConfigType } from '@/services/environment';
 import { currentAiCredentialScope, withoutAiCredentials } from '@/services/ai/nativeCredentials';
 import { initDayjs } from '@/utils/time';
 import { broadcastGlobalSettings } from '@/utils/settingsSync';
@@ -59,9 +59,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       // library memoizes whole-shelf derivations on it.
       settings: (() => {
         const incoming =
-          isTauriAppPlatform() &&
-          settings.aiSettings &&
-          settings.aiSettings.credentialScope !== currentAiCredentialScope()
+          settings.aiSettings && settings.aiSettings.credentialScope !== currentAiCredentialScope()
             ? withoutAiCredentials(settings)
             : settings;
         return state.settings.bookshelves && state.settings.bookshelves !== incoming.bookshelves
