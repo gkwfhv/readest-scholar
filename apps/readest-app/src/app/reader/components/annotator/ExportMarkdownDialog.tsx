@@ -2,12 +2,17 @@ import clsx from 'clsx';
 import React, { useState, useMemo, useEffect } from 'react';
 import { marked } from 'marked';
 import { useEnv } from '@/context/EnvContext';
+import type {
+  PdfAnnotationExportResult,
+  PdfAnnotationOmissionReason,
+} from '@/app/reader/utils/pdfAnnotationExport';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useBookDataStore } from '@/store/bookDataStore';
 import { useReaderStore } from '@/store/readerStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import {
   BookFormat,
+  BookNote,
   BooknoteGroup,
   HighlightColor,
   HighlightStyle,
@@ -48,6 +53,9 @@ interface ExportMarkdownDialogProps {
   location?: string;
   booknoteGroups: { [href: string]: BooknoteGroup };
   onCancel: () => void;
+  onExportPdf?: (
+    notes: BookNote[],
+  ) => Promise<Omit<PdfAnnotationExportResult, 'bytes'> | undefined>;
   onExport: (
     content: string,
     format: NoteExportFormat,
@@ -71,6 +79,7 @@ const ExportMarkdownDialog: React.FC<ExportMarkdownDialogProps> = ({
   location,
   booknoteGroups,
   onCancel,
+  onExportPdf,
   onExport,
 }) => {
   const _ = useTranslation();
@@ -141,6 +150,16 @@ const ExportMarkdownDialog: React.FC<ExportMarkdownDialogProps> = ({
   const isJson = exportConfig.exportFormat === 'json';
   const isPlainText = exportConfig.exportFormat === 'text';
 
+  const pdfOmissionLabels: Record<PdfAnnotationOmissionReason, string> = {
+    'unsupported-type': _('This note type has no PDF text markup equivalent'),
+    'unsupported-style': _('This highlight style has no PDF text markup equivalent'),
+    'missing-anchor': _('Page geometry is unavailable for this note'),
+    'stale-anchor': _('The note moved after its geometry was captured'),
+    'invalid-page': _('The source PDF no longer has this page'),
+    'invalid-crop': _('The PDF page has invalid crop or rotation'),
+  };
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const [pdfReport, setPdfReport] = useState<Omit<PdfAnnotationExportResult, 'bytes'> | null>(null);
   const [showSource, setShowSource] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -1034,12 +1053,51 @@ const ExportMarkdownDialog: React.FC<ExportMarkdownDialogProps> = ({
           )}
         </div>
 
+        {pdfReport && (
+          <div
+            className='eink-bordered bg-base-200 mt-3 max-h-32 overflow-y-auto rounded-lg p-3 text-sm'
+            role='status'
+          >
+            <p>
+              {_('Exported {{count}} PDF annotations; skipped {{skipped}}', {
+                count: pdfReport.exported,
+                skipped: pdfReport.skipped,
+              })}
+            </p>
+            {pdfReport.omissions.map((omission) => (
+              <p key={omission.id} className='text-base-content/70 mt-1'>
+                {omission.page ? `${_('Page:')} ${omission.page} · ` : ''}
+                {omission.text?.slice(0, 60) || omission.id} ·{pdfOmissionLabels[omission.reason]}
+              </p>
+            ))}
+          </div>
+        )}
+
         {/* Footer Actions */}
         <div className='mt-4 flex items-center justify-end'>
-          <div className='flex gap-4'>
+          <div className='flex flex-wrap justify-end gap-2'>
             <button onClick={onCancel} className='btn btn-ghost btn-sm'>
               {_('Cancel')}
             </button>
+            {bookFormat === 'PDF' && onExportPdf && (
+              <button
+                onClick={async () => {
+                  setExportingPdf(true);
+                  try {
+                    const report = await onExportPdf(
+                      filteredGroups.flatMap((group) => group.booknotes),
+                    );
+                    setPdfReport(report ?? null);
+                  } finally {
+                    setExportingPdf(false);
+                  }
+                }}
+                className='btn btn-outline btn-sm'
+                disabled={filteredNotesCount === 0 || exportingPdf}
+              >
+                {_('Export annotated PDF')}
+              </button>
+            )}
             {canSaveAndShare && (
               <button
                 onClick={(e) => handleExport(e, true)}

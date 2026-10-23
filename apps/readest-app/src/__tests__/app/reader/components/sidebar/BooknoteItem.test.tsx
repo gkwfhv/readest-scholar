@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => {
     setNotebookEditAnnotation: vi.fn(),
     toast: vi.fn(),
     addAnnotation: vi.fn(),
+    goTo: vi.fn(),
     saveConfig: vi.fn(),
     // Mirrors the real store: `updateBooknotes` writes back whatever array
     // it's called with (production code now returns a new array from
@@ -54,7 +55,7 @@ vi.mock('@/store/settingsStore', () => ({
 vi.mock('@/store/readerStore', () => ({
   useReaderStore: () => ({
     getProgress: () => undefined,
-    getView: () => null,
+    getView: () => ({ goTo: mocks.goTo }),
     getViewsById: () => [{ addAnnotation: mocks.addAnnotation }],
     getViewSettings: () => undefined,
   }),
@@ -167,6 +168,22 @@ describe('BooknoteItem', () => {
     renderItem(item);
     expect(screen.getByText('5 minutes ago')).toBeTruthy();
     expect(vi.getTimerCount()).toBe(1);
+  });
+
+  it('returns to the source PDF passage when a research note is clicked', () => {
+    const item = makeItem({
+      note: 'A source-linked research note',
+      page: 2,
+      pdfAnchor: {
+        version: 1,
+        pageIndex: 1,
+        cfi: 'epubcfi(/6/4!/4/2,/1:0,/1:5)',
+        rects: [[0.1, 0.2, 0.3, 0.25]],
+      },
+    });
+    renderItem(item);
+    fireEvent.click(screen.getByText('highlighted words'));
+    expect(mocks.goTo).toHaveBeenCalledWith(item.cfi);
   });
 
   it('never opens the notebook when a noted item is clicked', () => {

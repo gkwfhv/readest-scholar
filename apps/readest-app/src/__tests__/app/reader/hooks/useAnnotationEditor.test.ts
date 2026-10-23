@@ -13,6 +13,7 @@ const h = vi.hoisted(() => ({
   updateBooknotes: vi.fn(() => ({})),
   saveConfig: vi.fn(),
   annotations: [] as BookNote[],
+  bookFormat: 'EPUB',
 }));
 
 vi.mock('@/context/EnvContext', () => ({ useEnv: () => ({ envConfig: {} }) }));
@@ -20,6 +21,7 @@ vi.mock('@/store/settingsStore', () => ({ useSettingsStore: () => ({ settings: {
 vi.mock('@/store/bookDataStore', () => ({
   useBookDataStore: () => ({
     getConfig: () => ({ booknotes: h.annotations }),
+    getBookData: () => ({ book: { format: h.bookFormat } }),
     saveConfig: h.saveConfig,
     updateBooknotes: h.updateBooknotes,
   }),
@@ -78,6 +80,7 @@ beforeEach(() => {
   h.view.getCFI.mockReset().mockReturnValue('new-cfi');
   h.view.addAnnotation.mockReset();
   h.annotations = [{ ...annotation }];
+  h.bookFormat = 'EPUB';
 });
 
 afterEach(() => cleanup());
@@ -99,6 +102,55 @@ describe('useAnnotationEditor applyAnnotationRange', () => {
   // #6390: a range in the footnote popup's document means nothing to the main
   // view's getCFI; the popup's own mapping into the section must place it, and
   // the republished selection must still be known as the popup's.
+  test('a PDF range edit replaces the old page and visual anchor', async () => {
+    h.bookFormat = 'PDF';
+    const layer = document.createElement('div');
+    layer.className = 'textLayer';
+    const span = document.createElement('span');
+    span.textContent = 'edited text';
+    layer.append(span);
+    document.body.append(layer);
+    const pdfRange = document.createRange();
+    pdfRange.selectNodeContents(span);
+    vi.spyOn(layer, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      right: 200,
+      bottom: 300,
+      width: 200,
+      height: 300,
+    } as DOMRect);
+    Object.defineProperty(pdfRange, 'getClientRects', {
+      value: () => [{ left: 20, top: 30, right: 100, bottom: 60, width: 80, height: 30 }],
+    });
+    const old = {
+      ...annotation,
+      page: 1,
+      pdfAnchor: {
+        version: 1 as const,
+        pageIndex: 0,
+        cfi: 'old-cfi',
+        rects: [[0.1, 0.1, 0.2, 0.2]] as [number, number, number, number][],
+      },
+    };
+    h.annotations = [{ ...old }];
+    const { result } = setup(old);
+
+    await result.current.applyAnnotationRange(pdfRange, 2, false, false);
+
+    expect(h.annotations[0]).toMatchObject({
+      cfi: 'new-cfi',
+      page: 3,
+      pdfAnchor: {
+        version: 1,
+        pageIndex: 2,
+        cfi: 'new-cfi',
+        rects: [[0.1, 0.1, 0.5, 0.2]],
+      },
+    });
+    layer.remove();
+  });
+
   test('a footnote popup range is placed by the popup mapping, not the main view', async () => {
     const getPopupCfi = vi.fn(() => 'popup-cfi');
     const { result, setSelection } = setup(annotation, undefined, {

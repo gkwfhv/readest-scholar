@@ -7,7 +7,9 @@ import {
   BooknoteGroup,
   HighlightColor,
   HighlightStyle,
+  PdfAnnotationAnchor,
 } from '@/types/book';
+import { isPdfAnnotationAnchor } from '@/app/reader/utils/pdfAnnotationAnchor';
 
 /** Magic marker so an import can tell our own file from any other JSON. */
 export const READEST_ANNOTATION_FORMAT = 'readest-annotations';
@@ -31,6 +33,7 @@ export interface ReadestAnnotationEntry {
   global?: boolean;
   xpointer0?: string;
   xpointer1?: string;
+  pdfAnchor?: PdfAnnotationAnchor;
   createdAt: number;
   updatedAt: number;
 }
@@ -88,6 +91,9 @@ export const buildAnnotationExport = ({
       if (note.global) entry.global = true;
       if (note.xpointer0) entry.xpointer0 = note.xpointer0;
       if (note.xpointer1) entry.xpointer1 = note.xpointer1;
+      if (isPdfAnnotationAnchor(note.pdfAnchor) && note.pdfAnchor.cfi === note.cfi) {
+        entry.pdfAnchor = note.pdfAnchor;
+      }
       annotations.push(entry);
     }
   }
@@ -136,6 +142,9 @@ const parseEntry = (value: unknown): ReadestAnnotationEntry | null => {
   if (value['global'] === true) entry.global = true;
   if (xpointer0) entry.xpointer0 = xpointer0;
   if (xpointer1) entry.xpointer1 = xpointer1;
+  if (isPdfAnnotationAnchor(value['pdfAnchor']) && value['pdfAnchor'].cfi === cfi) {
+    entry.pdfAnchor = value['pdfAnchor'];
+  }
   return entry;
 };
 
@@ -259,6 +268,7 @@ const loadMatcher = async (): Promise<SectionMatcher> => {
 export interface ReadestConversionOptions {
   /** Yield to the event loop every N entries so an import spinner keeps painting. */
   yieldEvery?: number;
+  expectedBookHash?: string;
 }
 
 /**
@@ -383,6 +393,16 @@ export const convertAnnotationExportToBookNotes = async (
     if (!moved) {
       if (entry.xpointer0) note.xpointer0 = entry.xpointer0;
       if (entry.xpointer1) note.xpointer1 = entry.xpointer1;
+      if (
+        payload.book.format === 'PDF' &&
+        options.expectedBookHash &&
+        payload.book.hash === options.expectedBookHash &&
+        isPdfAnnotationAnchor(entry.pdfAnchor) &&
+        entry.pdfAnchor.cfi === cfi
+      ) {
+        note.pdfAnchor = entry.pdfAnchor;
+        note.page = entry.pdfAnchor.pageIndex + 1;
+      }
     }
     notes.push(note);
   }

@@ -2,7 +2,7 @@
 -- The logical file is tombstoned; immutable version objects remain retained.
 BEGIN;
 
-CREATE TABLE public.scholar_file_delete_ops (
+CREATE TABLE IF NOT EXISTS public.scholar_file_delete_ops (
   user_id uuid NOT NULL,
   file_id uuid NOT NULL,
   op_id uuid NOT NULL,
@@ -17,7 +17,7 @@ ALTER TABLE public.scholar_file_delete_ops ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.scholar_file_delete_ops FROM PUBLIC, anon, authenticated;
 GRANT ALL ON public.scholar_file_delete_ops TO service_role;
 
-CREATE FUNCTION public.delete_scholar_file_v1(
+CREATE OR REPLACE FUNCTION public.delete_scholar_file_v1(
   p_file_key text, p_op_id uuid, p_expected_version_id uuid
 ) RETURNS TABLE(file_id uuid, active_version_id uuid, deleted_at timestamptz)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
