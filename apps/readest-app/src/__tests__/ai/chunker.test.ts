@@ -34,6 +34,17 @@ describe('AI Chunker', () => {
       expect(text).not.toContain('.hidden');
     });
 
+    test('joins PDF presentation spans with word breaks across visual lines', () => {
+      const doc = createDocument(
+        '<span role="presentation">BERT</span><span role="presentation">handle</span>' +
+          '<span role="presentation">token 80% of</span><br role="presentation">' +
+          '<span role="presentation">the time</span>',
+      );
+      const text = extractTextFromDocument(doc);
+      expect(text).toContain('BERT handle');
+      expect(text).toContain('80% of the time');
+    });
+
     test('should handle empty document', () => {
       const doc = createDocument('');
       const text = extractTextFromDocument(doc);

@@ -443,23 +443,37 @@ export abstract class BaseAppService implements AppService {
       await ttsCleanup.downloadManager.removeBook(book.hash);
       await ttsCleanup.sessionManager.stopBook(book.hash, 'deleted');
     }
-    await CloudSvc.deleteBook(this.fs, book, deleteAction);
-    if (deleteAction === 'cloud') return;
-
-    // The current login owns the AI index/chat scope. Capture it after the
-    // local delete succeeds; a failed AI cleanup stays queued for the next
-    // app launch rather than silently retaining deleted-book passages.
-    const { queueBookAiDataDeletion, deleteBookAiData } = await import('./ai/deleteBookAiData');
+    // Mark the account's AI scope before removing local bytes. If the app
+    // crashes during deletion, startup cleanup still removes the AI copy.
+    const aiCleanup = deleteAction === 'cloud' ? null : await import('./ai/deleteBookAiData');
     let aiUserId: string | null = null;
-    try {
-      const user = JSON.parse(localStorage.getItem('user') || 'null') as { id?: unknown } | null;
-      aiUserId = typeof user?.id === 'string' ? user.id : null;
-      queueBookAiDataDeletion(book.hash, aiUserId);
-    } catch (error) {
-      console.warn('Could not queue book AI data cleanup', error);
+    if (aiCleanup) {
+      try {
+        const user = JSON.parse(localStorage.getItem('user') || 'null') as { id?: unknown } | null;
+        aiUserId = typeof user?.id === 'string' ? user.id : null;
+      } catch {
+        aiUserId = null;
+      }
+      aiCleanup.queueBookAiDataDeletion(book.hash, aiUserId);
     }
     try {
-      await deleteBookAiData(book.hash, aiUserId, this);
+      await CloudSvc.deleteBook(this.fs, book, deleteAction);
+    } catch (error) {
+      // A filesystem error may occur after some bytes were removed. The AI
+      // index is regenerable; clear it rather than expose stale passages.
+      if (aiCleanup) {
+        try {
+          await aiCleanup.deleteBookAiData(book.hash, aiUserId, this);
+        } catch (cleanupError) {
+          console.warn('Book AI data cleanup failed; will retry on next launch', cleanupError);
+        }
+      }
+      throw error;
+    }
+    if (deleteAction === 'cloud') return;
+
+    try {
+      await aiCleanup!.deleteBookAiData(book.hash, aiUserId, this);
     } catch (error) {
       console.warn('Book AI data cleanup failed; will retry on next launch', error);
     }

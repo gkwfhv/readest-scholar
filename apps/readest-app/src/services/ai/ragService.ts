@@ -1,5 +1,6 @@
 import { embed, embedMany } from 'ai';
 import { aiStore } from './storage/aiStore';
+import { runBookAiWork } from './bookAiWork';
 import { chunkSection, extractTextFromDocument } from './utils/chunker';
 import { withRetryAndTimeout, AI_TIMEOUTS, AI_RETRY_CONFIGS } from './utils/retry';
 import { getAIProvider } from './providers';
@@ -66,10 +67,24 @@ export async function indexBook(
   onProgress?: (progress: EmbeddingProgress) => void,
   pdfPageSections = false,
 ): Promise<void> {
+  return runBookAiWork(bookHash, (_signal, assertCurrent) =>
+    indexBookInner(bookDoc, bookHash, settings, onProgress, pdfPageSections, assertCurrent),
+  );
+}
+
+async function indexBookInner(
+  bookDoc: BookDocType,
+  bookHash: string,
+  settings: AISettings,
+  onProgress: ((progress: EmbeddingProgress) => void) | undefined,
+  pdfPageSections: boolean,
+  assertCurrent: () => void,
+): Promise<void> {
   const startTime = Date.now();
   const title = extractTitle(bookDoc.metadata);
 
   if (await isBookIndexed(bookHash, pdfPageSections)) return;
+  assertCurrent();
   // A pre-Phase-5 PDF index used estimated 1500-character pages. Replace its
   // chunks and BM25 data before storing physical page citations.
   if (pdfPageSections && (await aiStore.getMeta(bookHash))) {
@@ -96,9 +111,11 @@ export async function indexBook(
     const allChunks: TextChunk[] = [];
 
     for (let i = 0; i < sections.length; i++) {
+      assertCurrent();
       const section = sections[i]!;
       try {
         const doc = await section.createDocument();
+        assertCurrent();
         const text = extractTextFromDocument(doc);
         if (text.length < 100) continue;
         const sectionChunks = chunkSection(
@@ -161,13 +178,14 @@ export async function indexBook(
       throw e;
     }
 
+    assertCurrent();
     onProgress?.({ current: 0, total: 2, phase: 'indexing' });
     aiLogger.store.saveChunks(bookHash, allChunks.length);
-    await aiStore.saveChunks(allChunks);
+    await aiStore.saveChunks(allChunks, assertCurrent);
 
     onProgress?.({ current: 1, total: 2, phase: 'indexing' });
     aiLogger.store.saveBM25(bookHash);
-    await aiStore.saveBM25Index(bookHash, allChunks);
+    await aiStore.saveBM25Index(bookHash, allChunks, assertCurrent);
 
     const meta: BookIndexMeta = {
       bookHash,
@@ -180,7 +198,7 @@ export async function indexBook(
       lastUpdated: Date.now(),
     };
     aiLogger.store.saveMeta(meta);
-    await aiStore.saveMeta(meta);
+    await aiStore.saveMeta(meta, assertCurrent);
 
     onProgress?.({ current: 2, total: 2, phase: 'indexing' });
     aiLogger.rag.indexComplete(bookHash, allChunks.length, Date.now() - startTime);

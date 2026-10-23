@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { AIConversation, AIMessage } from '@/services/ai/types';
 import { aiStore } from '@/services/ai/storage/aiStore';
+import { assertBookAiScopeActive, bookAiGeneration } from '@/services/ai/bookAiWork';
 
 interface AIChatState {
   activeConversationId: string | null;
@@ -90,6 +91,8 @@ export const useAIChatStore = create<AIChatState>((set, get) => ({
   },
 
   createConversation: async (bookHash: string, title: string) => {
+    const generation = bookAiGeneration(bookHash);
+    const assertCurrent = () => assertBookAiScopeActive(bookHash, generation);
     if (get().currentBookHash !== bookHash) {
       await get().loadConversations(bookHash);
     }
@@ -105,7 +108,7 @@ export const useAIChatStore = create<AIChatState>((set, get) => ({
       createdAt: now,
       updatedAt: now,
     };
-    await aiStore.saveConversation(conversation);
+    await aiStore.saveConversation(conversation, assertCurrent);
     const conversations = await aiStore.getConversations(bookHash);
     if (get().currentBookHash !== bookHash) {
       // A logout can complete while storage is pending. Do not display the
@@ -122,6 +125,10 @@ export const useAIChatStore = create<AIChatState>((set, get) => ({
 
   addMessage: async (message: Omit<AIMessage, 'id' | 'createdAt'> & { id?: string }) => {
     const { activeConversationId, currentBookHash, conversations } = get();
+    const generation = currentBookHash ? bookAiGeneration(currentBookHash) : '';
+    const assertCurrent = () => {
+      if (currentBookHash) assertBookAiScopeActive(currentBookHash, generation);
+    };
     if (
       !currentBookHash ||
       !activeConversationId ||
@@ -137,7 +144,7 @@ export const useAIChatStore = create<AIChatState>((set, get) => ({
       id: message.id ?? generateId(),
       createdAt: Date.now(),
     };
-    await aiStore.saveMessage(fullMessage);
+    await aiStore.saveMessage(fullMessage, currentBookHash, assertCurrent);
     if (
       get().currentBookHash !== currentBookHash ||
       get().activeConversationId !== activeConversationId
@@ -147,7 +154,7 @@ export const useAIChatStore = create<AIChatState>((set, get) => ({
     const conv = get().conversations.find((item) => item.id === activeConversationId);
     if (conv) {
       const updated = { ...conv, updatedAt: Date.now() };
-      await aiStore.saveConversation(updated);
+      await aiStore.saveConversation(updated, assertCurrent);
       if (
         get().currentBookHash !== currentBookHash ||
         get().activeConversationId !== activeConversationId
