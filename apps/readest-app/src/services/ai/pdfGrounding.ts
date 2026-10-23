@@ -7,10 +7,12 @@ export const PDF_UNVERIFIED_REPLY =
  * not prove every claim; the saved Sources panel carries the actual excerpts.
  */
 export function verifyPdfAnswer(answer: string, evidencePages: readonly number[]): string {
+  const visible = answer.replace(/<think\b[^>]*>[\s\S]*?<\/think\s*>/gi, '').trim();
+  if (/<\/?think\b/i.test(visible)) return PDF_UNVERIFIED_REPLY;
   const allowed = new Set(evidencePages.filter((page) => Number.isInteger(page) && page > 0));
-  const citations = [...answer.matchAll(/\[p\.\s*(\d+)\]/gi)].map((match) => Number(match[1]));
-  if (!answer.trim() || citations.length === 0 || citations.some((page) => !allowed.has(page))) {
+  const citations = [...visible.matchAll(/\[p\.\s*(\d+)\]/gi)].map((match) => Number(match[1]));
+  if (!visible || citations.length === 0 || citations.some((page) => !allowed.has(page))) {
     return PDF_UNVERIFIED_REPLY;
   }
-  return answer.trim();
+  return visible;
 }

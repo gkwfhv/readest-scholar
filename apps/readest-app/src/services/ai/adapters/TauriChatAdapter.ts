@@ -156,6 +156,7 @@ export function createTauriAdapter(getOptions: () => TauriAdapterOptions): ChatM
               model: provider.getModel(),
               system: systemPrompt,
               messages: aiMessages,
+              temperature: 0,
               abortSignal,
             });
             for await (const chunk of result.textStream) {
@@ -236,6 +237,7 @@ export function createTauriAdapter(getOptions: () => TauriAdapterOptions): ChatM
               model: provider.getModel(),
               system: systemPrompt,
               messages: aiMessages,
+              temperature: isPdf ? 0 : undefined,
               abortSignal,
             });
             for await (const chunk of result.textStream) {

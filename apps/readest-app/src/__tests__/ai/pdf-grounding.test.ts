@@ -20,6 +20,21 @@ describe('PDF answer citation gate', () => {
     );
   });
 
+  it('removes model reasoning before showing a cited answer', () => {
+    expect(
+      verifyPdfAnswer(
+        '<think>private reasoning</think>\n\nLoRA reduces parameters by 10,000 times [p. 1].',
+        [1],
+      ),
+    ).toBe('LoRA reduces parameters by 10,000 times [p. 1].');
+  });
+
+  it('fails closed on an unfinished model reasoning block', () => {
+    expect(verifyPdfAnswer('<think>unfinished\nLoRA reduces parameters [p. 1].', [1])).toMatch(
+      /cannot verify|can't verify/i,
+    );
+  });
+
   it('refuses empty output', () => {
     expect(verifyPdfAnswer('   ', [8])).toMatch(/cannot verify|can't verify/i);
   });

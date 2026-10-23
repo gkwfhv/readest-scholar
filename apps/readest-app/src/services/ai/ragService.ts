@@ -148,7 +148,7 @@ async function indexBookInner(
     }
 
     onProgress?.({ current: 0, total: allChunks.length, phase: 'embedding' });
-    const embeddingModelName =
+    let embeddingModelName =
       settings.provider === 'ollama'
         ? settings.ollamaEmbeddingModel
         : settings.provider === 'openrouter'
@@ -168,6 +168,17 @@ async function indexBookInner(
         AI_RETRY_CONFIGS.EMBEDDING,
       );
 
+      if (
+        embeddings.length !== allChunks.length ||
+        embeddings.some(
+          (embedding) =>
+            !Array.isArray(embedding) ||
+            embedding.length === 0 ||
+            embedding.some((value) => !Number.isFinite(value)),
+        )
+      ) {
+        throw new Error('Embedding endpoint returned invalid vectors');
+      }
       for (let i = 0; i < allChunks.length; i++) {
         allChunks[i]!.embedding = embeddings[i];
       }
@@ -175,7 +186,8 @@ async function indexBookInner(
       aiLogger.embedding.complete(embeddings.length, allChunks.length, embeddings[0]?.length || 0);
     } catch (e) {
       aiLogger.embedding.error('batch', (e as Error).message);
-      throw e;
+      if (!pdfPageSections) throw e;
+      embeddingModelName = 'bm25-only';
     }
 
     assertCurrent();
@@ -216,23 +228,25 @@ export async function hybridSearch(
   maxPage?: number,
 ): Promise<ScoredChunk[]> {
   aiLogger.search.query(query, maxPage);
-  const provider = getAIProvider(settings);
   let queryEmbedding: number[] | null = null;
-
-  try {
-    // use AI SDK embed with provider's embedding model
-    const { embedding } = await withRetryAndTimeout(
-      () =>
-        embed({
-          model: provider.getEmbeddingModel(),
-          value: query,
-        }),
-      AI_TIMEOUTS.EMBEDDING_SINGLE,
-      AI_RETRY_CONFIGS.EMBEDDING,
-    );
-    queryEmbedding = embedding;
-  } catch {
-    // bm25 only fallback
+  const meta = await aiStore.getMeta(bookHash);
+  if (meta?.embeddingModel !== 'bm25-only') {
+    const provider = getAIProvider(settings);
+    try {
+      // use AI SDK embed with provider's embedding model
+      const { embedding } = await withRetryAndTimeout(
+        () =>
+          embed({
+            model: provider.getEmbeddingModel(),
+            value: query,
+          }),
+        AI_TIMEOUTS.EMBEDDING_SINGLE,
+        AI_RETRY_CONFIGS.EMBEDDING,
+      );
+      queryEmbedding = embedding;
+    } catch {
+      // bm25 only fallback
+    }
   }
 
   const results = await aiStore.hybridSearch(bookHash, queryEmbedding, query, topK, maxPage);
