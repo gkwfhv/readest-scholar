@@ -75,6 +75,7 @@ interface RunCall {
   tools?: Record<string, unknown>;
   stopWhen?: unknown;
   abortSignal?: AbortSignal;
+  temperature?: number;
 }
 
 async function drainRun(adapterRun: AsyncIterable<unknown>): Promise<void> {
@@ -300,6 +301,7 @@ describe('TauriChatAdapter wiring (M1.11)', () => {
     expect(call.system).toContain('[p. 8]');
     expect(call.system).toMatch(/untrusted|data only/i);
     expect(call.system).toContain('The measured value was 42.');
+    expect(call.temperature).toBe(0);
   });
   it('Reedy PDF without evidence refuses before generation', async () => {
     const searchPdfEvidence = vi.fn(async () => ({ passages: [], status: 'ok' }));
@@ -372,6 +374,7 @@ describe('TauriChatAdapter wiring (M1.11)', () => {
     const call = streamTextMock.mock.calls[0]![0] as RunCall;
     expect(call.tools).toBeUndefined();
     expect(call.system).toContain('[p. 8]');
+    expect(call.temperature).toBe(0);
     const turnIds = (sourceStore as unknown as { sources: Map<string, unknown[]> }).sources;
     expect([...turnIds.values()][0]).toHaveLength(1);
   });

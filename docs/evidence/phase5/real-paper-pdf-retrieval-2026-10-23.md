@@ -16,7 +16,7 @@ Three public arXiv PDFs were fetched directly to a private directory on the Linu
 
 - Chromium browser probe: 3/3 papers, 9/9 page assertions, 9/9 fact phrases within the top three BM25 results.
 - The first probe exposed a real extraction bug: PDF.js splits `80% of the time` across presentation spans and `<br>`, while plain `textContent` collapsed it to `80% ofthe time`. A red unit test reproduced that text and the extractor now inserts word boundaries for PDF presentation runs. Repeated real-PDF probes passed after the fix.
-- An earlier full one-shot unit run for the deletion/indexing slice passed 1,241 files and 14,119 tests, with four files/16 tests skipped by existing project configuration. That run preceded the final PDF extractor change; focused extractor and browser probes passed afterward. A final full run is still required before Phase 5 sign-off.
+- An earlier full one-shot unit run for the deletion/indexing slice passed 1,241 files and 14,119 tests, with four files/16 tests skipped by existing project configuration. That run preceded the final PDF extractor change; focused extractor and browser probes passed afterward. The final Phase 5 tree passed a one-shot full unit run in the server builder on 2026-10-23: 1,243 files and 14,130 tests passed; four files and 16 tests were skipped by existing configuration. Log: `/tmp/scholar-phase5-final-unit-v6.log` inside `scholar-native-builder`, exit 0.
 
 ## Remaining acceptance scope
 
