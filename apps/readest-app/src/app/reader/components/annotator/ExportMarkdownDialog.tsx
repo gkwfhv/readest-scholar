@@ -1055,7 +1055,7 @@ const ExportMarkdownDialog: React.FC<ExportMarkdownDialogProps> = ({
 
         {pdfReport && (
           <div
-            className='eink-bordered bg-base-200 mt-3 max-h-32 overflow-y-auto rounded-lg p-3 text-sm'
+            className='eink-bordered bg-base-200 mt-3 max-h-32 overflow-y-auto break-words rounded-lg p-3 text-sm'
             role='status'
           >
             <p>
@@ -1067,7 +1067,7 @@ const ExportMarkdownDialog: React.FC<ExportMarkdownDialogProps> = ({
             {pdfReport.omissions.map((omission) => (
               <p key={omission.id} className='text-base-content/70 mt-1'>
                 {omission.page ? `${_('Page:')} ${omission.page} · ` : ''}
-                {omission.text?.slice(0, 60) || omission.id} ·{pdfOmissionLabels[omission.reason]}
+                {omission.text?.slice(0, 60) || omission.id} · {pdfOmissionLabels[omission.reason]}
               </p>
             ))}
           </div>
