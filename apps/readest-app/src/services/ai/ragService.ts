@@ -4,6 +4,7 @@ import { chunkSection, extractTextFromDocument } from './utils/chunker';
 import { withRetryAndTimeout, AI_TIMEOUTS, AI_RETRY_CONFIGS } from './utils/retry';
 import { getAIProvider } from './providers';
 import { aiLogger } from './logger';
+import { stubTranslation as _ } from '@/utils/misc';
 import type { AISettings, TextChunk, ScoredChunk, EmbeddingProgress, BookIndexMeta } from './types';
 
 interface SectionItem {
@@ -118,6 +119,13 @@ export async function indexBook(
     aiLogger.chunker.complete(bookHash, allChunks.length);
 
     if (allChunks.length === 0) {
+      if (pdfPageSections) {
+        throw new Error(
+          _(
+            'This PDF has no extractable text. It may be scanned; run OCR before indexing it for AI search.',
+          ),
+        );
+      }
       aiLogger.rag.indexComplete(bookHash, 0, Date.now() - startTime);
       return;
     }

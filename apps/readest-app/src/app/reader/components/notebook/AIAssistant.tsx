@@ -27,9 +27,12 @@ import {
 import type { EmbeddingProgress, AISettings, AIMessage } from '@/services/ai/types';
 import type { RetrievedChunk } from '@/services/reedy/retrieval/BookRetriever';
 import { useEnv } from '@/context/EnvContext';
+import { useAuth } from '@/context/AuthContext';
+import { aiAccountScope, aiUserScope } from '@/services/ai/accountScope';
 import { isTauriAppPlatform } from '@/services/environment';
 import type { AppService } from '@/types/system';
 import { ReedyAssistant } from '@/services/reedy/ui/ReedyAssistant';
+import { useReedyStore } from '@/services/reedy/store/reedyStore';
 import type { ReadingContextSnapshot } from '@/services/reedy/tools/builtins/types';
 
 import { Button } from '@/components/ui/button';
@@ -339,7 +342,17 @@ const ThreadWrapper = ({
  */
 const AIAssistant = ({ bookKey }: AIAssistantProps) => {
   const { appService } = useEnv();
+  const { user } = useAuth();
   const { settings } = useSettingsStore();
+  const scopedBookHash = aiAccountScope(bookKey.split('-')[0] || '', user?.id);
+  const activeScope = useAIChatStore((state) => state.currentBookHash);
+  const loadConversations = useAIChatStore((state) => state.loadConversations);
+  useEffect(() => {
+    if (useAIChatStore.getState().currentBookHash !== scopedBookHash) {
+      useReedyStore.getState().reset();
+    }
+    void loadConversations(scopedBookHash);
+  }, [loadConversations, scopedBookHash]);
   const getBookData = useBookDataStore((s) => s.getBookData);
   const bookData = getBookData(bookKey);
 
@@ -352,8 +365,10 @@ const AIAssistant = ({ bookKey }: AIAssistantProps) => {
     isTauriAppPlatform() &&
     !!bookData?.bookDoc;
 
-  if (useAgentRuntime) return <ReedyAgentAssistantBridge bookKey={bookKey} />;
-  return <LegacyAIAssistant bookKey={bookKey} />;
+  // A scope change must clear shared chat state before any previous messages render.
+  if (activeScope !== scopedBookHash) return null;
+  if (useAgentRuntime) return <ReedyAgentAssistantBridge key={scopedBookHash} bookKey={bookKey} />;
+  return <LegacyAIAssistant key={scopedBookHash} bookKey={bookKey} />;
 };
 
 const LegacyAIAssistant = ({ bookKey }: AIAssistantProps) => {
@@ -373,7 +388,8 @@ const LegacyAIAssistant = ({ bookKey }: AIAssistantProps) => {
   const [indexed, setIndexed] = useState(false);
   const [currentTurnId, setCurrentTurnId] = useState<string | null>(null);
 
-  const bookHash = bookKey.split('-')[0] || '';
+  const { user } = useAuth();
+  const bookHash = aiAccountScope(bookKey.split('-')[0] || '', user?.id);
   const bookTitle = bookData?.book?.title || 'Unknown';
   const authorName = bookData?.book?.author || '';
   const currentPage = progress?.pageinfo?.current ?? 0;
@@ -418,7 +434,7 @@ const LegacyAIAssistant = ({ bookKey }: AIAssistantProps) => {
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       aiLogger.rag.indexError(bookHash, message);
-      setIndexError(message);
+      setIndexError(_(message));
     } finally {
       setIsIndexing(false);
       setIndexProgress(null);
@@ -546,7 +562,8 @@ const ReedyAgentAssistantBridge = ({ bookKey }: AIAssistantProps) => {
   // tool calls.
   const progress = useBookProgress(bookKey);
 
-  const bookHash = bookKey.split('-')[0] || '';
+  const { user } = useAuth();
+  const bookHash = aiAccountScope(bookKey.split('-')[0] || '', user?.id);
   const aiSettings = settings?.aiSettings;
 
   const readingContext = useMemo<ReadingContextSnapshot>(
@@ -574,6 +591,7 @@ const ReedyAgentAssistantBridge = ({ bookKey }: AIAssistantProps) => {
       bookDoc={bookData.bookDoc}
       bookHash={bookHash}
       bookKey={bookKey}
+      userId={aiUserScope(user?.id)}
       aiSettings={aiSettings}
       readingContext={readingContext}
       onNavigateToCfi={handleNavigate}

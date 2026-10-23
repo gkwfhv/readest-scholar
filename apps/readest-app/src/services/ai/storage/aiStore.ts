@@ -1,8 +1,6 @@
 import { TextChunk, ScoredChunk, BookIndexMeta, AIConversation, AIMessage } from '../types';
 import { aiLogger } from '../logger';
-
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const lunr = require('lunr') as typeof import('lunr');
+import lunr from 'lunr';
 
 const DB_NAME = 'readest-ai';
 const DB_VERSION = 3;

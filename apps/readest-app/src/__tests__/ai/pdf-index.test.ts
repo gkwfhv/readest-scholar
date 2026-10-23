@@ -39,9 +39,11 @@ describe('legacy PDF index page-number migration', () => {
     expect(await isBookIndexed('pdf', true)).toBe(true);
   });
 
-  it('clears stale PDF chunks before a replacement index', async () => {
+  it('clears stale PDF chunks before a replacement index and reports image-only PDFs', async () => {
     store.getMeta.mockResolvedValue(oldMeta);
-    await indexBook({ sections: [] }, 'pdf', settings, undefined, true);
+    await expect(indexBook({ sections: [] }, 'pdf', settings, undefined, true)).rejects.toThrow(
+      'no extractable text',
+    );
     expect(store.clearBook).toHaveBeenCalledWith('pdf');
   });
 });
