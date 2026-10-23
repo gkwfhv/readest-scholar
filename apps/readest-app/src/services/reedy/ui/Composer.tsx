@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useState, type KeyboardEvent } from 'react';
 import { Send, Square, WandSparkles } from 'lucide-react';
 
 /**
@@ -32,6 +32,7 @@ export function Composer({
   skills,
   activeSkillId,
   onSkillSelect,
+  draft,
 }: {
   isRunning: boolean;
   onSend: (text: string) => void;
@@ -40,8 +41,12 @@ export function Composer({
   skills?: Skill[];
   activeSkillId?: string | null;
   onSkillSelect?: (id: string | null) => void;
+  draft?: { id: string; text: string } | null;
 }) {
   const [text, setText] = useState('');
+  useEffect(() => {
+    if (draft) setText(draft.text);
+  }, [draft]);
 
   const send = useCallback(() => {
     const trimmed = text.trim();

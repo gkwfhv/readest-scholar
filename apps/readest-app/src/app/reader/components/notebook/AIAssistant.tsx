@@ -15,6 +15,7 @@ import { useBookDataStore } from '@/store/bookDataStore';
 import { useReaderStore } from '@/store/readerStore';
 import { useBookProgress } from '@/store/readerProgressStore';
 import { useAIChatStore } from '@/store/aiChatStore';
+import { useNotebookStore } from '@/store/notebookStore';
 import { aiLogger, createTauriAdapter } from '@/services/ai';
 import {
   LegacyIdbBackend,
@@ -216,6 +217,7 @@ const AIAssistantChat = ({
 
   return (
     <AIAssistantWithRuntime
+      scope={bookHash}
       adapter={adapter}
       historyAdapter={historyAdapter}
       onResetIndex={onResetIndex}
@@ -231,6 +233,7 @@ const AIAssistantChat = ({
 };
 
 const AIAssistantWithRuntime = ({
+  scope,
   adapter,
   historyAdapter,
   onResetIndex,
@@ -242,6 +245,7 @@ const AIAssistantWithRuntime = ({
   isPdf,
   onSourceClick,
 }: {
+  scope: string;
   adapter: NonNullable<ReturnType<typeof createTauriAdapter>>;
   historyAdapter?: ThreadHistoryAdapter;
   onResetIndex: () => void;
@@ -262,6 +266,7 @@ const AIAssistantWithRuntime = ({
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <ThreadWrapper
+        scope={scope}
         onResetIndex={onResetIndex}
         isLoadingHistory={isLoadingHistory}
         hasActiveConversation={hasActiveConversation}
@@ -276,6 +281,7 @@ const AIAssistantWithRuntime = ({
 };
 
 const ThreadWrapper = ({
+  scope,
   onResetIndex,
   isLoadingHistory,
   hasActiveConversation,
@@ -285,6 +291,7 @@ const ThreadWrapper = ({
   isPdf,
   onSourceClick,
 }: {
+  scope: string;
   onResetIndex: () => void;
   isLoadingHistory: boolean;
   hasActiveConversation: boolean;
@@ -298,7 +305,15 @@ const ThreadWrapper = ({
     currentTurnId ? sourceStore.get(currentTurnId) : [],
   );
   const assistantRuntime = useAssistantRuntime();
+  const pendingPrompt = useNotebookStore((state) => state.aiSelectionPrompt);
+  const setAiSelectionPrompt = useNotebookStore((state) => state.setAiSelectionPrompt);
   const { setActiveConversation } = useAIChatStore();
+
+  useEffect(() => {
+    if (!pendingPrompt || pendingPrompt.scope !== scope) return;
+    assistantRuntime.thread.composer.setText(pendingPrompt.text);
+    setAiSelectionPrompt(null);
+  }, [assistantRuntime, pendingPrompt, scope, setAiSelectionPrompt]);
 
   // Subscribe to the active turn's slot in the source store. Replaces the
   // pre-Reedy 500ms poll over a module-global lastSources (per plan §M1.7).
@@ -346,11 +361,14 @@ const AIAssistant = ({ bookKey }: AIAssistantProps) => {
   const { settings } = useSettingsStore();
   const scopedBookHash = aiAccountScope(bookKey.split('-')[0] || '', user?.id);
   const activeScope = useAIChatStore((state) => state.currentBookHash);
+  const activeReedyScope = useReedyStore((state) => state.scope);
   const loadConversations = useAIChatStore((state) => state.loadConversations);
   useEffect(() => {
-    if (useAIChatStore.getState().currentBookHash !== scopedBookHash) {
-      useReedyStore.getState().reset();
+    const pending = useNotebookStore.getState().aiSelectionPrompt;
+    if (pending && pending.scope !== scopedBookHash) {
+      useNotebookStore.getState().setAiSelectionPrompt(null);
     }
+    useReedyStore.getState().activateScope(scopedBookHash);
     void loadConversations(scopedBookHash);
   }, [loadConversations, scopedBookHash]);
   const getBookData = useBookDataStore((s) => s.getBookData);
@@ -366,7 +384,7 @@ const AIAssistant = ({ bookKey }: AIAssistantProps) => {
     !!bookData?.bookDoc;
 
   // A scope change must clear shared chat state before any previous messages render.
-  if (activeScope !== scopedBookHash) return null;
+  if (activeScope !== scopedBookHash || activeReedyScope !== scopedBookHash) return null;
   if (useAgentRuntime) return <ReedyAgentAssistantBridge key={scopedBookHash} bookKey={bookKey} />;
   return <LegacyAIAssistant key={scopedBookHash} bookKey={bookKey} />;
 };

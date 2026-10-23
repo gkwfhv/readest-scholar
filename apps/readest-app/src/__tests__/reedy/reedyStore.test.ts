@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   applyEventToMessages,
+  useReedyStore,
   type ReedyAssistantMessage,
   type ReedyMessage,
 } from '@/services/reedy/store/reedyStore';
@@ -199,5 +200,26 @@ describe('reedyStore — applyEventToMessages reducer', () => {
       summary: 's',
     });
     expect((msgs[0] as ReedyAssistantMessage).parts).toEqual([]);
+  });
+});
+
+describe('Reedy account scope', () => {
+  it('aborts and clears an active turn before exposing another account', () => {
+    const controller = new AbortController();
+    const onAbort = vi.fn();
+    controller.signal.addEventListener('abort', onAbort);
+    useReedyStore.getState().activateScope('account-a:book');
+    useReedyStore.getState().startUserTurn('Private question');
+    useReedyStore.getState().startAssistantTurn('answer-a', controller);
+
+    useReedyStore.getState().activateScope('account-b:book');
+
+    expect(onAbort).toHaveBeenCalledOnce();
+    expect(useReedyStore.getState()).toMatchObject({
+      scope: 'account-b:book',
+      messages: [],
+      isRunning: false,
+      activeAssistantMessageId: null,
+    });
   });
 });
