@@ -29,6 +29,7 @@ export interface TransferItem {
   bookTitle: string;
   scholarOpId?: string;
   scholarAccountId?: string;
+  scholarFilePath?: string;
   scholarExpectedVersionId?: string | null;
   scholarSnapshotPath?: string;
   scholarSnapshotRequired?: boolean;
@@ -71,7 +72,7 @@ interface TransferState {
     type: TransferType,
     priority?: number,
     isBackground?: boolean,
-    scholar?: { accountId: string; expectedVersionId: string | null },
+    scholar?: { accountId: string; expectedVersionId: string | null; filePath?: string },
   ) => string;
   addReplicaTransfer: (
     replicaKind: string,
@@ -88,6 +89,7 @@ interface TransferState {
   ) => string;
   removeTransfer: (transferId: string) => void;
   setScholarSnapshotPath: (transferId: string, path: string | undefined) => void;
+  rebaseScholarDelete: (transferId: string, expectedVersionId: string) => void;
   updateTransferProgress: (
     transferId: string,
     progress: number,
@@ -153,8 +155,9 @@ export const isFailedLikeTransfer = (t: TransferItem): boolean =>
   t.status === 'failed' || (t.status === 'cancelled' && t.cancelReason !== 'policy');
 
 export const isRetryableTransfer = (t: TransferItem): boolean =>
-  isFailedLikeTransfer(t) && !t.error?.includes('Scholar file conflict') &&
-  (!t.scholarAccountId || !!t.scholarSnapshotPath);
+  isFailedLikeTransfer(t) &&
+  !['Scholar file conflict', 'Scholar delete conflict'].some((message) => t.error?.includes(message)) &&
+  (!t.scholarAccountId || t.type !== 'upload' || !!t.scholarSnapshotPath);
 
 /**
  * Per-book download progress for the covers' transfer overlay, keyed by book
@@ -202,9 +205,11 @@ export const useTransferStore = create<TransferState>((set, get) => ({
       kind: 'book',
       bookHash,
       bookTitle,
-      scholarOpId: type === 'upload' ? uuidv4() : undefined,
-      scholarAccountId: type === 'upload' ? scholar?.accountId : undefined,
-      scholarExpectedVersionId: type === 'upload' ? scholar?.expectedVersionId : undefined,
+      scholarOpId: (type === 'upload' || type === 'delete') && scholar ? uuidv4() : undefined,
+      scholarAccountId: (type === 'upload' || type === 'delete') ? scholar?.accountId : undefined,
+      scholarFilePath: scholar?.filePath,
+      scholarExpectedVersionId: (type === 'upload' || type === 'delete')
+        ? scholar?.expectedVersionId : undefined,
       scholarSnapshotRequired: type === 'upload' && !!scholar,
       type,
       status: 'pending',
@@ -263,6 +268,25 @@ export const useTransferStore = create<TransferState>((set, get) => ({
     if (!transfer || (path && transfer.status !== 'pending')) return state;
     return { transfers: { ...state.transfers, [transferId]: {
       ...transfer, scholarSnapshotPath: path,
+    } } };
+  }),
+
+  rebaseScholarDelete: (transferId, expectedVersionId) => set((state) => {
+    const transfer = state.transfers[transferId];
+    if (!transfer || transfer.kind !== 'book' || transfer.type !== 'delete' ||
+        transfer.status !== 'failed' ||
+        !transfer.error?.includes('Scholar delete conflict') ||
+        !transfer.scholarAccountId || !transfer.scholarFilePath) return state;
+    return { transfers: { ...state.transfers, [transferId]: {
+      ...transfer,
+      scholarOpId: uuidv4(),
+      scholarExpectedVersionId: expectedVersionId,
+      status: 'pending',
+      error: undefined,
+      retryCount: 0,
+      progress: 0,
+      startedAt: undefined,
+      completedAt: undefined,
     } } };
   }),
 

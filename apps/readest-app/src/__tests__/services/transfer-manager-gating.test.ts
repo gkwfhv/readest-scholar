@@ -7,6 +7,7 @@ const scholarRelease = vi.fn();
 const scholarAccountId = vi.fn();
 const scholarBaseline = vi.fn();
 const saveScholarBaseline = vi.fn();
+const fetchWithAuth = vi.fn();
 vi.mock('@/services/environment', async (original) => ({
   ...(await original<typeof import('@/services/environment')>()),
   isScholarReleaseBundle: () => scholarRelease(),
@@ -16,6 +17,8 @@ vi.mock('@/services/scholarFileBaseline', () => ({
   getScholarFileBaseline: (...args: unknown[]) => scholarBaseline(...args),
   saveScholarFileBaseline: (...args: unknown[]) => saveScholarBaseline(...args),
 }));
+
+vi.mock('@/utils/fetch', () => ({ fetchWithAuth: (...args: unknown[]) => fetchWithAuth(...args) }));
 
 vi.mock('@/utils/event', () => ({
   eventDispatcher: {
@@ -151,6 +154,7 @@ beforeEach(() => {
   scholarRelease.mockReturnValue(false);
   scholarAccountId.mockResolvedValue(null);
   scholarBaseline.mockReturnValue(undefined);
+  fetchWithAuth.mockReset().mockResolvedValue({ json: async () => ({}) });
   localStorage.clear();
   settingsLoaded();
   vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -200,6 +204,103 @@ describe('Scholar file queue baseline', () => {
     expect(useTransferStore.getState().transfers[id!]!.scholarAccountId).toBe(userA);
     transferManager.setScholarAccountId(null);
     expect(transferManager.queueUpload(makeBook({ hash: "other" }))).toBeNull();
+  });
+
+  test('captures a stable delete operation and never invokes the legacy object remover', async () => {
+    scholarRelease.mockReturnValue(true);
+    scholarAccountId.mockResolvedValue(userA);
+    scholarBaseline.mockReturnValue({ fileId: 'file-id', versionId });
+    const book = makeBook({ uploadedAt: 1000 });
+    transferManager.pauseQueue();
+    const service = await initManager(makeAppService(), [book]);
+    const id = transferManager.queueDelete(book)!;
+    const task = useTransferStore.getState().transfers[id]!;
+    expect(task.scholarAccountId).toBe(userA);
+    expect(task.scholarOpId).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(task.scholarExpectedVersionId).toBe(versionId);
+    expect(task.scholarFilePath).toContain('Readest/Books/');
+    transferManager.resumeQueue();
+    await flushAsync();
+    expect(fetchWithAuth).toHaveBeenCalledWith(expect.stringContaining('/scholar/files/delete'),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          fileName: task.scholarFilePath, opId: task.scholarOpId,
+          expectedVersionId: versionId,
+        }),
+      }));
+    expect(service['deleteBook']).not.toHaveBeenCalled();
+    expect(book.uploadedAt).toBeNull();
+    expect(useTransferStore.getState().transfers[id]?.status).toBe('completed');
+  });
+
+  test('retains a conflicting remote version without automatic delete replay', async () => {
+    scholarRelease.mockReturnValue(true);
+    scholarAccountId.mockResolvedValue(userA);
+    scholarBaseline.mockReturnValue({ fileId: 'file-id', versionId });
+    fetchWithAuth.mockRejectedValueOnce(new Error('Scholar delete conflict; remote version retained'));
+    const book = makeBook({ uploadedAt: 1000 });
+    transferManager.pauseQueue();
+    await initManager(makeAppService(), [book]);
+    const id = transferManager.queueDelete(book)!;
+    transferManager.resumeQueue();
+    await flushAsync();
+    expect(useTransferStore.getState().transfers[id]?.status).toBe('failed');
+    expect(book.uploadedAt).toBe(1000);
+    transferManager.retryAllFailed();
+    await flushAsync();
+    expect(fetchWithAuth).toHaveBeenCalledTimes(1);
+  });
+
+  test('keeping a changed cloud file cancels delete and restores a local tombstone', async () => {
+    scholarRelease.mockReturnValue(true);
+    scholarAccountId.mockResolvedValue(userA);
+    const book = makeBook({ deletedAt: 1000, downloadedAt: null, uploadedAt: 900 });
+    const updateBook = vi.fn().mockResolvedValue(undefined);
+    await transferManager.initialize(makeAppService() as never, () => [book], updateBook, translationFn);
+    const task = makeTransferItem({
+      id: 'delete-conflict', type: 'delete', status: 'failed',
+      scholarAccountId: userA, scholarFilePath: 'Readest/Books/hash1/Test Book.epub',
+      scholarOpId: '00000000-0000-4000-8000-000000000004',
+      scholarExpectedVersionId: versionId,
+      error: 'Scholar delete conflict; remote version retained',
+    });
+    useTransferStore.setState({ transfers: { [task.id]: task } });
+    await transferManager.keepScholarCloudAfterDeleteConflict(task.id, 'file-id', versionId);
+    expect(fetchWithAuth).toHaveBeenCalledWith(expect.stringContaining('/scholar/files/restore'),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ fileId: 'file-id', versionId, expectedVersionId: versionId }),
+      }));
+    expect(updateBook).toHaveBeenCalledWith(expect.objectContaining({
+      deletedAt: null, fileSyncDeletionRequestedAt: null, uploadedAt: 900,
+    }));
+    expect(saveScholarBaseline).toHaveBeenCalledWith(userA, task.scholarFilePath,
+      { fileId: 'file-id', versionId });
+    expect(useTransferStore.getState().transfers[task.id]?.status).toBe('cancelled');
+  });
+
+  test('reviewed delete retry gets a fresh operation ID and current head', async () => {
+    scholarRelease.mockReturnValue(true);
+    scholarAccountId.mockResolvedValue(userA);
+    scholarBaseline.mockReturnValue({ fileId: 'file-id', versionId });
+    transferManager.pauseQueue();
+    await initManager(makeAppService(), [makeBook()]);
+    const task = makeTransferItem({
+      id: 'delete-conflict', type: 'delete', status: 'failed',
+      scholarAccountId: userA, scholarFilePath: 'Readest/Books/hash1/Test Book.epub',
+      scholarOpId: '00000000-0000-4000-8000-000000000004',
+      scholarExpectedVersionId: versionId,
+      error: 'Scholar delete conflict; remote version retained',
+    });
+    useTransferStore.setState({ transfers: { [task.id]: task } });
+    const newHead = '00000000-0000-4000-8000-000000000005';
+    await transferManager.requeueScholarDeleteConflict(task.id, 'file-id', newHead);
+    const rebased = useTransferStore.getState().transfers[task.id]!;
+    expect(rebased.status).toBe('pending');
+    expect(rebased.scholarExpectedVersionId).toBe(newHead);
+    expect(rebased.scholarOpId).not.toBe(task.scholarOpId);
+    expect(rebased.error).toBeUndefined();
   });
 
   test('stages the body even when paused, and reuses its path after the source changes', async () => {

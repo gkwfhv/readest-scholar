@@ -14,6 +14,7 @@ import {
 } from 'react-icons/md';
 import { useTransferQueue } from '@/hooks/useTransferQueue';
 import ScholarFileConflictDialog from './ScholarFileConflictDialog';
+import ScholarFileDeleteConflictDialog from './ScholarFileDeleteConflictDialog';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useResponsiveSize } from '@/hooks/useResponsiveSize';
 import { useKeyDownActions } from '@/hooks/useKeyDownActions';
@@ -141,10 +142,11 @@ const TransferItemRow: React.FC<{
 
       <div className='flex items-center gap-1'>
         {transfer.status === 'failed' &&
-          transfer.error?.includes('Scholar file conflict') && (
+          (transfer.error?.includes('Scholar file conflict') ||
+            transfer.error?.includes('Scholar delete conflict')) && (
           <button onClick={() => onResolve(transfer.id)}
             className='btn btn-ghost btn-sm eink-bordered'
-            aria-label={_('Resolve file conflict')}>
+            aria-label={_(transfer.type === 'delete' ? 'Resolve file delete conflict' : 'Resolve file conflict')}>
             {_('Resolve')}
           </button>
         )}
@@ -178,6 +180,7 @@ const TransferQueuePanel: React.FC = () => {
   const iconSize = useResponsiveSize(18);
   const setIsOpen = useTransferStore((state) => state.setIsTransferQueueOpen);
   const getVisibleLibrary = useLibraryStore((state) => state.getVisibleLibrary);
+  const fullLibrary = useLibraryStore((state) => state.library);
   const {
     transfers,
     stats,
@@ -399,11 +402,17 @@ const TransferQueuePanel: React.FC = () => {
       </div>
       {conflictId && (() => {
         const transfer = transfers.find((item) => item.id === conflictId);
-        const book = getVisibleLibrary().find((item) => item.hash === transfer?.bookHash);
-        return transfer && book ? (
+        // A delete conflict may concern a book already tombstoned locally,
+        // so the visible shelf cannot be used for this lookup.
+        const book = fullLibrary.find((item) => item.hash === transfer?.bookHash);
+        if (!transfer || !book) return null;
+        return transfer.type === 'delete' ? (
+          <ScholarFileDeleteConflictDialog transfer={transfer} book={book}
+            onClose={() => setConflictId(null)} />
+        ) : (
           <ScholarFileConflictDialog transfer={transfer} book={book}
             onClose={() => setConflictId(null)} />
-        ) : null;
+        );
       })()}
     </div>
   );

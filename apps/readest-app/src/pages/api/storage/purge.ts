@@ -3,6 +3,7 @@ import { corsAllMethods, runMiddleware } from '@/utils/cors';
 import { createSupabaseAdminClient } from '@/utils/supabase';
 import { validateUserAndToken } from '@/utils/access';
 import { deleteObject } from '@/utils/object';
+import { isProtectedScholarStorageKey } from '@/utils/scholarProtectedFile';
 
 interface BulkDeleteResult {
   success: string[];
@@ -46,6 +47,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'Protected file version' });
     }
 
+    if (fileKeys.some((key) => isProtectedScholarStorageKey(key, user.id))) {
+      return res.status(409).json({ error: 'Use Scholar version-aware file deletion' });
+    }
+
     const supabase = createSupabaseAdminClient();
 
     // Fetch all files that match the provided keys and belong to the user
@@ -69,6 +74,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const unauthorizedFiles = fileRecords.filter((record) => record.user_id !== user.id);
     if (unauthorizedFiles.length > 0) {
       return res.status(403).json({ error: 'Unauthorized access to one or more files' });
+    }
+
+    const { data: protectedVersions, error: versionError } = await supabase
+      .from('scholar_file_versions')
+      .select('file_id')
+      .eq('user_id', user.id)
+      .in('file_id', fileRecords.map((record) => record.id))
+      .limit(1);
+    if (versionError && !['42P01', 'PGRST205'].includes(versionError.code)) {
+      return res.status(500).json({ error: 'Could not verify Scholar versions' });
+    }
+    if (protectedVersions?.length) {
+      return res.status(409).json({ error: 'Use Scholar version-aware file deletion' });
     }
 
     // Process deletions

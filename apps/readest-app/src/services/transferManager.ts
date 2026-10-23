@@ -1,6 +1,7 @@
 import { Book } from '@/types/book';
 import { AppService, BaseDir, type ScholarFileUploadContext } from '@/types/system';
-import { isScholarReleaseBundle, isScholarTestBundle } from '@/services/environment';
+import { isScholarReleaseBundle, isScholarTestBundle, getAPIBaseUrl } from '@/services/environment';
+import { fetchWithAuth } from '@/utils/fetch';
 import { getRemoteBookFilename } from '@/utils/book';
 import { CLOUD_BOOKS_SUBDIR } from '@/services/constants';
 import { getScholarAccountId, getScholarFileBaseline, saveScholarFileBaseline } from '@/services/scholarFileBaseline';
@@ -321,7 +322,17 @@ class TransferManager {
       return existing.id;
     }
 
-    const transferId = store.addTransfer(book.hash, book.title, 'delete', priority, isBackground);
+    let scholar: { accountId: string; expectedVersionId: string | null; filePath: string } | undefined;
+    if (isScholarReleaseBundle() || isScholarTestBundle()) {
+      if (!this.scholarAccountId) return null;
+      const filePath = CLOUD_BOOKS_SUBDIR + '/' + getRemoteBookFilename(book);
+      scholar = {
+        accountId: this.scholarAccountId,
+        expectedVersionId: getScholarFileBaseline(this.scholarAccountId, filePath)?.versionId ?? null,
+        filePath,
+      };
+    }
+    const transferId = store.addTransfer(book.hash, book.title, 'delete', priority, isBackground, scholar);
     this.persistQueue();
     this.processQueue();
     return transferId;
@@ -460,6 +471,69 @@ class TransferManager {
     );
     this.cleanupScholarSnapshots([task]);
     this.persistQueue();
+  }
+
+  private async getScholarDeleteConflictTask(transferId: string): Promise<TransferItem> {
+    const task = useTransferStore.getState().transfers[transferId];
+    if (!task || task.kind !== 'book' || task.type !== 'delete' ||
+        task.status !== 'failed' || !task.error?.includes('Scholar delete conflict') ||
+        !task.scholarAccountId || !task.scholarFilePath) {
+      throw new Error('Scholar delete conflict is no longer available');
+    }
+    const accountId = await getScholarAccountId();
+    if (accountId !== task.scholarAccountId) throw new Error('Scholar delete account changed');
+    return task;
+  }
+
+  async keepScholarCloudAfterDeleteConflict(
+    transferId: string, fileId: string, activeVersionId: string,
+  ): Promise<void> {
+    const task = await this.getScholarDeleteConflictTask(transferId);
+    const baseline = getScholarFileBaseline(task.scholarAccountId!, task.scholarFilePath!);
+    if (baseline && baseline.fileId !== fileId) {
+      throw new Error('Scholar file identity changed; refresh this dialog');
+    }
+    const book = this.getLibrary?.().find((item) => item.hash === task.bookHash);
+    if (!book) throw new Error('Book not found in library');
+    // A no-op CAS verifies the reviewed cloud head atomically before the
+    // client's baseline and any local tombstone are changed.
+    await fetchWithAuth(getAPIBaseUrl() + '/scholar/files/restore', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fileId, versionId: activeVersionId, expectedVersionId: activeVersionId,
+      }),
+    });
+    if (book.deletedAt || !book.uploadedAt) {
+      await this.updateBook?.({
+        ...book,
+        deletedAt: null,
+        fileSyncDeletionRequestedAt: null,
+        uploadedAt: book.uploadedAt ?? Date.now(),
+        updatedAt: Math.max(Date.now(), (book.updatedAt ?? 0) + 1),
+      });
+    }
+    saveScholarFileBaseline(task.scholarAccountId!, task.scholarFilePath!, {
+      fileId, versionId: activeVersionId,
+    });
+    useTransferStore.getState().setTransferStatus(transferId, 'cancelled', undefined, 'user');
+    this.persistQueue();
+  }
+
+  async requeueScholarDeleteConflict(
+    transferId: string, fileId: string, activeVersionId: string,
+  ): Promise<void> {
+    const task = await this.getScholarDeleteConflictTask(transferId);
+    const baseline = getScholarFileBaseline(task.scholarAccountId!, task.scholarFilePath!);
+    if (baseline && baseline.fileId !== fileId) {
+      throw new Error('Scholar file identity changed; refresh this dialog');
+    }
+    useTransferStore.getState().rebaseScholarDelete(transferId, activeVersionId);
+    if (useTransferStore.getState().transfers[transferId]?.status !== 'pending') {
+      throw new Error('Scholar delete conflict is no longer available');
+    }
+    this.persistQueue();
+    this.processQueue();
   }
 
   retryTransfer(transferId: string): void {
@@ -645,6 +719,8 @@ class TransferManager {
       const isQuotaError = errorMessage.includes('Insufficient storage quota');
       const isPermanentError = isQuotaError || [
         'Scholar file conflict',
+        'Scholar delete conflict',
+        'Legacy Scholar delete queue needs requeue',
         'Scholar upload account changed',
         'Legacy upload queue needs requeue',
         'Scholar upload snapshot',
@@ -783,7 +859,30 @@ class TransferManager {
       book.downloadedAt = Date.now();
       await this.updateBook!(book);
     } else if (transfer.type === 'delete') {
-      await this.appService!.deleteBook(book, 'cloud');
+      if (isScholarReleaseBundle() || isScholarTestBundle()) {
+        const currentAccount = await getScholarAccountId();
+        if (!currentAccount || currentAccount !== transfer.scholarAccountId) {
+          throw new Error('Scholar upload account changed; requeue under the current account');
+        }
+        if (!transfer.scholarOpId || !transfer.scholarFilePath ||
+            transfer.scholarExpectedVersionId === undefined) {
+          throw new Error('Legacy Scholar delete queue needs requeue');
+        }
+        await fetchWithAuth(getAPIBaseUrl() + '/scholar/files/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fileName: transfer.scholarFilePath,
+            opId: transfer.scholarOpId,
+            expectedVersionId: transfer.scholarExpectedVersionId,
+          }),
+        });
+        // The logical file is tombstoned; retained version objects are never
+        // removed by the generic storage endpoint.
+        book.uploadedAt = null;
+      } else {
+        await this.appService!.deleteBook(book, 'cloud');
+      }
       await this.updateBook!(book);
     }
   }
