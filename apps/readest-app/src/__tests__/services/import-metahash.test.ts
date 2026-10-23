@@ -76,7 +76,9 @@ class TestAppService extends BaseAppService {
     return false;
   }
   async openDatabase() {
-    return {} as ReturnType<BaseAppService['openDatabase']>;
+    return { execute: vi.fn().mockResolvedValue(undefined) } as unknown as ReturnType<
+      BaseAppService['openDatabase']
+    >;
   }
   async createWindow() {}
   async getCacheDir() {

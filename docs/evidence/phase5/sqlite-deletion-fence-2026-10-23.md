@@ -22,3 +22,7 @@ Two independent Turso connections opened the same temporary `reedy.db`. An index
 ## Limit
 
 The new assistant and indexer paths carry the SQLite generation. An already-running older app binary that does not know this schema can still write while the deletion tombstone is present; process handover compatibility needs an explicit check before release. Native keychain and real-model claim evaluation remain separate gates.
+
+## Full-suite integration replay
+
+The first server one-shot unit run on `eaf681fe0` exposed seven older import test fixtures that returned an empty object for the mocked native database. The new import-completion fence calls `execute`, so 61 of 14,140 tests failed with `this.db.execute is not a function`. Those seven fixtures now provide an `execute` stub; all 71 tests in the affected files pass. This was a test-fixture compatibility failure, not a production database error. The second server one-shot run passed 1,243 files and 14,124 tests; 4 files and 16 tests remained skipped by the existing configuration, with zero failures. TypeScript/Biome passed across 2,934 files. The same checkout passed Web production build, Tauri static build and a Linux CEF debug build; the initial CEF command failed before compilation because the container PATH omitted `/root/.cargo/bin`, then passed with the correct PATH.

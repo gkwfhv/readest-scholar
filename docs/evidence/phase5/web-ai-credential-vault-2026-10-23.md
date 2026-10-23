@@ -22,8 +22,7 @@ Status: implementation slice on the draft Phase 5 branch. Phase 5 is **not accep
 
 ## Remaining limits
 
-- A real native OS keychain round trip remains outstanding. The rendered Web UI check covered light desktop and phone widths plus dark/E-Ink mobile layouts and a forced vault write failure.
+- A real Linux desktop OS keychain and current Phase 5 UI save/restart/clear round trip passed in an isolated QA container; see [native credential evidence](native-ai-credentials-2026-10-23.md). The rendered Web UI check covered light desktop and phone widths plus dark/E-Ink mobile layouts and a forced vault write failure.
 - The browser necessarily receives its own decrypted key for existing direct provider clients. This protects storage and account isolation, but a compromised same-origin script could still read the key from browser memory. A model proxy would be required to keep provider keys exclusively on the server.
 - Vault key rotation, restoration after a lost key and an externally reachable HTTPS deployment need procedures and tests before stable release. Old plaintext keys are intentionally not auto-migrated because their account owner is unknown.
 - Full Phase 5 acceptance also needs a real-paper claim-support evaluation, end-to-end citation/navigation checks, and deletion/indexing race closure.
-EOF'

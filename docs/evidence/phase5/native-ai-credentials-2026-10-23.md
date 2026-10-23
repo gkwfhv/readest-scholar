@@ -24,3 +24,11 @@ Status: implementation slice on the draft Phase 5 branch. Phase 5 is **not accep
 - Native keychain calls are mocked in unit tests. A real desktop keychain write/restart/read must be tested on a supported OS. An unavailable keychain intentionally rejects new key saves.
 - Scrubbing an older plaintext key requires a user to re-enter it; the AI settings panel now shows a dismissible notice.
 - Real-paper claim support, PDF citation accuracy, deletion/indexing races, and the remaining Phase 5 acceptance checks are tracked in `grounded-pdf-citations-2026-10-23.md`.
+
+## Server Linux Secret Service bridge smoke (2026-10-23)
+
+On isolated QA container B, installed GNOME Keyring and libsecret tools, started a private D-Bus session and unlocked the test keyring. A running Readest Scholar Linux CEF binary invoked the actual Tauri `native-bridge` secure-item commands over CDP. A synthetic value was saved, read, survived a full app and D-Bus session restart, and was cleared. Two synthetic account-scoped AI credential slots retained distinct values; clearing one left the other intact, then both were removed. Only boolean results were printed. No real API key was used, and the original staging Web instance was unchanged. This verifies the operating-system bridge and persistence on Linux; the current Phase 5 UI bundle still needs a build and UI-level save/restart check.
+
+## Current Phase 5 desktop UI smoke
+
+The server-built Linux CEF debug binary (`sha256:6a391e874fc4a25c4c26b0055088d5888d18e1ec4d644242171a630ef8032d23`) ran in isolated QA container B under GNOME Keyring. In the actual AI settings UI, a synthetic OpenAI-compatible key was entered and saved on blur. The native bridge read back the same value. Neither `settings.json` nor its backup contained the plaintext. After restarting the app and private D-Bus session, the provider and key field rehydrated. Clearing the field through the UI removed the keychain item. The dialog at 1152×720 had no document-level horizontal overflow; the brain icon and AI tab remained within the settings toolbar. [Screenshot](images/native-ai-settings-linux.png). The UI test used only a synthetic key and then cleared it.
