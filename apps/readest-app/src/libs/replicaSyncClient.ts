@@ -6,6 +6,7 @@ import type { SyncErrorCode } from '@/libs/errors';
 
 const ENDPOINT = () => `${getAPIBaseUrl()}/sync/replicas`;
 const KEYS_ENDPOINT = () => `${getAPIBaseUrl()}/sync/replica-keys`;
+const CHANGES_ENDPOINT = () => `${getAPIBaseUrl()}/sync/replica-changes`;
 
 export interface ReplicaKeyRow {
   saltId: string;
@@ -13,6 +14,65 @@ export interface ReplicaKeyRow {
   salt: string;
   createdAt: string;
 }
+
+export interface ReplicaChangePage {
+  changes: { seq: string; row: ReplicaRow }[];
+  nextCursor: string;
+  hasMore: boolean;
+}
+
+const isChangeCursor = (value: unknown): value is string =>
+  typeof value === 'string' &&
+  /^(0|[1-9][0-9]*)$/.test(value) &&
+  value.length <= 19 &&
+  BigInt(value) <= 9223372036854775807n;
+
+const parseChangePage = (
+  value: unknown,
+  kind: string,
+  after: string,
+  limit: number,
+): ReplicaChangePage => {
+  if (typeof value !== 'object' || value === null) {
+    throw new SyncError('SERVER', 'Invalid replica change page');
+  }
+  const page = value as Record<string, unknown>;
+  if (
+    !Array.isArray(page['changes']) ||
+    page['changes'].length > limit ||
+    typeof page['hasMore'] !== 'boolean' ||
+    !isChangeCursor(page['nextCursor'])
+  ) {
+    throw new SyncError('SERVER', 'Invalid replica change page');
+  }
+  const changes: ReplicaChangePage['changes'] = [];
+  let previous = BigInt(after);
+  for (const item of page['changes']) {
+    if (typeof item !== 'object' || item === null) {
+      throw new SyncError('SERVER', 'Invalid replica change row');
+    }
+    const change = item as Record<string, unknown>;
+    const row = change['row'];
+    if (
+      !isChangeCursor(change['seq']) ||
+      BigInt(change['seq']) <= previous ||
+      typeof row !== 'object' ||
+      row === null ||
+      (row as Record<string, unknown>)['kind'] !== kind
+    ) {
+      throw new SyncError('SERVER', 'Invalid replica change row');
+    }
+    previous = BigInt(change['seq']);
+    changes.push({ seq: change['seq'], row: row as ReplicaRow });
+  }
+  if (
+    page['nextCursor'] !== (changes.at(-1)?.seq ?? after) ||
+    (page['hasMore'] && changes.length !== limit)
+  ) {
+    throw new SyncError('SERVER', 'Invalid replica change cursor');
+  }
+  return { changes, nextCursor: page['nextCursor'], hasMore: page['hasMore'] };
+};
 
 interface ErrorBody {
   error?: string;
@@ -56,7 +116,7 @@ export class ReplicaSyncClient {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ rows }),
+        body: JSON.stringify({ protocolVersion: 2, rows }),
       });
     } catch (cause) {
       throw new SyncError('SERVER', 'Network failure during push', { cause });
@@ -70,6 +130,38 @@ export class ReplicaSyncClient {
     }
     const data = (await response.json()) as { rows: ReplicaRow[] };
     return data.rows ?? [];
+  }
+
+  /** Versioned pull. null means this backend has not deployed the new route. */
+  async pullChanges(kind: string, after: string, limit = 100): Promise<ReplicaChangePage | null> {
+    if (!isChangeCursor(after) || !Number.isInteger(limit) || limit < 1 || limit > 1000) {
+      throw new SyncError('VALIDATION', 'Invalid replica change cursor or page size');
+    }
+    const token = await requireToken();
+    const params = new URLSearchParams({ kind, after, limit: String(limit) });
+    let response: Response;
+    try {
+      response = await fetch(CHANGES_ENDPOINT() + '?' + params.toString(), {
+        method: 'GET',
+        headers: { Authorization: 'Bearer ' + token },
+      });
+    } catch (cause) {
+      throw new SyncError('SERVER', 'Network failure during change pull', { cause });
+    }
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      const body = await parseErrorBody(response);
+      const code = body.code ?? statusToDefaultCode(response.status);
+      throw new SyncError(code, body.error ?? 'Change pull failed with status ' + response.status, {
+        status: response.status,
+      });
+    }
+    try {
+      return parseChangePage(await response.json(), kind, after, limit);
+    } catch (cause) {
+      if (cause instanceof SyncError) throw cause;
+      throw new SyncError('SERVER', 'Invalid replica change page', { cause });
+    }
   }
 
   async pull(kind: string, since: Hlc | null): Promise<ReplicaRow[]> {

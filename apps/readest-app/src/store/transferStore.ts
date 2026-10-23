@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { v4 as uuidv4 } from 'uuid';
 import type { BaseDir } from '@/types/system';
 import { INDETERMINATE_PROGRESS } from '@/utils/transfer';
 
@@ -26,6 +27,14 @@ export interface TransferItem {
   kind: TransferKind;
   bookHash: string;
   bookTitle: string;
+  scholarOpId?: string;
+  scholarAccountId?: string;
+  scholarFilePath?: string;
+  scholarExpectedVersionId?: string | null;
+  scholarSnapshotPath?: string;
+  scholarSnapshotRequired?: boolean;
+  /** Device-local full-mirror download; can be cancelled when the preference is turned off. */
+  scholarMirror?: boolean;
   replicaKind?: string;
   replicaId?: string;
   replicaReincarnation?: string;
@@ -65,6 +74,12 @@ interface TransferState {
     type: TransferType,
     priority?: number,
     isBackground?: boolean,
+    scholar?: {
+      accountId: string;
+      expectedVersionId: string | null;
+      filePath?: string;
+      mirror?: boolean;
+    },
   ) => string;
   addReplicaTransfer: (
     replicaKind: string,
@@ -80,6 +95,9 @@ interface TransferState {
     },
   ) => string;
   removeTransfer: (transferId: string) => void;
+  promoteScholarMirrorDownload: (transferId: string, priority: number) => void;
+  setScholarSnapshotPath: (transferId: string, path: string | undefined) => void;
+  rebaseScholarDelete: (transferId: string, expectedVersionId: string) => void;
   updateTransferProgress: (
     transferId: string,
     progress: number,
@@ -144,6 +162,17 @@ const generateTransferId = (): string => {
 export const isFailedLikeTransfer = (t: TransferItem): boolean =>
   t.status === 'failed' || (t.status === 'cancelled' && t.cancelReason !== 'policy');
 
+export const isUnresolvedScholarConflict = (t: TransferItem): boolean =>
+  t.status === 'failed' &&
+  ['Scholar file conflict', 'Scholar delete conflict'].some((message) =>
+    t.error?.includes(message),
+  );
+
+export const isRetryableTransfer = (t: TransferItem): boolean =>
+  isFailedLikeTransfer(t) &&
+  !isUnresolvedScholarConflict(t) &&
+  (!t.scholarAccountId || t.type !== 'upload' || !!t.scholarSnapshotPath);
+
 /**
  * Per-book download progress for the covers' transfer overlay, keyed by book
  * hash. Derived on read rather than mirrored into a second state: the queue
@@ -183,13 +212,20 @@ export const useTransferStore = create<TransferState>((set, get) => ({
 
   setIsTransferQueueOpen: (isOpen) => set({ isTransferQueueOpen: isOpen }),
 
-  addTransfer: (bookHash, bookTitle, type, priority = 10, isBackground = false) => {
+  addTransfer: (bookHash, bookTitle, type, priority = 10, isBackground = false, scholar) => {
     const id = generateTransferId();
     const transfer: TransferItem = {
       id,
       kind: 'book',
       bookHash,
       bookTitle,
+      scholarOpId: type === 'upload' || (type === 'delete' && !!scholar) ? uuidv4() : undefined,
+      scholarAccountId: scholar?.accountId,
+      scholarFilePath: scholar?.filePath,
+      scholarExpectedVersionId:
+        type === 'upload' || type === 'delete' ? scholar?.expectedVersionId : undefined,
+      scholarSnapshotRequired: type === 'upload' && !!scholar,
+      scholarMirror: type === 'download' && !!scholar?.mirror,
       type,
       status: 'pending',
       progress: 0,
@@ -242,12 +278,81 @@ export const useTransferStore = create<TransferState>((set, get) => ({
     return id;
   },
 
+  setScholarSnapshotPath: (transferId, path) =>
+    set((state) => {
+      const transfer = state.transfers[transferId];
+      if (!transfer || (path && transfer.status !== 'pending')) return state;
+      return {
+        transfers: {
+          ...state.transfers,
+          [transferId]: {
+            ...transfer,
+            scholarSnapshotPath: path,
+          },
+        },
+      };
+    }),
+
+  rebaseScholarDelete: (transferId, expectedVersionId) =>
+    set((state) => {
+      const transfer = state.transfers[transferId];
+      if (
+        !transfer ||
+        transfer.kind !== 'book' ||
+        transfer.type !== 'delete' ||
+        transfer.status !== 'failed' ||
+        !transfer.error?.includes('Scholar delete conflict') ||
+        !transfer.scholarAccountId ||
+        !transfer.scholarFilePath
+      )
+        return state;
+      return {
+        transfers: {
+          ...state.transfers,
+          [transferId]: {
+            ...transfer,
+            scholarOpId: uuidv4(),
+            scholarExpectedVersionId: expectedVersionId,
+            status: 'pending',
+            error: undefined,
+            retryCount: 0,
+            progress: 0,
+            startedAt: undefined,
+            completedAt: undefined,
+          },
+        },
+      };
+    }),
+
   removeTransfer: (transferId) => {
     set((state) => {
       const { [transferId]: _, ...remaining } = state.transfers;
       return { transfers: remaining };
     });
   },
+
+  promoteScholarMirrorDownload: (transferId, priority) =>
+    set((state) => {
+      const task = state.transfers[transferId];
+      if (
+        !task ||
+        task.type !== 'download' ||
+        !task.scholarMirror ||
+        !['pending', 'in_progress'].includes(task.status)
+      )
+        return state;
+      return {
+        transfers: {
+          ...state.transfers,
+          [transferId]: {
+            ...task,
+            scholarMirror: false,
+            isBackground: false,
+            priority: Math.min(task.priority, priority),
+          },
+        },
+      };
+    }),
 
   updateTransferProgress: (transferId, progress, transferred, total, speed) => {
     set((state) => {
@@ -375,7 +480,10 @@ export const useTransferStore = create<TransferState>((set, get) => ({
     set((state) => {
       const remaining: Record<string, TransferItem> = {};
       Object.entries(state.transfers).forEach(([id, transfer]) => {
-        if (transfer.status !== 'failed' && transfer.status !== 'cancelled') {
+        if (
+          (transfer.status !== 'failed' && transfer.status !== 'cancelled') ||
+          isUnresolvedScholarConflict(transfer)
+        ) {
           remaining[id] = transfer;
         }
       });

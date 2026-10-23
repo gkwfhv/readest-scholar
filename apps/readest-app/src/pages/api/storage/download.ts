@@ -69,25 +69,54 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 }
 
-async function processFileKeys(
+export async function processFileKeys(
   fileKeys: string[],
   userId: string,
 ): Promise<Record<string, string | undefined>> {
   const supabase = createSupabaseAdminClient();
 
-  const { data: fileRecords, error: fileError } = await supabase
-    .from('files')
-    .select('user_id, file_key, book_hash')
-    .eq('user_id', userId)
-    .in('file_key', fileKeys)
-    .is('deleted_at', null);
+  // PostgREST puts .in() filters in the URL even when this API receives a
+  // POST body. The proxy rejected 50 real file paths (about 7 KB), so bound
+  // both the number of values and their encoded length before making requests.
+  const queryBatches = (values: string[]): string[][] => {
+    const batches: string[][] = [];
+    let batch: string[] = [];
+    let encodedLength = 0;
+    for (const value of values) {
+      const itemLength = encodeURIComponent(`"${value}"`).length + (batch.length ? 3 : 0);
+      if (batch.length && (batch.length >= 25 || encodedLength + itemLength > 2800)) {
+        batches.push(batch);
+        batch = [];
+        encodedLength = 0;
+      }
+      batch.push(value);
+      encodedLength += itemLength;
+    }
+    if (batch.length) batches.push(batch);
+    return batches;
+  };
+  const fileQueryResults = await Promise.all(
+    queryBatches(fileKeys).map((batch) =>
+      supabase
+        .from('files')
+        .select('id, user_id, file_key, book_hash, file_size')
+        .eq('user_id', userId)
+        .in('file_key', batch)
+        .is('deleted_at', null),
+    ),
+  );
 
+  const fileError = fileQueryResults.find((result) => result.error)?.error;
   if (fileError) {
     console.error('Error querying files:', fileError);
     return Object.fromEntries(fileKeys.map((key) => [key, undefined]));
   }
 
-  const fileRecordMap = new Map((fileRecords || []).map((record) => [record.file_key, record]));
+  const fileRecordMap = new Map(
+    fileQueryResults
+      .flatMap((result) => result.data || [])
+      .map((record) => [record.file_key, record]),
+  );
 
   const missingFileKeys = fileKeys.filter((key) => !fileRecordMap.has(key));
 
@@ -109,14 +138,21 @@ async function processFileKeys(
     if (fallbackCandidates.length > 0) {
       const bookHashes = [...new Set(fallbackCandidates.map((c) => c.bookHash))];
 
-      const { data: fallbackRecords, error: fallbackError } = await supabase
-        .from('files')
-        .select('user_id, file_key, book_hash')
-        .eq('user_id', userId)
-        .in('book_hash', bookHashes)
-        .is('deleted_at', null);
+      const fallbackQueryResults = await Promise.all(
+        queryBatches(bookHashes).map((batch) =>
+          supabase
+            .from('files')
+            .select('id, user_id, file_key, book_hash, file_size')
+            .eq('user_id', userId)
+            .in('book_hash', batch)
+            .is('deleted_at', null),
+        ),
+      );
+      const fallbackRecords = fallbackQueryResults.flatMap((result) =>
+        result.error ? [] : result.data || [],
+      );
 
-      if (!fallbackError && fallbackRecords) {
+      if (fallbackRecords.length > 0) {
         for (const candidate of fallbackCandidates) {
           const matchedFile = fallbackRecords.find(
             (f) =>
@@ -125,6 +161,68 @@ async function processFileKeys(
           );
           if (matchedFile) {
             fileRecordMap.set(candidate.originalKey, matchedFile);
+          }
+        }
+      }
+    }
+  }
+
+  // The old file key remains the public lookup alias. If Scholar has an
+  // active head, serve only its verified immutable object under that alias.
+  const fileIds = [
+    ...new Set(
+      [...fileRecordMap.values()]
+        .filter(
+          (record) =>
+            typeof record.id === 'string' &&
+            typeof record.book_hash === 'string' &&
+            record.file_key.startsWith(`${userId}/Readest/Books/${record.book_hash}/`) &&
+            !record.file_key.endsWith('/cover.png'),
+        )
+        .map((record) => record.id as string),
+    ),
+  ];
+  const headByFileId = new Map<string, string>();
+  const activeObjectByFileId = new Map<string, string>();
+  if (fileIds.length > 0) {
+    const headResults = await Promise.all(
+      queryBatches(fileIds).map((batch) =>
+        supabase
+          .from('scholar_file_heads')
+          .select('file_id,version_id')
+          .eq('user_id', userId)
+          .in('file_id', batch),
+      ),
+    );
+    const headError = headResults.find((result) => result.error)?.error;
+    if (headError && !['PGRST205', '42P01'].includes(headError.code)) {
+      console.error('Error querying Scholar file heads:', headError);
+      return Object.fromEntries(fileKeys.map((key) => [key, undefined]));
+    }
+    if (!headError) {
+      for (const head of headResults.flatMap((result) => result.data || [])) {
+        headByFileId.set(head.file_id, head.version_id);
+      }
+      const versionIds = [...new Set(headByFileId.values())];
+      if (versionIds.length > 0) {
+        const versionResults = await Promise.all(
+          queryBatches(versionIds).map((batch) =>
+            supabase
+              .from('scholar_file_versions')
+              .select('file_id,version_id,object_key')
+              .eq('user_id', userId)
+              .eq('state', 'ready')
+              .in('version_id', batch),
+          ),
+        );
+        const versionError = versionResults.find((result) => result.error)?.error;
+        if (versionError) {
+          console.error('Error querying Scholar file versions:', versionError);
+          return Object.fromEntries(fileKeys.map((key) => [key, undefined]));
+        }
+        for (const version of versionResults.flatMap((result) => result.data || [])) {
+          if (headByFileId.get(version.file_id) === version.version_id) {
+            activeObjectByFileId.set(version.file_id, version.object_key);
           }
         }
       }
@@ -143,8 +241,16 @@ async function processFileKeys(
         return { fileKey, downloadUrl: undefined };
       }
 
+      const hasHead = headByFileId.has(fileRecord.id);
+      // Scholar registration creates a zero-byte row before any object exists.
+      if (fileRecord.file_size === 0 && !hasHead) {
+        return { fileKey, downloadUrl: undefined };
+      }
+      const objectKey = hasHead ? activeObjectByFileId.get(fileRecord.id) : fileRecord.file_key;
+      if (!objectKey) return { fileKey, downloadUrl: undefined };
+
       try {
-        const downloadUrl = await getDownloadSignedUrl(fileRecord.file_key, 1800);
+        const downloadUrl = await getDownloadSignedUrl(objectKey, 1800);
         return { fileKey, downloadUrl };
       } catch (error) {
         console.error('Error creating signed URL for %s:', fileKey, error);

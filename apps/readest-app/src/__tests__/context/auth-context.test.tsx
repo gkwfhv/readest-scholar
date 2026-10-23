@@ -18,8 +18,19 @@ vi.mock('posthog-js', () => ({
 }));
 
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { supabase } from '@/utils/supabase';
 
 describe('AuthContext memoization', () => {
+  test('does not force a refresh token rotation on every provider mount', () => {
+    vi.mocked(supabase.auth.refreshSession).mockClear();
+    render(
+      <AuthProvider>
+        <div />
+      </AuthProvider>,
+    );
+    expect(supabase.auth.refreshSession).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     if (typeof window !== 'undefined') {
       window.localStorage.clear();

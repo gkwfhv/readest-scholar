@@ -332,7 +332,10 @@ export function useSync(bookKey?: string) {
       if (!isSyncCategoryEnabled('note')) return;
       if ((op === 'push' || op === 'both') && bookNotes?.length) {
         const pushed = await pushChanges({ notes: bookNotes });
-        if (pushed && bookId && bookKey) {
+        // A failed push must not advance the pull watermark. Otherwise a
+        // newer remote note can hide this device's still-pending local edit.
+        if (!pushed) return false;
+        if (bookId && bookKey) {
           setConfig(bookKey, { lastPushedAtNotes: Date.now() });
         }
       }
@@ -346,6 +349,7 @@ export function useSync(bookKey?: string) {
           metaHash,
         );
       }
+      return true;
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [lastSyncedAtInited, lastSyncedAtNotes],

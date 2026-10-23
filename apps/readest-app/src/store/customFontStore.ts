@@ -46,9 +46,9 @@ interface FontStoreState {
    * The placeholder lands with `unavailable: true`; the binary download
    * handler clears the flag on completion.
    */
-  applyRemoteFont: (font: CustomFont) => void;
+  applyRemoteFont: (font: CustomFont) => Promise<void>;
   /** Soft-delete by contentId, skipping the publish call. */
-  softDeleteByContentId: (contentId: string) => void;
+  softDeleteByContentId: (contentId: string) => Promise<void>;
   /** Clear the placeholder unavailable flag once binaries land on disk. */
   markAvailableByContentId: (contentId: string) => void;
   /**
@@ -179,7 +179,7 @@ export const useCustomFontStore = create<FontStoreState>((set, get) => ({
   findByContentId: (contentId) =>
     contentId ? get().fonts.find((f) => f.contentId === contentId) : undefined,
 
-  applyRemoteFont: (font) => {
+  applyRemoteFont: async (font) => {
     set((state) => {
       const existingIdx = state.fonts.findIndex((f) => f.id === font.id);
       const fonts =
@@ -189,10 +189,10 @@ export const useCustomFontStore = create<FontStoreState>((set, get) => ({
       return { fonts };
     });
     const env = getReplicaPersistEnv();
-    if (env) void get().saveCustomFonts(env);
+    if (env) await get().saveCustomFonts(env);
   },
 
-  softDeleteByContentId: (contentId) => {
+  softDeleteByContentId: async (contentId) => {
     const target = get().fonts.find((f) => f.contentId === contentId && !f.deletedAt);
     if (!target) return;
     set((state) => ({
@@ -202,7 +202,7 @@ export const useCustomFontStore = create<FontStoreState>((set, get) => ({
     }));
     if (target.blobUrl) URL.revokeObjectURL(target.blobUrl);
     const env = getReplicaPersistEnv();
-    if (env) void get().saveCustomFonts(env);
+    if (env) await get().saveCustomFonts(env);
   },
 
   markAvailableByContentId: (contentId) => {
@@ -416,7 +416,7 @@ export const useCustomFontStore = create<FontStoreState>((set, get) => ({
       const { fonts } = get();
       settings.customFonts = fonts.map(toSettingsFont);
       setSettings(settings);
-      saveSettings(envConfig, settings);
+      await saveSettings(envConfig, settings);
     } catch (error) {
       console.error('Failed to save custom fonts settings:', error);
       throw error;

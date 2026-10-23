@@ -35,15 +35,18 @@ export const r2Storage = {
     fileKey: string,
     contentLength: number,
     expiresIn: number,
+    createOnly = false,
   ) => {
+    const signedHeaders = createOnly ? 'content-length%3Bif-none-match' : 'content-length';
     return (
       await r2Storage.getR2Client().sign(
         new Request(
-          `${r2Storage.getR2Url()}/${bucketName}/${fileKey}?X-Amz-Expires=${expiresIn}&X-Amz-SignedHeaders=content-length`,
+          `${r2Storage.getR2Url()}/${bucketName}/${fileKey}?X-Amz-Expires=${expiresIn}&X-Amz-SignedHeaders=${signedHeaders}`,
           {
             method: 'PUT',
             headers: {
               'Content-Length': contentLength.toString(),
+              ...(createOnly ? { 'If-None-Match': '*' } : {}),
             },
           },
         ),
@@ -71,6 +74,12 @@ export const r2Storage = {
     return await r2Storage.getR2Client().fetch(`${r2Storage.getR2Url()}/${bucketName}/${fileKey}`, {
       method: 'DELETE',
     });
+  },
+
+  getObject: async (fileKey: string, bucketName = process.env['R2_BUCKET_NAME'] || '') => {
+    return await r2Storage
+      .getR2Client()
+      .fetch(`${r2Storage.getR2Url()}/${bucketName}/${fileKey}`, { method: 'GET' });
   },
 
   headObject: async (bucketName: string, fileKey: string) => {

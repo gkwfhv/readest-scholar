@@ -454,7 +454,7 @@ fn updater_disabled(identifier: &str) -> bool {
 // scripts on every Linux/WebKitGTK setup (see issue #4874).
 #[cfg(desktop)]
 #[tauri::command]
-fn is_updater_disabled(app: AppHandle) -> bool {
+fn is_updater_disabled(app: AppHandle<AppRuntime>) -> bool {
     updater_disabled(&app.config().identifier)
 }
 

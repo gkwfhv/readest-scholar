@@ -86,6 +86,7 @@ describe('cloudService', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   });
 
   describe('deleteBook', () => {
@@ -195,6 +196,17 @@ describe('cloudService', () => {
 
         expect(book.uploadedAt).toBeNull();
       });
+
+      test('Scholar both deletion leaves cloud bytes for the version-aware queue', async () => {
+        vi.stubEnv('NEXT_PUBLIC_SCHOLAR_RELEASE', 'true');
+        const { deleteFile: deleteCloudFile } = await import('@/libs/storage');
+        const book = createMockBook({ uploadedAt: 1000 });
+        await deleteBook(mockFs, book, 'both');
+
+        expect(deleteCloudFile).not.toHaveBeenCalled();
+        expect(book.uploadedAt).toBe(1000);
+        expect(book.deletedAt).toBeGreaterThan(0);
+      });
     });
 
     // Purge is the "Cloud & Device" delete PLUS a full wipe of the
@@ -296,6 +308,18 @@ describe('cloudService', () => {
         await deleteBook(mockFs, book, 'cloud');
 
         expect(deleteCloudFile).not.toHaveBeenCalled();
+      });
+
+      test('Scholar direct cloud deletion cannot use the legacy object path', async () => {
+        vi.stubEnv('NEXT_PUBLIC_SCHOLAR_RELEASE', 'true');
+        const { deleteFile: deleteCloudFile } = await import('@/libs/storage');
+        const book = createMockBook({ uploadedAt: 1000 });
+
+        await expect(deleteBook(mockFs, book, 'cloud')).rejects.toThrow(
+          'Use Scholar version-aware file deletion',
+        );
+        expect(deleteCloudFile).not.toHaveBeenCalled();
+        expect(book.uploadedAt).toBe(1000);
       });
 
       test('calls deleteFile for remote book and cover', async () => {

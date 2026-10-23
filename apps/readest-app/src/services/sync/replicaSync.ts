@@ -1,9 +1,13 @@
 import { acknowledgeBookshelfOperation } from '@/services/bookshelves/journal';
-import { HlcGenerator } from '@/libs/crdt';
+import { HlcGenerator, hlcParse } from '@/libs/crdt';
 import { LocalStorageHlcStore, type HlcSnapshotStore } from '@/libs/hlcStore';
 import { ReplicaSyncClient } from '@/libs/replicaSyncClient';
+import { isOfflineReplayKind } from '@/libs/replicaSchemas';
 import { markSettled, onSettled } from '@/utils/event';
 import { ReplicaSyncManager, type CursorStore } from './replicaSyncManager';
+import { LocalStoragePendingRowStore } from './replicaPendingStore';
+import { LocalStorageReplicaConflictStore } from './replicaConflictStore';
+import { getReplicaAdapter } from './replicaRegistry';
 
 const REPLICA_SYNC_READY_EVENT = 'replica-sync-ready';
 
@@ -11,13 +15,15 @@ export interface ReplicaSyncInitOpts {
   deviceId: string;
   cursorStore: CursorStore;
   hlcStore?: HlcSnapshotStore;
-  client?: Pick<ReplicaSyncClient, 'push' | 'pull' | 'pullBatch'>;
+  client?: Pick<ReplicaSyncClient, 'push' | 'pull' | 'pullBatch'> &
+    Partial<Pick<ReplicaSyncClient, 'pullChanges'>>;
 }
 
 export interface ReplicaSyncContext {
   manager: ReplicaSyncManager;
   hlc: HlcGenerator;
   deviceId: string;
+  changeClient?: Pick<ReplicaSyncClient, 'pullChanges'>;
 }
 
 let instance: ReplicaSyncContext | null = null;
@@ -72,18 +78,70 @@ export const initReplicaSync = (opts: ReplicaSyncInitOpts): ReplicaSyncContext =
     hlc,
     client,
     cursorStore: opts.cursorStore,
+    pendingStore: new LocalStoragePendingRowStore(),
+    onMergeConflict: (sent, merged) => new LocalStorageReplicaConflictStore().record(sent, merged),
     prepareRow: async (row) => {
-      if (row.kind !== 'bookshelf') return row;
       const { getUserID } = await import('@/utils/access');
-      const { isSyncCategoryEnabled } = await import('./syncCategories');
-      if (!isSyncCategoryEnabled('bookshelf') || row.user_id !== (await getUserID())) return null;
-      // The journal keeps the original stamps so LWW still orders by edit time,
-      // but the server rejects a whole batch whose row-level stamp is more than
-      // a minute off its clock — which would wedge every push after an offline
-      // edit. Restamp the row envelope only; the fields keep their own `t`.
+      const { isCredentialsSyncEnabled, isSyncCategoryEnabled } = await import('./syncCategories');
+      // A durable row may belong to a previous sign-in. Never send it with
+      // another account's token, and honor a category disabled after enqueue.
+      if (row.user_id !== (await getUserID()) || !isSyncCategoryEnabled(row.kind)) return null;
+      // A queued edit can outlive the credential-sync toggle. Recheck it at
+      // send time so previously encrypted slots never leave this device after
+      // the user opts out. Keep the durable original until this safe row lands.
+      let prepared = row;
+      if (!isCredentialsSyncEnabled()) {
+        const encryptedFields = getReplicaAdapter(row.kind)?.encryptedFields;
+        if (encryptedFields?.some((field) => field in row.fields_jsonb)) {
+          const fields_jsonb = { ...row.fields_jsonb };
+          for (const field of encryptedFields) delete fields_jsonb[field];
+          prepared = { ...row, fields_jsonb };
+        }
+      }
+      if (prepared.kind !== 'bookshelf') {
+        let rowTime: number;
+        let deletionTime: number | null;
+        try {
+          rowTime = hlcParse(row.updated_at_ts).physicalMs;
+          deletionTime = row.deleted_at_ts ? hlcParse(row.deleted_at_ts).physicalMs : null;
+        } catch {
+          console.warn('replica pending row has a malformed timestamp', {
+            kind: row.kind,
+            replicaId: row.replica_id,
+          });
+          return null;
+        }
+        const now = Date.now();
+        const outsideWindow =
+          Math.abs(rowTime - now) > 30_000 ||
+          (deletionTime !== null && Math.abs(deletionTime - now) > 30_000);
+        if (outsideWindow) {
+          // Version 2 accepts old field clocks for metadata-only rows. Never
+          // restamp them: the server change sequence drives delivery, while
+          // the original field HLC still decides content order. Binary and
+          // lifecycle operations need explicit conflict branches first.
+          const canReplayFields =
+            isOfflineReplayKind(row.kind) &&
+            row.manifest_jsonb === null &&
+            row.deleted_at_ts === null &&
+            row.reincarnation === null &&
+            rowTime <= now + 30_000;
+          if (!canReplayFields) {
+            console.warn('replica pending row requires versioned conflict handling', {
+              kind: row.kind,
+              replicaId: row.replica_id,
+            });
+            return null;
+          }
+        }
+        return prepared;
+      }
+      // Bookshelf operations retain their existing separate journal and
+      // transport timestamp policy; this slice does not change that path.
       const updated_at_ts = hlc.next();
+      if (hlcParse(updated_at_ts).physicalMs > Date.now() + 30_000) return null;
       return {
-        ...row,
+        ...prepared,
         updated_at_ts,
         ...(row.deleted_at_ts ? { deleted_at_ts: updated_at_ts } : {}),
       };
@@ -93,7 +151,12 @@ export const initReplicaSync = (opts: ReplicaSyncInitOpts): ReplicaSyncContext =
     },
   });
 
-  instance = { manager, hlc, deviceId: opts.deviceId };
+  instance = {
+    manager,
+    hlc,
+    deviceId: opts.deviceId,
+    changeClient: client.pullChanges ? { pullChanges: client.pullChanges.bind(client) } : undefined,
+  };
   void markSettled(REPLICA_SYNC_READY_EVENT);
   return instance;
 };

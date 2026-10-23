@@ -1,6 +1,6 @@
 # Agent 状态
 
-更新时间：2026-10-22。
+更新时间：2026-10-23。
 
 ## 已完成
 
@@ -53,8 +53,101 @@
 - Phase 2 首项[手动 DOI 元数据](docs/evidence/phase2/doi-metadata-2026-10-21.md)已实现并完成本地 Node 24 单测、Scholar Web 构建与手机宽度的浅色/深色/墨水屏检查。DOI 沿用 `books.metadata` 保存；文献/文件 ID 分离、集合、跨 Web/桌面 DOI 同步与账户隔离尚未验收。
 - 此后 Phase 2 的文献/文件 ID 分离、空集合持久化与 DOI 重复提示分别在 PR #47、#48、#49 合并。201 份合成 PDF 已通过隔离 staging 签名上传和 REST 写入；Web 与独立 macOS 测试包最终均能管理分组、读取 DOI/标签、下载并打开目标 PDF；第二账户的五张相关表均为 0 行，三次越权签名下载和一次越权写入被拒绝。完整界面及哈希证据见[规模核验](docs/evidence/phase2/scale-cross-device-2026-10-22.md)。这不是 201 文件的 UI 批量导入验收；三栏书库、加载性能、双向编辑与同步错误仍待处理，Phase 2 整体未通过。
 
+- [三栏科研书库](docs/evidence/phase2/three-pane-library-2026-10-22.md)已完成宽屏浅色/深色/E-Ink 与手机回退检查；[201 路径批量下载修复](docs/evidence/phase2/cover-download-batching-2026-10-22.md)在服务器专用容器构建并以独立 Web 候选版验证：201/201 签名、3/3 SHA-256 往返、第二账户 0 链接。当前候选仅在服务器临时端口，未替换 staging；UI 200+ 批量导入、跨端双向编辑与加载性能仍待验收，Phase 2 整体未通过。
+
+- [201 份 PDF 的真实浏览器导入与上传](docs/evidence/phase2/ui-bulk-import-2026-10-22.md)已在服务器独立 Web 候选版完成：201 本书/201 文献记录、传输队列 201 成功 0 失败、201/201 候选签名下载、3/3 SHA-256、第二账号三表 0 行。修复了 Scholar Web API 同源路径及同步上推 100 条 OR 查询导致的 URI 超长；40 项目标测试及 61 项同步 API 测试、TS、Biome 和服务器 Web 构建通过。203 本本地书库可见耗时三次 744/490/505 ms。候选仍与已验收 staging 分离；新版桌面三栏和 200+ 规模跨端双向编辑仍待验收，Phase 2 整体未通过。
+
+- [服务器候选镜像升级/回退](docs/evidence/phase2/staging-image-upgrade-rollback-2026-10-22.md)已通过：本地固定镜像 `sha256:d37f14118facc629fabfcf93bd425cd9205b5e38f217d4615ae94c841c9a335a` 不经外部仓库打包；端口 3134 验证 201/201 签名、3/3 哈希、第二账号 0 链接；staging 备份后只替换 Web，四路健康与同样的文件核验通过，再回退至原镜像并确认四路健康。201 本 Web 账户还创建了含 Paper 101 的分组，三栏显示 DOI/标签且服务端行一致；见[浏览器导入证据](docs/evidence/phase2/ui-bulk-import-2026-10-22.md)。未推送 GitHub 或 GHCR。
+
+- [201 本 Web ↔ 独立 macOS 测试包的集合与元数据双向往返](docs/evidence/phase2/cross-device-201-collections-2026-10-22.md)已实测：新本地身份登录后显示 201 本，Web 建分组与两标签到达桌面；桌面将 Paper 101 移入新分组、追加第三标签，服务端与 Web 均采用新值，旧客户端未抹除 DOI。第二合成账号仍为 0 签名链接。该桌面包早于三栏新布局，不能作为新版桌面视觉验收；Phase 2 仍未通过。
+
+- [Phase 3 副本游标修复](docs/evidence/phase3/replica-apply-cursor-2026-10-22.md)在服务器以先红后绿的回归测试完成：本地应用失败时不再提前提交单类或批量增量游标，online 重试后才确认；目标 87/87、全量 13,849 通过，TypeScript/Biome 通过。Linux CEF 测试容器已在用户授权下接受本地网络许可并登录 staging，服务端集合可见；本地 201 PDF 跨端上传尚未证明。
+
+- Phase 3 第二项[持久副本待发送队列](docs/evidence/phase3/durable-replica-outbox-2026-10-22.md)正在服务器本地分支 `feat/scholar-durable-replica-queue` 验证：非书架行在内存入队前写本地日志，失败保留，重启恢复；账户隔离、跨窗口旧确认、退避重试和凭据关闭后的发送过滤已覆盖。现有行 HLC 与清单/复活冲突顺序及增量游标耦合，超过 30 秒的行暂不发送，等待[ADR 0004](docs/adr/0004-replica-change-cursor.md)中的版本化协议。目标测试 120/120、TypeScript/Biome 和全量回归 13,868/13,868 已通过，Web 候选产物检查通过（构建期间 SSH 断线，原命令退出码未取得）；未推送 GitHub/GHCR，Phase 3 仍未通过。
+
+- Phase 3 第三项[游标加载/保存竞态](docs/evidence/phase3/cursor-hydration-2026-10-22.md)在服务器分支 `fix/scholar-cursor-hydration` 以两条失败回归锁定并修复：迟到的初始设置不会倒退新游标，保存会合并另一窗口先写入的其他类型游标。相关 78/78、TypeScript/Biome 和格式检查通过；旧存储仍未按账户隔离且并发读改写未事务化，交给 ADR 0004 的新版游标协议。未推送 GitHub/GHCR。
+
+
+- Phase 3 新增[服务端副本变更序号数据库基础](docs/evidence/phase3/replica-change-seq-schema-2026-10-22.md)与[分页 API](docs/evidence/phase3/replica-changes-api-2026-10-22.md)，仅在服务器本地提交。隔离 PostgreSQL 验证同 HLC 的 1,000/1,001 边界、旧 HLC 更新、账户隔离、回滚、并发提交、大整数文本及重复迁移；API 单测、Lint 和 Web 构建通过，最终全量 Vitest 13,875 通过、16 跳过。现有 staging 尚未迁移，客户端仍用旧 HLC 游标，Phase 3 未验收。
+
+- Phase 3 [客户端变更游标接入](docs/evidence/phase3/replica-change-client-2026-10-23.md)已在服务器本地完成：启动先设置、按账户分类型分页、落盘后确认、账户切换和旧端点全量回退。全量 13,891 项通过、16 项跳过；最终边界补丁目标 41/41、Lint 和 Web 构建通过。该提交验收时 staging 尚未迁移或部署，长离线提交和冲突恢复未验收；未推送 GitHub/GHCR。
+
+- Phase 3 [staging 变更协议升级与回退](docs/evidence/phase3/staging-change-protocol-upgrade-2026-10-23.md)已在服务器完成：私有合成快照与迁移前状态恢复、032/033 真正升级、候选 Web 和旧 Web 回退、匿名/合成账户接口实测均通过。该项完成时数据库为 033（后续已升级 035）、Web 已恢复原镜像；候选本地镜像保留。无 GitHub/GHCR 推送。
+
+- Phase 3 [长离线字段重放与冲突历史基础](docs/evidence/phase3/offline-field-conflict-protocol-2026-10-23.md)已在服务器本地验证：原始字段时钟不重写，旧二进制与生命周期操作仍受保护；本地落败字段在清队列前保存，034 历史表在隔离恢复库验证双方版本、重复提交无新游标、账户隔离、旧 RPC 兼容和事务回滚。全量 Vitest 13,904 通过、16 跳过，Lint、格式检查和 Web 构建通过。该项完成时 staging 为 DB033/旧 Web（后续已升至 DB035），冲突界面、双端故障验收及其余 Phase 3 内容未完成；未推送 GitHub/GHCR。
+
+- Phase 3 [staging 冲突历史升级与回退](docs/evidence/phase3/staging-conflict-archive-rollout-2026-10-23.md)通过受控合成烟测：迁移前服务器私有备份、隔离库恢复与 034/035 验证、直接历史伪造被拒、候选 Web 登录态重复推送及分页拉取、只换镜像的短暂部署与原镜像恢复均完成。staging DB035，正式 Web 保持原镜像，四路健康；未推送 GitHub/GHCR。Phase 3 仍需双端断网/崩溃和冲突恢复界面。
+
+- Phase 3 [单字段冲突恢复与并发保护](docs/evidence/phase3/field-recovery-ui-2026-10-23.md)在服务器本地完成：迁移 036、恢复 RPC、按账户中文恢复区、敏感值遮罩、展开时快照与提交时 CAS。目标 5/5、TypeScript/Biome、Web standalone 构建通过；实际浏览器验证正常恢复和展开后的并发编辑拒绝。staging DB036，正式 Web 仍为原镜像，候选仅回环运行；全量测试日志待收尾。无 GitHub/GHCR 推送；Phase 3 尚需双设备故障与注释、二进制和缓存。
+
+- Phase 3 [双逻辑设备元数据故障探针](docs/evidence/phase3/two-device-metadata-fault-probe-2026-10-23.md)在服务器候选 Web 上通过：离线旧字段重放、在线新值胜出、模拟响应丢失后的重复请求、候选 Web 重启、增量游标收敛和历史分支留存；独立临时副本与历史清理为 0。该脚本只模拟协议设备，真实桌面/Web 断网及数据库进程崩溃仍待验收。无 GitHub/GHCR 推送。
+
+- Phase 3 [桌面离线书签自动重试](docs/evidence/phase3/offline-bookmark-retry-2026-10-23.md)在服务器本地完成：先用失败回归复现断线后未重试，再加入 15 秒/online 重试与上传失败不推进笔记拉取游标；目标用例、TypeScript/Biome、Tauri 静态构建及 Linux CEF debug 构建通过。真实测试容器中，保持客户端运行、断开并恢复候选 Web 回环代理后，第 2 页书签从本地配置上传到服务端；重启后的第 1 页离线书签也已重放。另以先红后绿用例覆盖旧请求成功覆盖新请求失败的竞态，最终 Linux 包已重建并读回两页书签；最终完整 Vitest 13,912 通过、16 跳过（1,196 文件通过、4 跳过），完整 Lint 通过。无 GitHub/GHCR 推送。
+
+- Phase 3 [笔记冲突历史与原子比较](docs/evidence/phase3/book-note-conflict-history-2026-10-23.md)已在服务器完成隔离数据库、PostgREST、并发事务及候选 Web 真实 API 验证：过期删除不能覆盖新编辑，删除同时间戳优先，双方版本按账户保留，相同插入重试无副作用。staging 升级 037/038 前有私有完整备份并在隔离库恢复；原 Web 镜像未更换，候选仅绑定回环，合成行已清理。TypeScript/Lint、目标测试及正确环境的完整 Vitest 均通过（13,916 通过、16 跳过）；无 GitHub/GHCR 推送。Phase 3 尚未验收。
+
+- Phase 3 [笔记版本恢复与并发保护](docs/evidence/phase3/book-note-recovery-2026-10-23.md)已在服务器本地完成：039/040 迁移、账户限制与 CAS 行锁、中文恢复区、真实 REST HTTP 409、浏览器旧版恢复和服务端归档复核。原 Web 保持不变，新候选仅绑定回环；全量 Vitest 13,918 通过、16 跳过，加载竞态修复后的目标 5/5、TypeScript/Biome、服务器 Web 生产构建和 staging 四路健康通过。合成测试行均已清理；未推送 GitHub/GHCR。Phase 3 仍需双真实设备并发、二进制冲突、按需缓存和完整镜像。
+
+- Phase 3 [同键二进制覆盖复现](docs/evidence/phase3/binary-overwrite-repro-2026-10-23.md)：服务器合成对象两次等长签名 PUT 后，下载只得到第二份字节；对象与数据库记录均已清理。需实施不可变对象版本和活动指针 CAS，不能仅比较文件大小。此项未通过。
+
+- Phase 3 [不可变文件版本数据库基础](docs/evidence/phase3/immutable-file-version-schema-2026-10-23.md)已在服务器隔离恢复库验证：准备幂等、对象键唯一、完成后行锁 CAS、落败版本留存、恢复 CAS 和账户/角色隔离。迁移 041 仅在隔离库，现有 API 仍可覆盖同名对象；继续实现实际上传/校验/下载协议和客户端，不能据此签收二进制冲突。
+
+- Phase 3 [不可变对象条件写入与流式校验](docs/evidence/phase3/create-only-object-upload-2026-10-23.md)完成服务器本地合成 MinIO 200/412 重复 PUT 和流式 SHA-256/大小实测；6 项单测、TypeScript/Biome 通过。旧签名行为未变；新 API、额度预留、客户端和故障注入未完成，Phase 3 仍不可验收。
+
+- Phase 3 [旧文件与版本共用配额](docs/evidence/phase3/legacy-file-shared-quota-2026-10-23.md)在服务器本地通过：迁移 043 共用账户锁和实时版本字节汇总，隔离库 SQL 探针、35 项存储测试、Lint、Next standalone 构建及回环候选真实合成 HTTP 往返通过。staging 数据库在本机备份后升级 043，正式 Web 仍为旧镜像；测试数据已清理。未向 GitHub/GHCR 推送，Phase 3 尚未验收。
+
+- Phase 3 [文件版本基线状态接口](docs/evidence/phase3/scholar-file-status-2026-10-23.md)已在服务器本地测试和回环候选真实合成 HTTP 验证，旧文件空基线与完成后的活动版本均正确，测试数据清理为 0。正式 Web 不变；客户端仍须在离线排队时持久记录版本基线和内容快照。未推送 GitHub/GHCR。
+
+- Phase 3 [不可变文件原子登记](docs/evidence/phase3/immutable-file-registration-2026-10-23.md)在服务器完成隔离数据库回滚测试、接口单测、Lint/构建与回环候选真实对象往返。staging 数据库在备份后升级 044，正式 Web 原镜像不变；测试对象与行已清理。客户端仍须接入登记、版本基线和持久内容快照，Phase 3 未验收；未推送 GitHub/GHCR。
+
+- Phase 3 [书籍版本客户端接入](docs/evidence/phase3/scholar-book-client-version-flow-2026-10-23.md)已在服务器容器完成单测、Lint、Web 候选构建与合成账户指定版本下载；正式 staging Web 未切换。持久正文快照、冲突处理界面及双设备故障验收待完成。未推送 GitHub/GHCR。
+
 ## 下一动作
 
-1. 继续 Phase 2：实现三栏书库并完成桌面/手机宽度及主题布局验收；定位 201 本数据时的加载延迟和 `URI too long`；走真实 UI 批量导入路径复核 200+ 文献；对集合与元数据做双向编辑并复核隔离。
+1. [Phase 2 非生产合成数据验收](docs/evidence/phase2/acceptance-2026-10-22.md)已通过计划判据，开始 Phase 3 的可靠同步与离线开发。新版 Linux CEF 客户端已在用户授权下接受本地网络许可，合成账户登录、集合拉取及菜单同步状态通过；201 本地文件的跨端读写与故障注入仍列入 Phase 3/7 门槛。Phase 3 的服务端变更序号、分页 API 和客户端落盘后确认已在服务器本地通过回归；staging 数据库升级与 Web 候选回退已实测；单字段冲突恢复已在候选界面和数据库验证。笔记冲突恢复界面已验收；下一步是双真实设备并发、二进制冲突、双设备故障注入、按需缓存。
 2. 外部 HTTPS 分享、真实 OAuth 提供方回跳及独立收件人导入仍需域名和相应测试配置；真实模型质量留给 Phase 5，正式身份包的签名更新分发留给 Phase 8。测试包不是可发布产物。
 3. 生产真实数据、外部 TLS、签名与正式发布仍需单独审批和验收。
+
+## 最新进展（2026-10-23，Phase 3）
+
+服务器本地提交 `cad33382d` 加入不可变文件额度原子预留，`7ed712cd2` 加入可信上传准备/完成 API，并封住旧上传与删除接口对版本对象的直接操作。服务器容器中定向单测、TypeScript/Biome、Web 构建通过；隔离库和合成 staging 的 SQL 探针通过。候选 Web 的两版本签名 PUT、重复写入拒绝、SHA-256 完成、CAS 落败保留、账户恢复和 CORS 预检均完成真实合成往返，测试对象与行已清理。详见 [staging 证据](docs/evidence/phase3/immutable-file-upload-staging-2026-10-23.md)。正式 staging Web 仍为旧镜像，客户端和双设备故障验收待继续；未向 GitHub/GHCR 推送。
+
+[不可变文件活动/历史下载](docs/evidence/phase3/immutable-file-download-2026-10-23.md)新增账户隔离的版本下载 API；回环候选对两个不同字节版本、CAS 落败、指定历史下载、恢复后活动下载和第二账户 404 完成真实合成往返，测试数据已清理。正式 Web 与客户端仍未接入。
+
+[文件版本旧接口兼容](docs/evidence/phase3/immutable-file-legacy-compat-2026-10-23.md)在合成 staging 候选版实测：旧上传原件与下载可用，新版本发布后旧下载返回活动版字节，旧覆盖上传返回 409。[客户端传输基础](docs/evidence/phase3/scholar-file-client-transfer-2026-10-23.md)已分块计算 SHA-256 并用同一操作 ID 处理丢失响应；尚无持久离线队列和书库接入。
+
+## Phase 3 双客户端书签往返（2026-10-23）
+
+服务器上两个独立 Linux CEF QA 容器以同一合成账户实测：A 创建第 1 页书签，B 拉取；B 创建第 2 页书签，A 在已打开阅读器中拉取；B 重启后两个书签仍存在。另一合成账户不能读取 A 的书签。详见 docs/evidence/phase3/two-native-clients-bookmark-sync-2026-10-23.md。Phase 3 尚需双端同一注释并发、服务崩溃故障注入、移动网络切换和最终候选构建验收；没有向 GitHub/GHCR 推送。
+
+## Phase 3 离线书签收敛与 PDF 重推修复（2026-10-23）
+
+服务器上 A/B 两个独立 Linux CEF 客户端以同一合成账户完成不同书签的并发离线/在线删除。B 断开自己的候选 Web 代理后删第 2 页，A 在线删第 1 页；B 网络恢复与重启后侧栏为空，staging 两个书签行都是墓碑。旧客户端对没有 xpointer 的 PDF 书签反复 POST 笔记，新增先失败后通过的五项回归并限制补充 xpointer 的待发送条件，reader hooks 292/292、TypeScript、Biome 及服务器 Web/CEF 构建通过。曾有一次 QA 构建漏载 staging 环境而误连上游认证服务；使用现有 native-build.env 重建后，B 登录态恢复，空闲 43 秒无周期性 POST。详见 docs/evidence/phase3/two-native-clients-bookmark-sync-2026-10-23.md。Phase 3 仍需同一注释的双端并发、服务崩溃及移动网络切换等门槛；未向 GitHub/GHCR 推送。
+
+同日补做候选 Web 重启故障：B 离线复活 Paper 141 第 2 页书签，重启仅供测试的 scholar-phase3-delete-candidate 容器，再恢复 B 本地代理。B 自动重试两次后停止，服务端单行活动书签，A 已打开阅读器自动显示第 2 页。正式 staging Web/数据库未重启；数据库崩溃场景仍未验收。证据追加到 docs/evidence/phase3/two-native-clients-bookmark-sync-2026-10-23.md。
+
+## Phase 3 数据库进程故障演练（2026-10-23）
+
+服务器合成 staging 在完整备份后强制停止数据库进程，带锚点批注已提交数据保留，停机请求失败、恢复后相同请求幂等重放且无虚假冲突；探针还通过恢复 CAS、删除/复活排序。数据库重启策略和四路健康均恢复。标准环境完整 Vitest 为 14035 通过、16 跳过、0 失败。详见 [数据库故障证据](docs/evidence/phase3/staging-db-crash-note-replay-2026-10-23.md)。Phase 3 仍需双真实客户端同一批注并发和二进制冲突等场景；未向 GitHub/GHCR 推送。
+
+## Phase 3 桌面离线批注与在线 API 冲突（2026-10-23）
+
+QA-B 在真实 PDF 阅读器创建并离线编辑同一高亮批注，第二条已认证 API 客户端提交较新版本；B 网络恢复后显示在线版，服务端历史保留 B 离线版，B 的账户恢复界面可见并成功恢复旧版，原在线版转存历史。详见 [桌面批注冲突证据](docs/evidence/phase3/native-api-annotation-conflict-2026-10-23.md)。这不是双图形客户端并发，Phase 3 仍未签收。QA-A 菜单显示 Sign In，故障前状态不明，继续调查。
+
+## Phase 3 双桌面批注冲突与远端落盘（2026-10-23）
+
+服务器 QA-B/QA-C 两个独立 Linux CEF 容器完成同一 PDF 批注的真实图形界面并发：C 离线编辑、B 在线编辑，恢复网络后较新 B 版生效，C 版进入可恢复历史；C 在界面恢复旧版后，B 重开 PDF 收到恢复内容。另复现并修复“远端批注只在内存、进程崩溃后离线丢失”：新构建立即保存每本书配置，QA-C 和 QA-B 均用 SIGKILL、断网、重启验证内容仍在。完整 Vitest 14,036 通过、16 跳过，Web/CEF 构建、TypeScript/Biome 通过。详见 [双客户端批注证据](docs/evidence/phase3/two-native-annotation-conflict-durability-2026-10-23.md)。Phase 3 仍需不可变文件离线快照、双设备故障和按需缓存等；未向 GitHub/GHCR 推送。
+
+## Phase 3 集成候选 staging 往返（2026-10-23）
+
+服务器最终 Scholar Web 生产构建通过，本地镜像 `sha256:3b1d265be2dbf0ce3e8f0bd59055b54389276f8d231f2023d0552da9e1c4ba2a` 在独立回环端口通过书库、PDF worker、匿名拒绝及合成账户两项接口探针。升级前完成私有备份，Compose 比较只变 Web 镜像；短暂切换 staging 后四路健康与登录态增量/文件版本接口均通过，随后恢复原镜像 `sha256:f5a0ddae78db6365b5dcce8138434292e548a75b8f71004dc138ad2b44c024cd`，其他五容器不变。见 [集成候选往返](docs/evidence/phase3/integrated-candidate-staging-2026-10-23.md)。Phase 3 尚未签收；无 GitHub/GHCR 推送。
+
+## Phase 3 认证刷新隔离与双桌面文件冲突（2026-10-23）
+
+QA-B 发现独立登录后的刷新令牌争用：每个阅读窗口强制刷新，以及查询客户端共享交互会话。已加两项先失败后通过的回归，隔离查询客户端并移除装载时强制刷新。两台修复版 CEF 各自登录，B 双阅读窗口及进程重启、C 进程重启后仍登录；05:26–05:44 UTC 未见新增 `refresh_token_already_used`。服务器完整 Vitest 1,223 文件、14,038 项通过（16 跳过），Web/CEF 构建与类型、Biome 检查通过。一小时自然过期刷新仍需覆盖。
+
+Paper 145 双客户端二进制并发：C 离线入队，B 上传不同 PDF 形成活动版本；C 恢复后在桌面界面看到显式冲突，选择使用此次上传后 C 版成为活动版，B 版仍为可恢复的已验证版本。最初 QA 缺少 MinIO 回环代理导致上传不完整；恢复隔离容器代理并从持久任务重试成功，无公网端口变化。详见 [认证与文件冲突证据](docs/evidence/phase3/native-auth-and-two-client-file-conflict-2026-10-23.md)。Phase 3 尚未签收，未向 GitHub/GHCR 推送。
+
+## Phase 3 自验收（2026-10-23）
+
+按工程计划的双设备并发、断网恢复、重复请求、服务崩溃与自动故障测试判据，Phase 3 自验收通过，详见 [验收矩阵](docs/evidence/phase3/acceptance-2026-10-23.md)。含认证修复的最终 Web 候选镜像 `sha256:8737592e0ddd1f77c0ff23b9bbda40d9166e56040c04ea10472e83db9544b05c` 在独立回环和 staging 短暂切换均通过，只重建 Web 后恢复原镜像，其余五容器不变。移动真机、长时完整镜像和一小时自然令牌刷新列为后续平台矩阵/稳定性回归，不作已通过证据。开始 Phase 4 PDF 专业阅读与笔记。

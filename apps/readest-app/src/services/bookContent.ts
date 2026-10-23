@@ -11,6 +11,7 @@ import { buildAbsEbookUrl, isAbsEbook, parseAbsFilePath } from '@/utils/audioboo
 
 export type BookContentSource =
   | { kind: 'managed'; path: string; base: 'Books'; legacy?: boolean }
+  | { kind: 'snapshot'; path: string; base: 'Cache' }
   | { kind: 'external'; path: string; base: 'None' }
   | { kind: 'url'; path: string; base: 'None'; fetcher?: typeof fetch }
   | { kind: 'stream'; path: string; base: 'None'; scheme: 'pse' }
@@ -19,13 +20,18 @@ export type BookContentSource =
 
 export type BookFileContentSource = Extract<
   BookContentSource,
-  { kind: 'managed' | 'external' | 'url' }
+  { kind: 'managed' | 'external' | 'url' | 'snapshot' }
 >;
 
 export function isBookFileContentSource(
   source: BookContentSource,
 ): source is BookFileContentSource {
-  return source.kind === 'managed' || source.kind === 'external' || source.kind === 'url';
+  return (
+    source.kind === 'managed' ||
+    source.kind === 'external' ||
+    source.kind === 'url' ||
+    source.kind === 'snapshot'
+  );
 }
 
 async function resolveLegacyManagedSource(

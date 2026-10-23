@@ -37,6 +37,34 @@ describe('transferStore', () => {
       expect(transfer!.isBackground).toBe(false);
     });
 
+    test('persists one Scholar operation ID across retry and queue restore', () => {
+      const id = useTransferStore.getState().addTransfer('hash', 'Paper', 'upload');
+      const original = useTransferStore.getState().transfers[id]!;
+      expect(original.scholarOpId).toMatch(/^[0-9a-f]{8}-[0-9a-f-]{27}$/);
+      useTransferStore.getState().retryTransfer(id);
+      expect(useTransferStore.getState().transfers[id]!.scholarOpId).toBe(original.scholarOpId);
+      const saved = JSON.parse(JSON.stringify(useTransferStore.getState().transfers));
+      useTransferStore.setState(initialState);
+      useTransferStore.getState().restoreTransfers(saved, false);
+      expect(useTransferStore.getState().transfers[id]!.scholarOpId).toBe(original.scholarOpId);
+      const downloadId = useTransferStore.getState().addTransfer('hash2', 'Paper 2', 'download');
+      expect(useTransferStore.getState().transfers[downloadId]!.scholarOpId).toBeUndefined();
+    });
+
+    test('freezes the account and local version baseline for a Scholar upload', () => {
+      const userId = '00000000-0000-4000-8000-000000000001';
+      const versionId = '00000000-0000-4000-8000-000000000002';
+      const id = useTransferStore.getState().addTransfer('hash', 'Paper', 'upload', 10, false, {
+        accountId: userId,
+        expectedVersionId: versionId,
+      });
+      const item = useTransferStore.getState().transfers[id]!;
+      expect(item.scholarAccountId).toBe(userId);
+      expect(item.scholarExpectedVersionId).toBe(versionId);
+      useTransferStore.getState().retryTransfer(id);
+      expect(useTransferStore.getState().transfers[id]!.scholarExpectedVersionId).toBe(versionId);
+    });
+
     test('accepts custom priority and isBackground', () => {
       const id = useTransferStore.getState().addTransfer('hash2', 'Book Two', 'download', 1, true);
       const transfer = useTransferStore.getState().transfers[id]!;
@@ -234,6 +262,26 @@ describe('transferStore', () => {
 
   // ── clearFailed ──────────────────────────────────────────────────
   describe('clearFailed', () => {
+    test('keeps unresolved Scholar upload and delete conflicts for review', () => {
+      const upload = useTransferStore.getState().addTransfer('h1', 'Upload', 'upload');
+      const deletion = useTransferStore.getState().addTransfer('h2', 'Delete', 'delete');
+      const other = useTransferStore.getState().addTransfer('h3', 'Other', 'download');
+      useTransferStore
+        .getState()
+        .setTransferStatus(upload, 'failed', 'Scholar file conflict; local version retained');
+      useTransferStore
+        .getState()
+        .setTransferStatus(deletion, 'failed', 'Scholar delete conflict; remote version retained');
+      useTransferStore.getState().setTransferStatus(other, 'failed', 'network');
+
+      useTransferStore.getState().clearFailed();
+
+      const transfers = useTransferStore.getState().transfers;
+      expect(transfers[upload]).toBeDefined();
+      expect(transfers[deletion]).toBeDefined();
+      expect(transfers[other]).toBeUndefined();
+    });
+
     test('removes failed and cancelled transfers', () => {
       const id1 = useTransferStore.getState().addTransfer('h1', 'B1', 'upload');
       const id2 = useTransferStore.getState().addTransfer('h2', 'B2', 'download');

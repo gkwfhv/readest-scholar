@@ -101,7 +101,14 @@ const isWebDevMode = () => process.env['NODE_ENV'] === 'development' && isWebApp
 // Dev API only in development mode and web platform
 // with command `pnpm dev-web`
 // for production build or tauri app use the production Web API
-export const getAPIBaseUrl = () => (isWebDevMode() ? '/api' : `${getBaseUrl()}/api`);
+// Scholar's Web API is served by the same Next.js origin. A relative path also
+// works through SSH tunnels and reverse proxies where the public hostname or
+// port differs from the server's configured canonical URL.
+export const getAPIBaseUrl = () =>
+  isWebDevMode() ||
+  (typeof window !== 'undefined' && isWebAppPlatform() && isScholarReleaseBundle())
+    ? '/api'
+    : `${getBaseUrl()}/api`;
 
 // Readest Voice synthesizes on the production GPU service, which a local dev
 // server cannot reach: its routes use the production Web API even under

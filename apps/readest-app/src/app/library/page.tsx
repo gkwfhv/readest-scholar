@@ -104,6 +104,7 @@ import { BackupWindow } from './components/BackupWindow';
 import { CacheManagerWindow } from './components/CacheManagerWindow';
 import { useDragDropImport } from './hooks/useDragDropImport';
 import { useTransferQueue } from '@/hooks/useTransferQueue';
+import { useScholarFullMirror } from '@/hooks/useScholarFullMirror';
 import { useAppRouter } from '@/hooks/useAppRouter';
 import { Toast } from '@/components/Toast';
 import { createBookGroups, findGroupById, getBreadcrumbs } from './utils/libraryUtils';
@@ -391,6 +392,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
   useClipUrlIngress();
   useWebBrowserDownloads();
   useTransferQueue(libraryLoaded);
+  useScholarFullMirror(user?.id, libraryLoaded, appService);
 
   const { pullLibrary, pushLibrary } = useBooksSync();
   // Library-scoped auto-sync for the active third-party cloud provider (WebDAV /

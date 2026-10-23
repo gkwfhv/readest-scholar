@@ -1,0 +1,31 @@
+# Phase 3：双独立 Linux 客户端书签往返
+
+日期：2026-10-23。两套独立 Readest Scholar Linux CEF QA 容器均运行在测试服务器，分别使用独立的 CEF 缓存和本地书库，通过各自的回环代理访问同一 staging 合成账户。界面通过 SSH 隧道和 noVNC 检查；没有在本机开发、编译或向 GitHub 推送。
+
+## 操作与结果
+
+1. A 在合成论文 Scholar Scale Paper 141 第 1 页新增书签。A 的本地配置中 ID 6t4wkgl、页码 1；staging book_notes 出现该账户的活动书签。
+2. B 首次从 A 的旧 CEF 缓存复制会话，但菜单显示 Sign In。直接复制浏览器会话不能当作第二个有效登录。B 后来误用另一套合成账户登录，能访问 staging 但论文书签列表为空；数据库核实该账户与 A 的书签归属不同。这证明了该次缺失是测试账户错误，不能据此判断同步失败。
+3. B 退出并以 A 的同一合成账户独立登录，重新打开同一 PDF。B 的书签侧栏出现第 1 页书签，本地 config.json 记录同一 ID；账户 API 请求返回 200。
+4. B 在第 2 页新增书签 ID fdsqyj6。staging 同一论文活动书签数变为 2；A 未重启，在已打开的阅读器侧栏显示第 1、2 页书签。B 本地配置保存两个 ID 和页码。
+5. 重启 B 客户端后重新打开 PDF，侧栏仍显示第 1、2 页书签。本地书库与 CEF 配置均为 B 自有挂载，未共享 A 的配置文件。
+
+## 核查边界
+
+- 这次证明真实客户端双向书签同步、账户隔离及 B 重启后的本地持久性；界面截图在本次测试会话中逐步核对。
+- 双客户端同时修改同一个注释的竞态、原生客户端进程在服务端崩溃瞬间的重试、移动端网络切换仍需继续验收。相同注释的服务端冲突与归档已由单独故障探针覆盖，不能替代这些端到端场景。
+- 使用的均为合成账户和合成 PDF。测试密码、访问令牌、代理请求头与响应体未写入此证据文件。
+
+## 离线并发删除与重启恢复
+
+随后只中断 B 的本地候选 Web 代理，不停止 B 的阅读器。B 离线删除第 2 页书签；A 在线删除第 1 页书签。恢复 B 的代理后，B 侧栏显示 No Bookmarks。staging 的 public.book_notes 中两个 ID 6t4wkgl 和 fdsqyj6 均有 deleted_at。B 重启并使用正确 staging 构建重新打开 Paper 141，侧栏仍显示 No Bookmarks，两行仍为墓碑。该结果覆盖了两台真实客户端在不同连接状态下分别删除不同书签的收敛；没有声称同一注释的同时编辑已通过。
+
+## PDF 笔记重复上推修复
+
+B 的代理日志在旧客户端空闲时每几秒重复出现 POST /api/sync，随后 GET 相同论文的 notes；PDF 书签及删除墓碑本来没有 xpointer，但旧逻辑把缺少 xpointer 一律当作待同步。新增五个回归用例：未变化的 PDF 书签不重推、新 PDF 书签和墓碑仍上推、旧 EPUB 墓碑不重推、活动 EPUB 笔记仍补充 xpointer。修复前未变化 PDF 用例失败，修复后 reader hooks 套件 292/292、TypeScript 和 Biome 通过。
+
+服务器专用构建容器的 Web 静态构建与 Linux CEF debug 构建均通过。第一次构建命令遗漏 staging 构建环境，客户端连接到上游默认认证服务，合成账号登录失败；此错误只发生在 QA 构建。使用服务器现有 native-build.env 重建后，B 客户端菜单显示 Logged in，登录请求经过 B 的 8130 本地代理并返回 200，Paper 141 在重启后显示 No Bookmarks。该次新二进制于 02:57:18 UTC 后没有再次 POST /api/sync；检查至 02:58:01 UTC，仍有一次普通 notes GET，不再有旧版周期性 POST。构建日志保留在服务器私有测试目录，未向 GitHub 推送。正式 staging Web 保持原镜像。
+
+## 候选 Web 进程重启与离线重放
+
+B 保持 Paper 141 阅读器打开，只停止 B 本地代理后，在第 2 页重新加入书签。B 本地 config.json 显示原 ID fdsqyj6 已复活且 deletedAt 为空；此时服务端该行仍为墓碑。随后重启隔离的 scholar-phase3-delete-candidate Web 容器，B 从同一 Docker 网络取得候选 /library 200，再恢复 B 代理。B 的自动重试在 03:00:12 和 03:00:17 UTC 对笔记发出两次同步 POST，随后停止周期性 POST；03:00:50 UTC 数据库只保留一行 ID fdsqyj6，deleted_at 为空。A 的已打开阅读器自动出现第 2 页书签。此场景只重启候选 Web 进程，staging 正式 Web 和数据库未重启；数据库进程崩溃仍待独立验收。

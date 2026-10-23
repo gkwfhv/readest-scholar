@@ -105,9 +105,9 @@ interface OPDSStoreState {
    * Add a catalog received via replica sync from another device. Same
    * effect on local state as addCatalog, but does NOT republish.
    */
-  applyRemoteCatalog(catalog: OPDSCatalog): void;
+  applyRemoteCatalog(catalog: OPDSCatalog): Promise<void>;
   /** Mirror a server-side tombstone locally without re-publishing. */
-  softDeleteByContentId(contentId: string): void;
+  softDeleteByContentId(contentId: string): Promise<void>;
 
   /** Hydrate from `settings.opdsCatalogs`. Backfills sync fields if needed. */
   loadCustomOPDSCatalogs(envConfig: EnvConfigType): Promise<void>;
@@ -220,7 +220,7 @@ export const useCustomOPDSStore = create<OPDSStoreState>((set, get) => ({
     updated.forEach(publishOpdsUpsert);
   },
 
-  applyRemoteCatalog: (catalog) => {
+  applyRemoteCatalog: async (catalog) => {
     set((state) => {
       const idx = state.catalogs.findIndex((c) => c.contentId === catalog.contentId);
       if (idx >= 0) {
@@ -249,10 +249,10 @@ export const useCustomOPDSStore = create<OPDSStoreState>((set, get) => ({
       return { catalogs: [...state.catalogs, catalog] };
     });
     const env = getReplicaPersistEnv();
-    if (env) void get().saveCustomOPDSCatalogs(env);
+    if (env) await get().saveCustomOPDSCatalogs(env);
   },
 
-  softDeleteByContentId: (contentId) => {
+  softDeleteByContentId: async (contentId) => {
     const target = get().catalogs.find((c) => c.contentId === contentId && !c.deletedAt);
     if (!target) return;
     set((state) => ({
@@ -261,7 +261,7 @@ export const useCustomOPDSStore = create<OPDSStoreState>((set, get) => ({
       ),
     }));
     const env = getReplicaPersistEnv();
-    if (env) void get().saveCustomOPDSCatalogs(env);
+    if (env) await get().saveCustomOPDSCatalogs(env);
   },
 
   loadCustomOPDSCatalogs: async (_envConfig) => {
@@ -293,7 +293,7 @@ export const useCustomOPDSStore = create<OPDSStoreState>((set, get) => ({
       // tombstones back into memory if the row is still deleted.
       settings.opdsCatalogs = catalogs.filter((c) => !c.deletedAt);
       setSettings(settings);
-      saveSettings(_envConfig, settings);
+      await saveSettings(_envConfig, settings);
     } catch (error) {
       console.error('Failed to save OPDS catalogs:', error);
       throw error;

@@ -65,13 +65,16 @@ export const s3Storage = {
     fileKey: string,
     contentLength: number,
     expiresIn: number,
+    createOnly = false,
   ) => {
     const signableHeaders = new Set<string>();
     signableHeaders.add('content-length');
+    if (createOnly) signableHeaders.add('if-none-match');
     const putCommand = new PutObjectCommand({
       Bucket: bucketName,
       Key: fileKey,
       ContentLength: contentLength,
+      IfNoneMatch: createOnly ? '*' : undefined,
     });
 
     const uploadUrl = await getSignedUrl(s3SigningClient, putCommand, {
@@ -104,6 +107,12 @@ export const s3Storage = {
     });
 
     return await s3Storage.getClient().send(deleteCommand);
+  },
+
+  getObject: async (fileKey: string, bucketName = process.env['S3_BUCKET_NAME'] || '') => {
+    return await s3Storage
+      .getClient()
+      .send(new GetObjectCommand({ Bucket: bucketName, Key: fileKey }));
   },
 
   headObject: async (bucketName: string, fileKey: string) => {

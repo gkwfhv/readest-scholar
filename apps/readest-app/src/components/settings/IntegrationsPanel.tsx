@@ -34,6 +34,12 @@ import { useLocalSendStore } from '@/store/localsendStore';
 import { CatalogManager } from '@/app/opds/components/CatalogManager';
 import { saveSysSettings } from '@/helpers/settings';
 import { isCloudSyncAllowed } from '@/utils/access';
+import { getOSPlatform } from '@/utils/misc';
+import {
+  getScholarFileCacheMode,
+  setScholarFileCacheMode,
+  type ScholarFileCacheMode,
+} from '@/services/scholarFileCacheMode';
 import {
   getAppDisplayName,
   isScholarReleaseBundle,
@@ -125,6 +131,17 @@ const IntegrationsPanel: React.FC = () => {
   const router = useAppRouter();
   const { envConfig, appService } = useEnv();
   const { user } = useAuth();
+  const [scholarCacheMode, setScholarCacheModeState] = useState<ScholarFileCacheMode>(() =>
+    getScholarFileCacheMode(user?.id),
+  );
+  useEffect(() => {
+    setScholarCacheModeState(getScholarFileCacheMode(user?.id));
+  }, [user?.id]);
+  const selectScholarCacheMode = (mode: ScholarFileCacheMode) => {
+    if (!user?.id) return;
+    setScholarFileCacheMode(user.id, mode);
+    setScholarCacheModeState(mode);
+  };
   const { settings, requestedSubPage, setRequestedSubPage } = useSettingsStore();
   const opdsCatalogs = useCustomOPDSStore((s) => s.catalogs);
   const opdsCount = opdsCatalogs.filter((c) => !c.deletedAt).length;
@@ -473,6 +490,54 @@ const IntegrationsPanel: React.FC = () => {
             onClick={() => navigateToProfile(router)}
           />
         </BoxedList>
+        {scholarRelease && isTauriAppPlatform() && user && (
+          <fieldset className='mt-5'>
+            <legend className='mb-2 font-medium'>{_('File cache on this device')}</legend>
+            <p className='text-base-content/70 mb-3 text-sm'>
+              {_(
+                'Choose when this device downloads cloud book files. This choice applies only to the current account on this device.',
+              )}
+              {(appService?.isIOSApp ||
+                appService?.isAndroidApp ||
+                ['ios', 'android'].includes(getOSPlatform())) && (
+                <span className='mt-1 block'>
+                  {_(
+                    'On mobile, background mirroring runs only when Wi-Fi is detected; if network type is unavailable, open books to download them on demand.',
+                  )}
+                </span>
+              )}
+            </p>
+            <div className='border-base-300 overflow-hidden rounded-xl border'>
+              {(
+                [
+                  ['on_demand', _('On demand'), _('Download a book when you open it.')],
+                  [
+                    'full_mirror',
+                    _('Full mirror'),
+                    _('Download every cloud book for offline reading in the background.'),
+                  ],
+                ] as const
+              ).map(([mode, title, description]) => (
+                <label
+                  key={mode}
+                  className='border-base-300 flex cursor-pointer items-start gap-3 border-b p-3 last:border-b-0'
+                >
+                  <input
+                    type='radio'
+                    name='scholar-file-cache-mode'
+                    className='radio radio-primary mt-1'
+                    checked={scholarCacheMode === mode}
+                    onChange={() => selectScholarCacheMode(mode)}
+                  />
+                  <span>
+                    <strong className='block'>{title}</strong>
+                    <span className='text-base-content/70 text-sm'>{description}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )}
       </div>
     );
   if (subPage === 'readwise')

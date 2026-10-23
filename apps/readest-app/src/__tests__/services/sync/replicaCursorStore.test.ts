@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { createSettingsCursorStore } from '@/services/sync/replicaCursorStore';
+import { hlcPack } from '@/libs/crdt';
 import type { AppService } from '@/types/system';
 import type { Hlc } from '@/types/replica';
 import type { SystemSettings } from '@/types/settings';
@@ -117,6 +118,41 @@ describe('createSettingsCursorStore', () => {
     expect(() => store.set('dictionary', 'cur' as Hlc)).not.toThrow();
     await vi.advanceTimersByTimeAsync(110);
     await Promise.resolve();
+  });
+
+  test('a late initial load cannot rewind a cursor set during hydration', async () => {
+    let resolveLoad!: (settings: SystemSettings) => void;
+    const loadSettings = vi.fn(
+      () =>
+        new Promise<SystemSettings>((resolve) => {
+          resolveLoad = resolve;
+        }),
+    );
+    const fake = { loadSettings, saveSettings: vi.fn() };
+    const store = createSettingsCursorStore(fake as unknown as AppService);
+    const old = hlcPack(1000, 0, 'dev-a') as Hlc;
+    const newer = hlcPack(2000, 0, 'dev-a') as Hlc;
+
+    store.set('dictionary', newer);
+    resolveLoad({ lastSyncedAtReplicas: { dictionary: old } } as unknown as SystemSettings);
+    await Promise.resolve();
+
+    expect(store.get('dictionary')).toBe(newer);
+  });
+
+  test('a save merges cursors written by another window after hydration', async () => {
+    const fake = makeFakeAppService();
+    const store = createSettingsCursorStore(fake as unknown as AppService, { debounceMs: 100 });
+    await vi.advanceTimersByTimeAsync(0);
+    const dictionary = hlcPack(2000, 0, 'dev-a') as Hlc;
+    const font = hlcPack(3000, 0, 'dev-b') as Hlc;
+    await fake.saveSettings({ lastSyncedAtReplicas: { font } } as unknown as SystemSettings);
+
+    store.set('dictionary', dictionary);
+    await vi.advanceTimersByTimeAsync(110);
+
+    expect(fake.getSettings().lastSyncedAtReplicas).toEqual({ font, dictionary });
+    expect(store.get('font')).toBe(font);
   });
 
   test('hydrate failure does not break subsequent get/set', async () => {

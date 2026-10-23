@@ -54,14 +54,27 @@ export const getUploadSignedUrl = async (
   contentLength: number,
   expiresIn: number,
   bucketName?: string,
+  createOnly = false,
 ) => {
   const storageType = getStorageType();
   if (storageType === 'r2') {
     bucketName = bucketName || process.env['R2_BUCKET_NAME'] || '';
-    return await r2Storage.getUploadSignedUrl(bucketName, fileKey, contentLength, expiresIn);
+    return await r2Storage.getUploadSignedUrl(
+      bucketName,
+      fileKey,
+      contentLength,
+      expiresIn,
+      createOnly,
+    );
   } else {
     bucketName = bucketName || process.env['S3_BUCKET_NAME'] || '';
-    return await s3Storage.getUploadSignedUrl(bucketName, fileKey, contentLength, expiresIn);
+    return await s3Storage.getUploadSignedUrl(
+      bucketName,
+      fileKey,
+      contentLength,
+      expiresIn,
+      createOnly,
+    );
   }
 };
 

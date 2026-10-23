@@ -3,6 +3,7 @@ import { corsAllMethods, runMiddleware } from '@/utils/cors';
 import { createSupabaseAdminClient } from '@/utils/supabase';
 import { validateUserAndToken } from '@/utils/access';
 import { deleteObject } from '@/utils/object';
+import { isProtectedScholarStorageKey } from '@/utils/scholarProtectedFile';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   await runMiddleware(req, res, corsAllMethods);
@@ -23,6 +24,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'Missing or invalid fileKey' });
     }
 
+    if (fileKey.startsWith(`${user.id}/Scholar/versions/`)) {
+      return res.status(400).json({ error: 'Protected file version' });
+    }
+
+    if (isProtectedScholarStorageKey(fileKey, user.id)) {
+      return res.status(409).json({ error: 'Use Scholar version-aware file deletion' });
+    }
+
     const supabase = createSupabaseAdminClient();
     const { data: fileRecord, error: fileError } = await supabase
       .from('files')
@@ -39,6 +48,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (fileRecord.user_id !== user.id) {
       return res.status(403).json({ error: 'Unauthorized access to the file' });
     }
+
+    // Also protect an immutable version when this server has not enabled the
+    // Scholar release flag. Never delete the object if a retained version
+    // depends on this file row.
+    const { data: version, error: versionError } = await supabase
+      .from('scholar_file_versions')
+      .select('file_id')
+      .eq('user_id', user.id)
+      .eq('file_id', fileRecord.id)
+      .limit(1)
+      .maybeSingle();
+    if (versionError && !['42P01', 'PGRST205'].includes(versionError.code)) {
+      return res.status(500).json({ error: 'Could not verify Scholar versions' });
+    }
+    if (version) return res.status(409).json({ error: 'Use Scholar version-aware file deletion' });
 
     try {
       await deleteObject(fileKey);

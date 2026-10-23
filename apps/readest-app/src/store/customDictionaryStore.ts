@@ -80,7 +80,7 @@ interface DictionaryStoreState {
    * just pulled it). Re-publishing would create a tight feedback loop
    * with stale HLCs. Used exclusively by the pull-side orchestrator.
    */
-  applyRemoteDictionary(dict: ImportedDictionary): void;
+  applyRemoteDictionary(dict: ImportedDictionary): Promise<void>;
   /**
    * Look up a local imported entry by its cross-device contentId. Used
    * by the pull-side orchestrator to detect "row from another device"
@@ -99,7 +99,7 @@ interface DictionaryStoreState {
    * server row arrives tombstoned — the row is already deleted on the
    * server; we just observed it and need to mirror locally.
    */
-  softDeleteByContentId(contentId: string): void;
+  softDeleteByContentId(contentId: string): Promise<void>;
   /**
    * Patch an imported dictionary's mutable display fields (currently just
    * `name`). The on-disk bundle is untouched. No-op if the id is unknown
@@ -231,7 +231,7 @@ export const useCustomDictionaryStore = create<DictionaryStoreState>((set, get) 
     publishDictUpsert(dict);
   },
 
-  applyRemoteDictionary: (dict) => {
+  applyRemoteDictionary: async (dict) => {
     // Same local-state mutation as addDictionary, minus the publish call.
     // The row already exists on the server (we just pulled it).
     set((state) => {
@@ -253,7 +253,7 @@ export const useCustomDictionaryStore = create<DictionaryStoreState>((set, get) 
       };
     });
     const env = getReplicaPersistEnv();
-    if (env) void get().saveCustomDictionaries(env);
+    if (env) await get().saveCustomDictionaries(env);
   },
 
   findByContentId: (contentId) =>
@@ -269,7 +269,7 @@ export const useCustomDictionaryStore = create<DictionaryStoreState>((set, get) 
     if (env) void get().saveCustomDictionaries(env);
   },
 
-  softDeleteByContentId: (contentId) => {
+  softDeleteByContentId: async (contentId) => {
     // Scrub providerOrder/providerEnabled by contentId regardless of
     // whether a local dict matches — Device B fresh-install pulls the
     // contentId via the settings replica's providerOrder/providerEnabled
@@ -304,7 +304,7 @@ export const useCustomDictionaryStore = create<DictionaryStoreState>((set, get) 
       },
     }));
     const env = getReplicaPersistEnv();
-    if (env) void get().saveCustomDictionaries(env);
+    if (env) await get().saveCustomDictionaries(env);
   },
 
   updateDictionary: (id, patch) => {
@@ -681,7 +681,7 @@ export const useCustomDictionaryStore = create<DictionaryStoreState>((set, get) 
         markExplicitProviderOrderPublish();
       }
       setSettings(next);
-      saveSettings(envConfig, next);
+      await saveSettings(envConfig, next);
     } catch (error) {
       console.error('Failed to save custom dictionaries settings:', error);
       throw error;

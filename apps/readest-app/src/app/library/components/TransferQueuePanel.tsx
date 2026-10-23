@@ -13,6 +13,8 @@ import {
   MdDeleteSweep,
 } from 'react-icons/md';
 import { useTransferQueue } from '@/hooks/useTransferQueue';
+import ScholarFileConflictDialog from './ScholarFileConflictDialog';
+import ScholarFileDeleteConflictDialog from './ScholarFileDeleteConflictDialog';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useResponsiveSize } from '@/hooks/useResponsiveSize';
 import { useKeyDownActions } from '@/hooks/useKeyDownActions';
@@ -25,6 +27,8 @@ import {
   TransferItem,
   TransferStatus,
   isFailedLikeTransfer,
+  isRetryableTransfer,
+  isUnresolvedScholarConflict,
   useTransferStore,
 } from '@/store/transferStore';
 
@@ -88,8 +92,9 @@ const TransferItemRow: React.FC<{
   transfer: TransferItem;
   onCancel: (id: string) => void;
   onRetry: (id: string) => void;
+  onResolve: (id: string) => void;
   iconSize: number;
-}> = ({ transfer, onCancel, onRetry, iconSize }) => {
+}> = ({ transfer, onCancel, onRetry, onResolve, iconSize }) => {
   const _ = useTranslation();
 
   const completedLabel = {
@@ -137,7 +142,22 @@ const TransferItemRow: React.FC<{
       </div>
 
       <div className='flex items-center gap-1'>
-        {isFailedLikeTransfer(transfer) && (
+        {transfer.status === 'failed' &&
+          (transfer.error?.includes('Scholar file conflict') ||
+            transfer.error?.includes('Scholar delete conflict')) && (
+            <button
+              onClick={() => onResolve(transfer.id)}
+              className='btn btn-ghost btn-sm eink-bordered'
+              aria-label={_(
+                transfer.type === 'delete'
+                  ? 'Resolve file delete conflict'
+                  : 'Resolve file conflict',
+              )}
+            >
+              {_('Resolve')}
+            </button>
+          )}
+        {isRetryableTransfer(transfer) && (
           <button
             onClick={() => onRetry(transfer.id)}
             className='btn btn-ghost btn-sm btn-circle'
@@ -167,6 +187,7 @@ const TransferQueuePanel: React.FC = () => {
   const iconSize = useResponsiveSize(18);
   const setIsOpen = useTransferStore((state) => state.setIsTransferQueueOpen);
   const getVisibleLibrary = useLibraryStore((state) => state.getVisibleLibrary);
+  const fullLibrary = useLibraryStore((state) => state.library);
   const {
     transfers,
     stats,
@@ -184,6 +205,11 @@ const TransferQueuePanel: React.FC = () => {
   } = useTransferQueue();
 
   const [filter, setFilter] = useState<FilterType>('all');
+  const [conflictId, setConflictId] = useState<string | null>(null);
+  const unresolvedConflicts = transfers.filter(isUnresolvedScholarConflict).length;
+  const clearableFailed = transfers.filter(
+    (transfer) => isFailedLikeTransfer(transfer) && !isUnresolvedScholarConflict(transfer),
+  ).length;
 
   const onClose = () => setIsOpen(false);
   const divRef = useKeyDownActions({ onCancel: onClose, onConfirm: onClose });
@@ -350,6 +376,7 @@ const TransferQueuePanel: React.FC = () => {
                 transfer={transfer}
                 onCancel={cancelTransfer}
                 onRetry={retryTransfer}
+                onResolve={setConflictId}
                 iconSize={iconSize}
               />
             ))
@@ -358,7 +385,7 @@ const TransferQueuePanel: React.FC = () => {
 
         {/* Footer actions */}
         <div className='border-base-300 flex flex-wrap items-center justify-evenly gap-2 border-t p-4'>
-          {stats.failed > 0 && (
+          {transfers.some(isRetryableTransfer) && (
             <button onClick={retryAllFailed} className='btn btn-ghost btn-sm gap-1'>
               <MdRefresh size={iconSize - 2} />
               {_('Retry All')}
@@ -376,14 +403,35 @@ const TransferQueuePanel: React.FC = () => {
               {_('Clear Completed')}
             </button>
           )}
-          {stats.failed > 0 && (
+          {clearableFailed > 0 && (
             <button onClick={clearFailed} className='btn btn-ghost btn-sm gap-1'>
               <MdDeleteSweep size={iconSize - 2} />
-              {_('Clear Failed')}
+              {_(unresolvedConflicts ? 'Clear Other Failed' : 'Clear Failed')}
             </button>
           )}
         </div>
       </div>
+      {conflictId &&
+        (() => {
+          const transfer = transfers.find((item) => item.id === conflictId);
+          // A delete conflict may concern a book already tombstoned locally,
+          // so the visible shelf cannot be used for this lookup.
+          const book = fullLibrary.find((item) => item.hash === transfer?.bookHash);
+          if (!transfer || !book) return null;
+          return transfer.type === 'delete' ? (
+            <ScholarFileDeleteConflictDialog
+              transfer={transfer}
+              book={book}
+              onClose={() => setConflictId(null)}
+            />
+          ) : (
+            <ScholarFileConflictDialog
+              transfer={transfer}
+              book={book}
+              onClose={() => setConflictId(null)}
+            />
+          );
+        })()}
     </div>
   );
 };

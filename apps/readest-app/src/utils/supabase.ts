@@ -31,6 +31,9 @@ export const supabase = createClient(
 
 export const createSupabaseClient = (accessToken?: string) => {
   return createClient(supabaseUrl, supabaseAnonKey, {
+    // Query clients use the explicit bearer token below. Sharing the browser's
+    // interactive session would create extra refreshers for one rotating token.
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     global: {
       headers: accessToken
         ? {

@@ -50,7 +50,7 @@ describe('ReplicaSyncClient.push', () => {
     expect(init.method).toBe('POST');
     expect(init.headers.Authorization).toBe('Bearer fake-token');
     expect(init.headers['Content-Type']).toBe('application/json');
-    expect(JSON.parse(init.body)).toEqual({ rows: [sampleRow] });
+    expect(JSON.parse(init.body)).toEqual({ protocolVersion: 2, rows: [sampleRow] });
     expect(result).toEqual([sampleRow]);
   });
 
@@ -322,5 +322,44 @@ describe('ReplicaSyncClient.pullBatch', () => {
     await expect(client.pullBatch([{ kind: 'dictionary', since: null }])).rejects.toBeInstanceOf(
       SyncError,
     );
+  });
+});
+
+describe('ReplicaSyncClient.pullChanges', () => {
+  test('keeps a bigint cursor as text across request and response', async () => {
+    const page = {
+      changes: [{ seq: '9007199254740993', row: sampleRow }],
+      nextCursor: '9007199254740993',
+      hasMore: false,
+    };
+    mockFetch.mockResolvedValueOnce(new Response(JSON.stringify(page), { status: 200 }));
+    const result = await new ReplicaSyncClient().pullChanges('dictionary', '9007199254740992', 100);
+    expect(result).toEqual(page);
+    const [url, init] = mockFetch.mock.calls[0]!;
+    expect(url).toBe(
+      'https://example.test/sync/replica-changes?kind=dictionary&after=9007199254740992&limit=100',
+    );
+    expect(init.headers.Authorization).toBe('Bearer fake-token');
+  });
+
+  test('reports a missing versioned endpoint as unsupported', async () => {
+    mockFetch.mockResolvedValueOnce(new Response('not found', { status: 404 }));
+    await expect(new ReplicaSyncClient().pullChanges('dictionary', '0', 100)).resolves.toBeNull();
+  });
+
+  test('rejects a non-progressing or numerically rounded page', async () => {
+    mockFetch.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          changes: [{ seq: Number('9007199254740993'), row: sampleRow }],
+          nextCursor: '9007199254740992',
+          hasMore: true,
+        }),
+        { status: 200 },
+      ),
+    );
+    await expect(
+      new ReplicaSyncClient().pullChanges('dictionary', '9007199254740992', 100),
+    ).rejects.toThrow();
   });
 });

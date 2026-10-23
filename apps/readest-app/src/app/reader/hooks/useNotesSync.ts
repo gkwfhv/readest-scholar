@@ -1,8 +1,10 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { useEnv } from '@/context/EnvContext';
 import { useSync } from '@/hooks/useSync';
 import { BookNote, FIXED_LAYOUT_FORMATS } from '@/types/book';
 import { useBookDataStore } from '@/store/bookDataStore';
+import { useSettingsStore } from '@/store/settingsStore';
 import { useReaderStore } from '@/store/readerStore';
 import { SYNC_NOTES_INTERVAL_SEC } from '@/services/constants';
 import { throttle } from '@/utils/throttle';
@@ -26,11 +28,15 @@ const incomingWins = (existing: BookNote, incoming: BookNote) => {
 
 export const useNotesSync = (bookKey: string) => {
   const { user } = useAuth();
+  const { appService, envConfig } = useEnv();
+  const { settings } = useSettingsStore();
   const { syncedNotes, syncNotes, lastSyncedAtNotes } = useSync(bookKey);
   const { getConfig, setConfig, getBookData } = useBookDataStore();
   const { getView, getViewsById } = useReaderStore();
 
   const config = getConfig(bookKey);
+  const retryPendingRef = useRef(false);
+  const latestSyncAttemptRef = useRef(0);
 
   const populateXPointersForPush = async (notes: BookNote[]): Promise<BookNote[]> => {
     const bookData = getBookData(bookKey);
@@ -143,11 +149,17 @@ export const useNotesSync = (bookKey: string) => {
     if (!config?.location || !book || !user) return {};
 
     const bookNotes = config.booknotes ?? [];
-    // A note without an xpointer is pushed until it gets one; a drawing never
-    // does (see populateXPointersForPush), so it goes only when it changed.
+    // Re-push a live EPUB note until its xpointer is populated. PDF/CBZ
+    // anchors have no xpointer by design, and tombstones never gain one:
+    // treating either as pending would upload the same note on every pull.
+    const needsXPointer = (note: BookNote) =>
+      !FIXED_LAYOUT_FORMATS.has(book.format) &&
+      !note.deletedAt &&
+      !note.xpointer0 &&
+      note.type !== 'ink';
     const newNotes = bookNotes.filter(
       (note) =>
-        (!note.xpointer0 && note.type !== 'ink') ||
+        needsXPointer(note) ||
         lastSyncedAtNotes < note.updatedAt ||
         lastSyncedAtNotes < (note.deletedAt ?? 0),
     );
@@ -168,8 +180,15 @@ export const useNotesSync = (bookKey: string) => {
         const book = getBookData(bookKey)?.book;
         const newNotes = getNewNotes();
         if (newNotes.notes?.length) {
-          populateXPointersForPush(newNotes.notes).then((enriched) => {
-            syncNotes(enriched, book?.hash, book?.metaHash, 'both');
+          const attempt = ++latestSyncAttemptRef.current;
+          populateXPointersForPush(newNotes.notes).then(async (enriched) => {
+            if (attempt !== latestSyncAttemptRef.current) return;
+            const pushed = await syncNotes(enriched, book?.hash, book?.metaHash, 'both');
+            // An older request can finish after a newer edit failed; its
+            // success must not erase the newer edit's retry obligation.
+            if (attempt === latestSyncAttemptRef.current) {
+              retryPendingRef.current = pushed === false;
+            }
           });
         } else {
           syncNotes(newNotes.notes, book?.hash, book?.metaHash, 'both');
@@ -183,6 +202,20 @@ export const useNotesSync = (bookKey: string) => {
     ),
     [syncNotes],
   );
+
+  // A failed upload is still in local booknotes. Retry even when a container
+  // proxy returns and navigator.onLine never changed, as in a service outage.
+  useEffect(() => {
+    const retry = () => {
+      if (retryPendingRef.current) handleAutoSync();
+    };
+    const timer = window.setInterval(retry, 15_000);
+    window.addEventListener('online', retry);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('online', retry);
+    };
+  }, [handleAutoSync]);
 
   // A book's first reading position is saved after its notes load, and that
   // write keeps the same booknotes array, so re-run once it appears.
@@ -252,9 +285,22 @@ export const useNotesSync = (bookKey: string) => {
         ...oldNotes.filter((oldNote) => !convertedNotes.some((n) => n.id === oldNote.id)),
         ...convertedNotes.map(processNewNote),
       ];
+      const changed = JSON.stringify(mergedNotes) !== JSON.stringify(oldNotes);
       setConfig(bookKey, { booknotes: mergedNotes });
+      if (!changed) return;
+      // A remote note is already visible in the reader. Persist it now so a
+      // crash before the next page turn or graceful close cannot erase the
+      // offline copy. Save the per-book config directly: saveConfig also bumps
+      // reading-progress timestamps and can make stale local progress win.
+      const latest = getConfig(bookKey);
+      if (book && latest) {
+        const service = appService ?? (await envConfig.getAppService());
+        await service.saveBookConfig(book, latest, settings);
+      }
     };
-    processSyncedNotes();
+    void processSyncedNotes().catch((err) => {
+      console.error('Failed to persist pulled book notes:', err);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncedNotes]);
 };

@@ -9,6 +9,8 @@ interface StorageStats {
   usage: number;
   quota: number;
   usagePercentage: number;
+  versionCount?: number;
+  versionBytes?: number;
   byBookHash: Array<{
     bookHash: string | null;
     fileCount: number;
@@ -31,44 +33,45 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const supabase = createSupabaseAdminClient();
 
-    // Get total file count and size (paginated to avoid Supabase 1000 row limit)
-    const PAGE_SIZE = 1000;
-    let allFileStats: { file_size: number }[] = [];
-    let offset = 0;
-    let hasMore = true;
-
-    while (hasMore) {
-      const { data, error } = await supabase
-        .from('files')
-        .select('file_size')
-        .eq('user_id', user.id)
-        .is('deleted_at', null)
-        .range(offset, offset + PAGE_SIZE - 1);
-
-      if (error) {
-        console.error('Error querying total stats:', error);
-        return res.status(500).json({ error: 'Failed to retrieve storage statistics' });
-      }
-
-      if (data && data.length > 0) {
-        allFileStats = allFileStats.concat(data);
-        offset += PAGE_SIZE;
-        hasMore = data.length === PAGE_SIZE;
-      } else {
-        hasMore = false;
-      }
+    const { data: liveStats, error: liveStatsError } = await supabase.rpc('get_storage_usage_v1', {
+      p_user_id: user.id,
+    });
+    if (liveStatsError && !['PGRST202', '42883'].includes(liveStatsError.code)) {
+      console.error('Error querying storage usage:', liveStatsError);
+      return res.status(500).json({ error: 'Failed to retrieve storage statistics' });
+    }
+    const live = liveStats?.[0];
+    if (!liveStatsError && !live) {
+      return res.status(500).json({ error: 'Empty storage usage result' });
     }
 
-    const totalFiles = allFileStats.length;
-    const totalSize = allFileStats.reduce((sum, file) => sum + (file.file_size || 0), 0);
-
-    // `quota` is an entitlement and is fine to read from the token. `usage`
-    // there is a claim frozen at token-mint time, so reporting it would show a
-    // figure that disagrees with the totalSize this endpoint just summed from
-    // the files table. Report the live sum.
+    // Older self-hosted databases have no Scholar usage RPC yet.
+    let totalFiles = live?.file_count ?? 0;
+    let totalSize = live?.file_bytes ?? 0;
+    if (liveStatsError) {
+      const PAGE_SIZE = 1000;
+      let offset = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from('files')
+          .select('file_size')
+          .eq('user_id', user.id)
+          .is('deleted_at', null)
+          .range(offset, offset + PAGE_SIZE - 1);
+        if (error) {
+          console.error('Error querying total stats:', error);
+          return res.status(500).json({ error: 'Failed to retrieve storage statistics' });
+        }
+        totalFiles += data?.length ?? 0;
+        totalSize += data?.reduce((sum, file) => sum + (file.file_size || 0), 0) ?? 0;
+        if (!data || data.length < PAGE_SIZE) break;
+        offset += PAGE_SIZE;
+      }
+    }
     const { quota } = getStoragePlanData(token);
-    const usage = totalSize;
+    const usage = live?.usage_bytes ?? totalSize;
     const usagePercentage = quota > 0 ? Math.round((usage / quota) * 100) : 0;
+    const PAGE_SIZE = 1000;
 
     // Get stats grouped by book_hash
     const { data: bookHashStats, error: bookHashError } = await supabase.rpc(
@@ -135,6 +138,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       usage,
       quota,
       usagePercentage,
+      versionCount: live?.version_count ?? 0,
+      versionBytes: live?.version_bytes ?? 0,
       byBookHash,
     };
 

@@ -73,9 +73,9 @@ interface ABSServerStoreState {
    * Apply a server received via replica sync from another device. Same
    * effect on local state as addServer, but does NOT republish.
    */
-  applyRemoteServer(server: ABSServer): void;
+  applyRemoteServer(server: ABSServer): Promise<void>;
   /** Mirror a server-side tombstone locally without re-publishing. */
-  softDeleteByContentId(contentId: string): void;
+  softDeleteByContentId(contentId: string): Promise<void>;
 
   /** Hydrate from `settings.absServers`. Backfills sync fields if needed. */
   loadABSServers(envConfig: EnvConfigType): Promise<void>;
@@ -166,7 +166,7 @@ export const useABSServerStore = create<ABSServerStoreState>((set, get) => ({
     return true;
   },
 
-  applyRemoteServer: (server) => {
+  applyRemoteServer: async (server) => {
     set((state) => {
       const idx = state.servers.findIndex((s) => s.contentId === server.contentId);
       if (idx >= 0) {
@@ -206,17 +206,17 @@ export const useABSServerStore = create<ABSServerStoreState>((set, get) => ({
       return { servers: [...state.servers, server] };
     });
     const env = getReplicaPersistEnv();
-    if (env) void get().saveABSServers(env);
+    if (env) await get().saveABSServers(env);
   },
 
-  softDeleteByContentId: (contentId) => {
+  softDeleteByContentId: async (contentId) => {
     const target = get().servers.find((s) => s.contentId === contentId && !s.deletedAt);
     if (!target) return;
     set((state) => ({
       servers: state.servers.map((s) => (s.id === target.id ? { ...s, deletedAt: Date.now() } : s)),
     }));
     const env = getReplicaPersistEnv();
-    if (env) void get().saveABSServers(env);
+    if (env) await get().saveABSServers(env);
   },
 
   loadABSServers: async (_envConfig) => {
@@ -266,7 +266,7 @@ export const useABSServerStore = create<ABSServerStoreState>((set, get) => ({
       );
       settings.absServers = [...live, ...unseen];
       setSettings(settings);
-      saveSettings(_envConfig, settings);
+      await saveSettings(_envConfig, settings);
     } catch (error) {
       console.error('Failed to save ABS servers:', error);
       throw error;

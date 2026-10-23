@@ -103,13 +103,15 @@ const indexedDBFileSystem: FileSystem = {
         const data = getRequest.result;
         if (data) {
           store.put({ path: dstFp, content: data.content });
-          resolve();
         } else {
+          transaction.abort();
           reject(new Error(`File not found: ${srcFp}`));
         }
       };
 
-      getRequest.onerror = () => reject(getRequest.error);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error);
     });
   },
   async readFile(path: string, base: BaseDir, mode: 'text' | 'binary') {

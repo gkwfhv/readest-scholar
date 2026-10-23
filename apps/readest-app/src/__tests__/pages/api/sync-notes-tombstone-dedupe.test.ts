@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dedupeLatest } from '@/pages/api/sync';
+import { dedupeLatest, incomingBookNoteWins } from '@/pages/api/sync';
 
 const iso = (ms: number) => new Date(ms).toISOString();
 
@@ -53,5 +53,26 @@ describe('dedupeLatest', () => {
     const a = { book_hash: 'k', id: '', updated_at: iso(1000), deleted_at: null };
     const b = { book_hash: 'r', id: '', updated_at: iso(1000), deleted_at: null };
     expect(dedupeLatest([a, b], ['id'])).toHaveLength(2);
+  });
+});
+
+describe('incomingBookNoteWins', () => {
+  it('rejects a stale deletion after a newer live edit', () => {
+    const server = { updated_at: iso(3000), deleted_at: null };
+    const incoming = { updated_at: iso(1000), deleted_at: iso(2000) };
+    expect(incomingBookNoteWins(incoming, server)).toBe(false);
+  });
+
+  it('does not resurrect a tombstone on an equal-time live edit', () => {
+    const server = { updated_at: iso(1000), deleted_at: iso(5000) };
+    const incoming = { updated_at: iso(5000), deleted_at: null };
+    expect(incomingBookNoteWins(incoming, server)).toBe(false);
+  });
+
+  it('accepts a live edit made after deletion and a deletion tied with a live edit', () => {
+    const deleted = { updated_at: iso(1000), deleted_at: iso(5000) };
+    expect(incomingBookNoteWins({ updated_at: iso(6000), deleted_at: null }, deleted)).toBe(true);
+    const live = { updated_at: iso(5000), deleted_at: null };
+    expect(incomingBookNoteWins({ updated_at: iso(1000), deleted_at: iso(5000) }, live)).toBe(true);
   });
 });

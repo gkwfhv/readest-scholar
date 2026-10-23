@@ -278,6 +278,16 @@ describe('environment', () => {
       expect(getAPIBaseUrl()).toBe('https://web.readest.com/api');
     });
 
+    test('uses the current origin for Scholar Web behind a proxy or SSH tunnel', async () => {
+      env['NODE_ENV'] = 'production';
+      env['NEXT_PUBLIC_APP_PLATFORM'] = 'web';
+      env['NEXT_PUBLIC_SCHOLAR_RELEASE'] = 'true';
+      env['NEXT_PUBLIC_API_BASE_URL'] = 'http://127.0.0.1:3130';
+      window.__READEST_RUNTIME_CONFIG = { apiBaseUrl: 'http://127.0.0.1:3133' };
+      const { getAPIBaseUrl } = await import('@/services/environment');
+      expect(getAPIBaseUrl()).toBe('/api');
+    });
+
     test('returns full URL for tauri platform even in development', async () => {
       env['NODE_ENV'] = 'development';
       env['NEXT_PUBLIC_APP_PLATFORM'] = 'tauri';

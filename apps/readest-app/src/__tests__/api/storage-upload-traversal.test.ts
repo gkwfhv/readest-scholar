@@ -63,7 +63,10 @@ beforeEach(() => {
   const builder: Record<string, unknown> = {};
   for (const m of ['select', 'eq', 'limit', 'insert']) builder[m] = () => builder;
   builder['single'] = single;
-  createSupabaseAdminClientMock.mockReset().mockReturnValue({ from: () => builder });
+  createSupabaseAdminClientMock.mockReset().mockReturnValue({
+    rpc: vi.fn().mockResolvedValue({ data: null, error: { code: 'PGRST202' } }),
+    from: () => builder,
+  });
 });
 
 describe('POST /api/storage/upload — fileName traversal guard', () => {
@@ -85,6 +88,45 @@ describe('POST /api/storage/upload — fileName traversal guard', () => {
     });
     await handler(req, res);
     expect(res.status).toHaveBeenCalledWith(400);
+    expect(getUploadSignedUrlMock).not.toHaveBeenCalled();
+  });
+
+  it('never signs a legacy overwrite for immutable Scholar versions', async () => {
+    const { req, res } = makeReqRes({
+      fileName: 'Scholar/versions/00000000-0000-4000-8000-000000000001',
+      fileSize: 11,
+    });
+    await handler(req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(getUploadSignedUrlMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses a legacy overwrite after a Scholar version becomes active', async () => {
+    const filesSingle = vi.fn().mockResolvedValue({
+      data: { id: 'file-id', file_size: 11, file_key: 'attacker-id/Readest/Books/hash.epub' },
+      error: null,
+    });
+    const headsMaybeSingle = vi.fn().mockResolvedValue({
+      data: { version_id: 'version-id' },
+      error: null,
+    });
+    const make = (terminal: unknown) => {
+      const chain: Record<string, unknown> = { single: terminal, maybeSingle: terminal };
+      for (const name of ['select', 'eq', 'limit']) chain[name] = () => chain;
+      return chain;
+    };
+    createSupabaseAdminClientMock.mockReturnValue({
+      rpc: vi.fn().mockResolvedValue({ data: null, error: { code: 'PGRST202' } }),
+      from: (table: string) =>
+        make(table === 'scholar_file_heads' ? headsMaybeSingle : filesSingle),
+    });
+    const { req, res } = makeReqRes({
+      fileName: 'Readest/Books/hash.epub',
+      fileSize: 11,
+      bookHash: 'hash',
+    });
+    await handler(req, res);
+    expect(res.status).toHaveBeenCalledWith(409);
     expect(getUploadSignedUrlMock).not.toHaveBeenCalled();
   });
 

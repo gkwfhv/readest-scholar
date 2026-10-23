@@ -1,6 +1,6 @@
 # Readest Scholar 路线图
 
-状态日期：2026-10-21。**Phase 0 已按单机合成基线验收；Phase 1 已按非生产工程底座范围验收，Phase 2 进行中。** [验收记录](docs/evidence/phase0/acceptance-2026-10-20.md)覆盖 Web、独立 macOS 客户端、自托管对象存储与同步、生产构建 AI 来源、Turso 数值契约、资源采样及 Node 24 全量测试（13,768 通过、16 跳过）。[PR #17](https://github.com/gkwfhv/readest-scholar/pull/17)发布双架构 GHCR 固定提交镜像和 CycloneDX SBOM，[PR #18](https://github.com/gkwfhv/readest-scholar/pull/18)加入摘要固定的 staging Web 升级与回退。Linux 测试主机已完成 Scholar 镜像升级、健康检查、故障回退及第二套空项目的备份冷恢复；升级后独立桌面端的新翻页已写入服务端，[Web→桌面的新同步](docs/evidence/phase1/web-to-desktop-progress-2026-10-20.md)也已在同一合成账户验证。测试环境的秘密文件防误提交门槛已建立，独立桌面测试包已[隔离上游更新渠道](docs/evidence/phase1/scholar-test-updater-isolation-2026-10-20.md)。用户批准的正式名称与 Bundle ID 已通过[未签名 macOS 本地包](docs/evidence/phase1/scholar-release-identity-2026-10-21.md)验证；独立协议的[书籍唤起本地实测](docs/evidence/phase1/scholar-deeplink-identity-2026-10-21.md)已完成。[Staging Web 合成 AI 交互](docs/evidence/phase1/staging-ai-smoke-2026-10-21.md)已验证模型连接、索引、来源列表和会话恢复；[自托管分享实际往返](docs/evidence/phase1/scholar-selfhosted-links-2026-10-21.md)已验证创建、本站落地页、预览、对象下载跳转和撤销。真实模型质量、Linux 主机模型运行、外部 HTTPS 分享、OAuth 提供方回跳及正式签名更新分发仍待验收。本状态不代表正式发布。
+状态日期：2026-10-23。**Phase 0、Phase 1 已按各自限定范围验收；Phase 2 的非生产合成数据范围已验收，Phase 3 正在开发。** [验收记录](docs/evidence/phase0/acceptance-2026-10-20.md)覆盖 Web、独立 macOS 客户端、自托管对象存储与同步、生产构建 AI 来源、Turso 数值契约、资源采样及 Node 24 全量测试（13,768 通过、16 跳过）。[PR #17](https://github.com/gkwfhv/readest-scholar/pull/17)发布双架构 GHCR 固定提交镜像和 CycloneDX SBOM，[PR #18](https://github.com/gkwfhv/readest-scholar/pull/18)加入摘要固定的 staging Web 升级与回退。Linux 测试主机已完成 Scholar 镜像升级、健康检查、故障回退及第二套空项目的备份冷恢复；升级后独立桌面端的新翻页已写入服务端，[Web→桌面的新同步](docs/evidence/phase1/web-to-desktop-progress-2026-10-20.md)也已在同一合成账户验证。测试环境的秘密文件防误提交门槛已建立，独立桌面测试包已[隔离上游更新渠道](docs/evidence/phase1/scholar-test-updater-isolation-2026-10-20.md)。用户批准的正式名称与 Bundle ID 已通过[未签名 macOS 本地包](docs/evidence/phase1/scholar-release-identity-2026-10-21.md)验证；独立协议的[书籍唤起本地实测](docs/evidence/phase1/scholar-deeplink-identity-2026-10-21.md)已完成。[Staging Web 合成 AI 交互](docs/evidence/phase1/staging-ai-smoke-2026-10-21.md)已验证模型连接、索引、来源列表和会话恢复；[自托管分享实际往返](docs/evidence/phase1/scholar-selfhosted-links-2026-10-21.md)已验证创建、本站落地页、预览、对象下载跳转和撤销。真实模型质量、Linux 主机模型运行、外部 HTTPS 分享、OAuth 提供方回跳及正式签名更新分发仍待验收。本状态不代表正式发布。
 
 [PR #32 的 staging 验收](docs/evidence/phase1/scholar-web-build-brand-2026-10-21.md)进一步确认双架构 GHCR 发布、构建时 Scholar 品牌标记、`/library` 标题与 Web 安装清单；固定 amd64 摘要升级后四路健康通过，只有 Web 容器变化，合成分享预览与撤销复验通过。[正式身份 macOS 包的 staging 双向进度](docs/evidence/phase1/formal-desktop-staging-sync-2026-10-21.md)已通过合成账户验收；签名更新分发仍待完成。
 
@@ -12,12 +12,20 @@
 
 Phase 2 已从[手动 DOI 元数据](docs/evidence/phase2/doi-metadata-2026-10-21.md)开始：Scholar 书籍详情可编辑和显示 DOI，沿用现有元数据保存路径。[隔离 staging 的双向同步实测](docs/evidence/phase2/doi-staging-bidirectional-2026-10-21.md)已验证 Web ↔ 服务端 ↔ macOS 的一次 DOI 修改往返，以及现有 `books` 记录的双账户读取隔离；[书库文本检索](docs/evidence/phase2/doi-search-2026-10-21.md)新增 DOI 和出版年份。[文献/文件身份迁移](docs/evidence/phase2/document-file-identity-2026-10-21.md)已在隔离 PostgreSQL 与 staging 中验证回填、复合外键、双账户 RLS 和 PostgREST 可见性。[新书自动文献映射](docs/evidence/phase2/document-auto-link-2026-10-21.md)已通过本地数据库行为测试和 staging 写入角色验收；[原文文件自动关联](docs/evidence/phase2/document-file-auto-link-2026-10-21.md)已通过隔离数据库、staging 写入角色及真实 HTTP 签名上传/下载校验，Web 导入按钮与桌面新书往返仍待测。客户端文献操作、集合、去重、200+ 文献规模和更广的隔离/冲突场景尚未完成。
 
+[三栏科研书库界面](docs/evidence/phase2/three-pane-library-2026-10-22.md)已经过宽屏多主题和手机回退检查；[201 份合成 PDF 规模核验](docs/evidence/phase2/scale-cross-device-2026-10-22.md)覆盖旧版 Web/桌面的查看、下载和账户隔离。[批量下载授权查询修复](docs/evidence/phase2/cover-download-batching-2026-10-22.md)已在服务器独立候选版通过 201/201 签名、3/3 内容 SHA-256 与第二账户拒绝，但尚未替换 staging。UI 200+ 批量导入、200+ 规模双向编辑和加载性能尚未通过，Phase 2 继续进行。
+
+[201 份 PDF 的真实浏览器导入与云端往返](docs/evidence/phase2/ui-bulk-import-2026-10-22.md)已在独立候选版通过：201 本书与文献记录、201 次上传成功、201/201 签名下载、3 份 SHA-256 往返、第二账号 0 行；203 本本地书库可见耗时中位数 505 ms。服务器构建修复了同源 API 和 200+ 本上推 URI 超长。新版桌面三栏与 200+ 规模跨端双向编辑仍待验收，Phase 2 未通过。
+
+[服务器本地镜像升级与回退](docs/evidence/phase2/staging-image-upgrade-rollback-2026-10-22.md)已在合成 staging 完成：仅替换 Web 容器时 201/201 下载与四路健康通过，随后恢复原镜像且四路健康通过；Web 端新建集合并确认 DOI/标签服务端一致。没有向 GitHub/GHCR 推送；旧独立 macOS 包的跨端集合/标签编辑已通过，但新版桌面视觉尚未验收。
+
+[201 本 Web ↔ 独立桌面包的集合和标签往返](docs/evidence/phase2/cross-device-201-collections-2026-10-22.md)已实测，旧桌面端未抹除新 DOI；新版桌面三栏的原生构建与视觉验证仍待完成。
+
 | 阶段 | 状态 | 依赖 | 完成判据 |
 |---|---|---|---|
 | 0 审计与可复现基线 | 已通过限定范围验收 | [验收记录](docs/evidence/phase0/acceptance-2026-10-20.md) | 单机合成数据、Web/独立 macOS/Silo 阅读同步及生产 AI 来源验证通过；跨平台、真实模型质量不在此结论内 |
 | 1 工程底座 | 已通过限定范围验收 | Phase 0 签收 | 镜像/SBOM 发布、staging 摘要升级、健康、备份、冷恢复、回退、桌面→后端新进度写入及 Web→桌面新位置采用已实测；测试环境秘密文件受 CI 保护，独立桌面包已隔离上游更新；正式身份未签名 macOS 包、独立书籍协议、staging Web 合成 AI 和回环分享路径通过烟测，外部 HTTPS 分享、真实 OAuth、真实模型及正式签名更新分发作为后续功能和发布门槛保留 |
-| 2 文献管理 | 进行中，DOI 与身份表 staging 已实测，身份表待客户端接入 | ADR 0001、0002，bookshelves 源码核对 | 文献/文件 ID 分离，200+ 测试文献导入管理，集合和元数据跨 Web/桌面同步，无跨账户数据泄露 |
-| 3 同步与离线 | 未开始 | 不新做第二套协议 | 断网、重复提交、冲突都不丢数据 |
+| 2 文献管理 | 非生产合成范围通过；[验收记录](docs/evidence/phase2/acceptance-2026-10-22.md)，新版 Linux 客户端上传与跨端故障验收转入 Phase 3/7 | ADR 0001、0002，bookshelves 源码核对 | 文献/文件 ID 分离，200+ 测试文献导入管理，集合和元数据跨 Web/桌面同步，无跨账户数据泄露 |
+| 3 同步与离线 | 进行中；本地应用后提交、持久离线队列和游标竞态已完成验证；服务端变更序号与分页 API 已在隔离数据库和服务器构建验收；客户端分页拉取与按账户持久游标已在服务器本地完成回归，staging 数据库已升级到 044（037–040 的既有 schema 与缺失账本已核对） 且 Web 候选/回退通过；正式 Web 仍为旧镜像；长离线纯字段重放、冲突双方留存、单字段恢复界面与双重并发保护已在隔离库和合成浏览器验证；[真实 Linux 客户端离线书签自动重试](docs/evidence/phase3/offline-bookmark-retry-2026-10-23.md)已在回环故障注入通过；[笔记冲突历史与行锁比较](docs/evidence/phase3/book-note-conflict-history-2026-10-23.md)已在隔离库、候选 Web 和合成 staging 验证，同内容重试不产生虚假冲突；[笔记版本恢复](docs/evidence/phase3/book-note-recovery-2026-10-23.md)已在回环候选浏览器实测并通过并发保护与加载竞态回归；双真实设备与跨文件副本批注、[同键二进制覆盖已复现](docs/evidence/phase3/binary-overwrite-repro-2026-10-23.md)，[不可变版本数据库基础](docs/evidence/phase3/immutable-file-version-schema-2026-10-23.md)已在隔离库验证，[对象条件写入与流式校验](docs/evidence/phase3/create-only-object-upload-2026-10-23.md)已在回环 MinIO 实测，且不可变上传 API 已在回环候选 Web 完成合成对象往返；旧上传/下载兼容、统一配额统计与不可变文件登记已在服务器回环候选验证；客户端书籍正文已接入文件登记、队列操作 ID/版本基线和校验后下载，服务器本地候选已通过合成 HTTP；正式 Web 与原生客户端仍未切换，持久正文快照、按需缓存和二进制冲突界面仍待做 | 不新做第二套协议 | 断网、重复提交、冲突都不丢数据 |
 | 4 PDF 笔记 | 未开始 | 客户端坐标结构核对 | 缩放/旋转样本不漂移 |
 | 5 AI 引用 | 未开始 | 现有 `ragService` | 页码可点，无证据拒答 |
 | 6 pdf2zh Worker | 未开始 | 独立任务表 | 译文不覆盖原文，失败可取消可重试 |

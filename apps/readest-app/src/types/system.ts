@@ -87,6 +87,13 @@ export interface SaveLibraryBooksOptions {
   replace?: boolean;
 }
 
+export interface ScholarFileUploadContext {
+  accountId: string;
+  opId: string;
+  expectedVersionId: string | null;
+  snapshotPath?: string;
+}
+
 export interface AppService {
   osPlatform: OsPlatform;
   appPlatform: AppPlatform;
@@ -139,6 +146,7 @@ export interface AppService {
   isRootDirUsable(): Promise<boolean>;
   openFile(path: string, base: BaseDir): Promise<File>;
   copyFile(srcPath: string, srcBase: BaseDir, dstPath: string, dstBase: BaseDir): Promise<void>;
+  createScholarUploadSnapshot(book: Book, path: string): Promise<number>;
   readFile(path: string, base: BaseDir, mode: 'text' | 'binary'): Promise<string | ArrayBuffer>;
   writeFile(path: string, base: BaseDir, content: string | ArrayBuffer | File): Promise<void>;
   createDir(path: string, base: BaseDir, recursive?: boolean): Promise<void>;
@@ -201,7 +209,11 @@ export interface AppService {
   importBook(file: string | File, books: Book[], options?: ImportBookOptions): Promise<Book | null>;
   refreshBookMetadata(book: Book): Promise<boolean>;
   deleteBook(book: Book, deleteAction: DeleteAction): Promise<void>;
-  uploadBook(book: Book, onProgress?: ProgressHandler): Promise<void>;
+  uploadBook(
+    book: Book,
+    onProgress?: ProgressHandler,
+    scholar?: ScholarFileUploadContext,
+  ): Promise<void>;
   uploadBookCover(book: Book, onProgress?: ProgressHandler): Promise<void>;
   downloadBook(
     book: Book,

@@ -9,7 +9,10 @@ import { __resetSettledEventsForTests } from '@/utils/event';
 import type { Hlc, ReplicaRow } from '@/types/replica';
 
 vi.mock('@/utils/access', () => ({ getUserID: async () => 'account' }));
-vi.mock('@/services/sync/syncCategories', () => ({ isSyncCategoryEnabled: () => true }));
+vi.mock('@/services/sync/syncCategories', () => ({
+  isSyncCategoryEnabled: () => true,
+  isCredentialsSyncEnabled: () => false,
+}));
 
 afterEach(() => {
   vi.useRealTimers();

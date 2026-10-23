@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { createProgressThrottle, webDownload, type ProgressPayload } from '@/utils/transfer';
+import {
+  createProgressThrottle,
+  webDownload,
+  webUpload,
+  type ProgressPayload,
+} from '@/utils/transfer';
 
 const buildResponse = (
   body: Uint8Array,
@@ -24,6 +29,31 @@ beforeEach(() => {
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  vi.unstubAllGlobals();
+});
+
+describe('webUpload', () => {
+  test('sends a conditional create header with the file bytes', async () => {
+    const setRequestHeader = vi.fn();
+    let sent: Blob | null = null;
+    class FakeXHR {
+      upload = { onprogress: null };
+      status = 200;
+      onload?: () => void;
+      onerror?: () => void;
+      open() {}
+      setRequestHeader = setRequestHeader;
+      send(body: Blob) {
+        sent = body;
+        this.onload?.();
+      }
+    }
+    vi.stubGlobal('XMLHttpRequest', FakeXHR);
+    const file = new File(['version-one'], 'version.pdf');
+    await webUpload(file, 'https://example.test/object', undefined, { 'If-None-Match': '*' });
+    expect(setRequestHeader).toHaveBeenCalledWith('If-None-Match', '*');
+    expect(sent).toBe(file);
+  });
 });
 
 describe('webDownload', () => {

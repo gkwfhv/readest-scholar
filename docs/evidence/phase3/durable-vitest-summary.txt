@@ -1,0 +1,7 @@
+env -u SELF_HOSTED NODE_ENV=test pnpm test --run
+exit_code=0
+
+ Test Files  1186 passed | 4 skipped (1190)
+      Tests  13868 passed | 16 skipped (13884)
+   Start at  13:55:05
+   Duration  780.21s (transform 16.21s, setup 3.56s, import 132.25s, tests 118.23s, environment 418.10s)

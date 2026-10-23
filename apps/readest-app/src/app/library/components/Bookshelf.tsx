@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PiPlus } from 'react-icons/pi';
 import { useOverlayScrollbars } from 'overlayscrollbars-react';
+import { useMediaQuery } from 'react-responsive';
 import 'overlayscrollbars/overlayscrollbars.css';
 import { Book, BooksGroup, type LibrarySearchConfig, ReadingStatus } from '@/types/book';
 import { LibraryGroupByType, LibrarySortByType, LibraryViewModeType } from '@/types/settings';
@@ -48,7 +49,7 @@ import { eventDispatcher } from '@/utils/event';
 import { getLocalBookFilename } from '@/utils/book';
 import { MIMETYPES, EXTS } from '@/libs/document';
 import { makeSafeFilename } from '@/utils/misc';
-import { isTauriAppPlatform } from '@/services/environment';
+import { isScholarReleaseBundle, isTauriAppPlatform } from '@/services/environment';
 import { isLocalSendEnabled } from '@/services/localsend/devicePrefs';
 import { splitLibraryOpenIds } from '@/utils/audiobook';
 
@@ -65,6 +66,7 @@ import TaggingModal from './TaggingModal';
 import SetStatusAlert from './SetStatusAlert';
 import { useOpenBook } from '../hooks/useOpenBook';
 import LibrarySearchResults from './LibrarySearchResults';
+import ScholarThreePane from './ScholarThreePane';
 
 export interface ContentSearchRequest {
   query: string;
@@ -119,6 +121,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({
   onSearchProgress,
 }) => {
   const _ = useTranslation();
+  const isWideLibrary = useMediaQuery({ minWidth: 1024 });
   const router = useRouter();
   const searchParams = useSearchParams();
   const { envConfig, appService } = useEnv();
@@ -263,6 +266,12 @@ const Bookshelf: React.FC<BookshelfProps> = ({
     const bookFilter = createBookFilter(queryTerm);
     return queryTerm ? visibleBooks.filter((book) => bookFilter(book)) : visibleBooks;
   }, [visibleBooks, queryTerm]);
+  const showScholarThreePane =
+    isScholarReleaseBundle() &&
+    searchParams?.get('layout') === 'research' &&
+    isWideLibrary &&
+    !isSelectMode &&
+    !contentSearch?.query.trim();
 
   const manualGroupName = groupBy === LibraryGroupByType.Group ? getGroupName(groupId) : undefined;
   const pageDurations = useMedianPageDurationsSecs(libraryBooks, showTimeRemaining);
@@ -989,6 +998,15 @@ const Bookshelf: React.FC<BookshelfProps> = ({
           config={contentSearch.config}
           onSelectResult={openSearchResult}
           onProgress={onSearchProgress}
+        />
+      ) : showScholarThreePane ? (
+        <ScholarThreePane
+          books={filteredBooks}
+          collectionPaths={settings.scholarCollectionPaths ?? []}
+          onOpenBook={(book) => void openBook(book)}
+          onShowDetails={handleShowDetailsBook}
+          onDownload={(book) => void handleBookDownload(book)}
+          onUpload={(book) => void handleBookUpload(book)}
         />
       ) : (
         // The OverlayScrollbars root and the search results are siblings on
