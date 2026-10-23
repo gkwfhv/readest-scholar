@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { useEnv } from '@/context/EnvContext';
 import { useSync } from '@/hooks/useSync';
 import { BookNote, FIXED_LAYOUT_FORMATS } from '@/types/book';
 import { useBookDataStore } from '@/store/bookDataStore';
+import { useSettingsStore } from '@/store/settingsStore';
 import { useReaderStore } from '@/store/readerStore';
 import { SYNC_NOTES_INTERVAL_SEC } from '@/services/constants';
 import { throttle } from '@/utils/throttle';
@@ -26,6 +28,8 @@ const incomingWins = (existing: BookNote, incoming: BookNote) => {
 
 export const useNotesSync = (bookKey: string) => {
   const { user } = useAuth();
+  const { appService, envConfig } = useEnv();
+  const { settings } = useSettingsStore();
   const { syncedNotes, syncNotes, lastSyncedAtNotes } = useSync(bookKey);
   const { getConfig, setConfig, getBookData } = useBookDataStore();
   const { getView, getViewsById } = useReaderStore();
@@ -281,9 +285,22 @@ export const useNotesSync = (bookKey: string) => {
         ...oldNotes.filter((oldNote) => !convertedNotes.some((n) => n.id === oldNote.id)),
         ...convertedNotes.map(processNewNote),
       ];
+      const changed = JSON.stringify(mergedNotes) !== JSON.stringify(oldNotes);
       setConfig(bookKey, { booknotes: mergedNotes });
+      if (!changed) return;
+      // A remote note is already visible in the reader. Persist it now so a
+      // crash before the next page turn or graceful close cannot erase the
+      // offline copy. Save the per-book config directly: saveConfig also bumps
+      // reading-progress timestamps and can make stale local progress win.
+      const latest = getConfig(bookKey);
+      if (book && latest) {
+        const service = appService ?? (await envConfig.getAppService());
+        await service.saveBookConfig(book, latest, settings);
+      }
     };
-    processSyncedNotes();
+    void processSyncedNotes().catch((err) => {
+      console.error('Failed to persist pulled book notes:', err);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncedNotes]);
 };

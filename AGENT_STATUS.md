@@ -133,3 +133,7 @@
 ## Phase 3 桌面离线批注与在线 API 冲突（2026-10-23）
 
 QA-B 在真实 PDF 阅读器创建并离线编辑同一高亮批注，第二条已认证 API 客户端提交较新版本；B 网络恢复后显示在线版，服务端历史保留 B 离线版，B 的账户恢复界面可见并成功恢复旧版，原在线版转存历史。详见 [桌面批注冲突证据](docs/evidence/phase3/native-api-annotation-conflict-2026-10-23.md)。这不是双图形客户端并发，Phase 3 仍未签收。QA-A 菜单显示 Sign In，故障前状态不明，继续调查。
+
+## Phase 3 双桌面批注冲突与远端落盘（2026-10-23）
+
+服务器 QA-B/QA-C 两个独立 Linux CEF 容器完成同一 PDF 批注的真实图形界面并发：C 离线编辑、B 在线编辑，恢复网络后较新 B 版生效，C 版进入可恢复历史；C 在界面恢复旧版后，B 重开 PDF 收到恢复内容。另复现并修复“远端批注只在内存、进程崩溃后离线丢失”：新构建立即保存每本书配置，QA-C 和 QA-B 均用 SIGKILL、断网、重启验证内容仍在。完整 Vitest 14,036 通过、16 跳过，Web/CEF 构建、TypeScript/Biome 通过。详见 [双客户端批注证据](docs/evidence/phase3/two-native-annotation-conflict-durability-2026-10-23.md)。Phase 3 仍需不可变文件离线快照、双设备故障和按需缓存等；未向 GitHub/GHCR 推送。

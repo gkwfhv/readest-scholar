@@ -26,6 +26,14 @@ const h = vi.hoisted(() => {
   };
 });
 
+vi.mock('@/context/EnvContext', () => ({
+  useEnv: () => ({ appService: { saveBookConfig: vi.fn(async () => {}) } }),
+}));
+
+vi.mock('@/store/settingsStore', () => ({
+  useSettingsStore: () => ({ settings: {} }),
+}));
+
 vi.mock('@/context/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'u1' } }),
 }));
