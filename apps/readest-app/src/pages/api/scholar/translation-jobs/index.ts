@@ -9,10 +9,26 @@ const isUuid = (value: unknown): value is string =>
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   await runMiddleware(req, res, corsAllMethods);
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method !== 'POST' && req.method !== 'GET')
+    return res.status(405).json({ error: 'Method not allowed' });
 
   const { user, token } = await validateUserAndToken(req.headers.authorization);
   if (!user || !token) return res.status(403).json({ error: 'Not authenticated' });
+
+  if (req.method === 'GET') {
+    const fileId = req.query['fileId'];
+    if (!isUuid(fileId)) return res.status(400).json({ error: 'Invalid file ID' });
+    const supabase = createSupabaseAdminClient();
+    const { data: jobs, error } = await supabase
+      .from('scholar_translation_jobs')
+      .select('id,state,progress,mode,error_code,created_at')
+      .eq('user_id', user.id)
+      .eq('source_file_id', fileId)
+      .order('created_at', { ascending: false })
+      .limit(20);
+    if (error) return res.status(500).json({ error: 'Could not list translation jobs' });
+    return res.status(200).json({ jobs: jobs ?? [] });
+  }
 
   const { fileId, versionId, idempotencyKey, mode, glossarySha256 } = req.body ?? {};
   if (

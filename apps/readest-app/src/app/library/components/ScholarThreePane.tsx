@@ -9,6 +9,7 @@ import {
   selectScholarCollectionBooks,
 } from '@/services/scholar/threePane';
 import BookDetailView from '@/components/metadata/BookDetailView';
+import ScholarTranslationPanel from './ScholarTranslationPanel';
 
 interface ScholarThreePaneProps {
   books: Book[];
@@ -159,6 +160,12 @@ const ScholarThreePane = ({
               onDownload={() => onDownload(selectedBook)}
               onUpload={() => onUpload(selectedBook)}
             />
+            {selectedBook.format === 'PDF' && (
+              <ScholarTranslationPanel
+                key={`translation-${selectedBook.hash}`}
+                book={selectedBook}
+              />
+            )}
           </>
         ) : (
           <p className='text-sm text-base-content/60'>{_('Select a book to view details.')}</p>
