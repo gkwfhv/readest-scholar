@@ -1,0 +1,105 @@
+name: Scholar iOS Identity Simulator
+
+on:
+  pull_request:
+    types: [labeled, synchronize]
+  workflow_dispatch:
+
+concurrency:
+  group: scholar-ios-identity-simulator-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ios-simulator:
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'e2e-scholar-ios')
+    runs-on: macos-15
+    timeout-minutes: 90
+    env:
+      CI: 'true'
+      CODE_SIGNING_ALLOWED: 'NO'
+      NEXT_PUBLIC_APP_PLATFORM: tauri
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: initialize git submodules
+        run: git submodule update --init --recursive
+
+      - name: setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: setup node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: install Rust with iOS Simulator target
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          targets: aarch64-apple-ios-sim
+
+      - uses: Swatinem/rust-cache@f0d9c3887740aee45f6153b24b3a6b815192ec16 # v2
+        with:
+          workspaces: apps/readest-app/src-tauri
+          key: scholar-ios-sim
+
+      - name: install dependencies
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: copy PDF and Chinese conversion vendors
+        run: pnpm --filter @readest/readest-app setup-vendors
+
+      - name: prepare Next.js build environment
+        run: cp apps/readest-app/.env.tauri apps/readest-app/.env.local
+
+      - name: build Scholar web assets
+        run: pnpm --filter @readest/readest-app build
+
+      - name: build unsigned iOS Simulator app
+        id: build
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          cd apps/readest-app
+          rm -rf src-tauri/gen/apple
+          pnpm tauri ios init --ci --config src-tauri/scholar.release.json
+          git checkout -- src-tauri/gen/apple
+          node scripts/prepare-scholar-ios.mjs
+          (cd src-tauri/gen/apple && xcodegen generate)
+          test -f src-tauri/gen/apple/ReadestWidget/Info.plist
+          pnpm tauri ios build --debug --target aarch64-sim --ci --config src-tauri/scholar.release.json
+          APP=$(find src-tauri/gen/apple/build -type d -name '*.app' -print -quit)
+          test -n "$APP"
+          BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$APP/Info.plist")
+          test "$BUNDLE_ID" = "io.github.gkwfhv.readestscholar"
+          echo "app=$PWD/$APP" >> "$GITHUB_OUTPUT"
+          echo "bundle_id=$BUNDLE_ID" >> "$GITHUB_OUTPUT"
+
+      - name: boot Simulator and launch app
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEVICE_ID=$(xcrun simctl list -j devices available | node -e "let s='';process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>{const ds=Object.values(JSON.parse(s).devices).flat();const d=ds.find(x=>x.name.startsWith('iPhone')&&x.isAvailable);if(!d)process.exit(1);console.log(d.udid)})")
+          xcrun simctl boot "$DEVICE_ID"
+          xcrun simctl bootstatus "$DEVICE_ID" -b
+          xcrun simctl install "$DEVICE_ID" "${{ steps.build.outputs.app }}"
+          xcrun simctl launch "$DEVICE_ID" "${{ steps.build.outputs.bundle_id }}"
+          sleep 10
+          xcrun simctl io "$DEVICE_ID" screenshot "$RUNNER_TEMP/scholar-ios-simulator.png"
+          ditto -c -k --sequesterRsrc --keepParent "${{ steps.build.outputs.app }}" "$RUNNER_TEMP/ios-simulator-app.zip"
+          shasum -a 256 "$RUNNER_TEMP/ios-simulator-app.zip"
+
+      - name: upload Simulator evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: scholar-ios-identity-simulator
+          path: |
+            ${{ runner.temp }}/scholar-ios-simulator.png
+            ${{ runner.temp }}/ios-simulator-app.zip
+          if-no-files-found: warn
+          retention-days: 7
