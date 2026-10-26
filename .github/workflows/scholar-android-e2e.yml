@@ -150,7 +150,7 @@ jobs:
             adb install -r "$APK"
             adb shell pm list packages io.github.gkwfhv.readestscholar | grep -Fx 'package:io.github.gkwfhv.readestscholar'
             cd apps/readest-app && READEST_ANDROID_SCREENSHOT_PATH="$GITHUB_WORKSPACE/scholar-android-reader.png" READEST_ANDROID_PACKAGE=io.github.gkwfhv.readestscholar READEST_ANDROID_REQUIRE_DEVICE=true pnpm test:android
-            adb shell am force-stop io.github.gkwfhv.readestscholar && adb shell monkey -p io.github.gkwfhv.readestscholar -c android.intent.category.LAUNCHER 1 >/dev/null && sleep 25 && adb exec-out screencap -p > "$GITHUB_WORKSPACE/scholar-android-library.png" && test -s "$GITHUB_WORKSPACE/scholar-android-library.png"
+            cd apps/readest-app && READEST_ANDROID_PACKAGE=io.github.gkwfhv.readestscholar pnpm exec tsx scripts/capture-scholar-android-library.ts "$GITHUB_WORKSPACE/scholar-android-library.png"
 
       - name: upload Android screen evidence
         if: always()
