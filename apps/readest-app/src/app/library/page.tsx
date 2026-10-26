@@ -849,7 +849,8 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     initLogin().catch((error) => console.error('Failed to initialize login:', error));
     void enqueueLibraryInit(async () => {
       // A queued run may belong to a route that has already navigated away.
-      if (disposed || window.location.pathname !== '/library') return;
+      // The root route also renders LibraryPage on mobile cold start.
+      if (disposed || !['/', '/library'].includes(window.location.pathname)) return;
       await initLibrary();
     }).catch((error) => {
       if (!disposed) recoverFromInitFailure(error);
