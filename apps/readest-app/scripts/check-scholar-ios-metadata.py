@@ -18,11 +18,12 @@ main = read_plist(app / "Info.plist")
 assert main["CFBundleIdentifier"] == identifier
 assert main["CFBundleName"] == "Readest Scholar"
 assert list(main["NSUbiquitousContainers"]) == [f"iCloud.{identifier}"]
+assert main["NSUbiquitousContainers"][f"iCloud.{identifier}"]["NSUbiquitousContainerName"] == "Readest Scholar"
 assert all("Readest Scholar" in main[key] for key in (
     "NSLocalNetworkUsageDescription", "NSFaceIDUsageDescription", "NSPhotoLibraryAddUsageDescription"
 ))
 schemes = [scheme for item in main["CFBundleURLTypes"] for scheme in item["CFBundleURLSchemes"]]
-assert "readest-scholar" in schemes and "readest" not in schemes
+assert schemes == ["readest-scholar"], schemes
 
 for extension in ("ReadestWidget", "ShareExtension"):
     info = read_plist(app / "PlugIns" / f"{extension}.appex" / "Info.plist")

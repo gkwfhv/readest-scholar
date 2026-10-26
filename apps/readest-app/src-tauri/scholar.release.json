@@ -7,14 +7,23 @@
     "beforeBuildCommand": ""
   },
   "bundle": {
-    "createUpdaterArtifacts": false
+    "createUpdaterArtifacts": false,
+    "iOS": {
+      "infoPlist": "./Info-scholar-ios.plist"
+    }
   },
   "plugins": {
     "deep-link": {
       "mobile": [{ "scheme": ["readest-scholar"], "appLink": false }],
       "desktop": {
         "schemes": ["readest-scholar"]
-      }
+      },
+      "mobile": [
+        {
+          "scheme": ["readest-scholar"],
+          "appLink": false
+        }
+      ]
     },
     "updater": {
       "endpoints": []
