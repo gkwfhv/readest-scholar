@@ -148,9 +148,12 @@ export const openFixtureBook = async (fixtureFile: string): Promise<CdpPage> => 
       return pages.find((p) => p.type === 'page' && p.url.includes('/reader'));
     },
     { timeoutMs: 90_000, intervalMs: 500, label: 'reader page' },
-  ).catch((error: unknown) => {
+  ).catch(async (error: unknown) => {
+    const nativeLog = await adbShell(
+      'logcat -d -t 300 -s NativeBridgePlugin:D MainActivity:D "*:S"',
+    ).catch(() => '');
     throw new Error(
-      `${String(error)}; VIEW intent: ${launchOutput.trim()}; CDP pages: ${JSON.stringify(lastPages)}`,
+      `${String(error)}; VIEW intent: ${launchOutput.trim()}; CDP pages: ${JSON.stringify(lastPages)}; native intent log: ${nativeLog.slice(-4000)}`,
     );
   });
   const page = await CdpPage.connect(CDP_PORT, target.id);
