@@ -45,7 +45,10 @@ fn page_sizes<R: Read + Seek>(zip: &mut ZipArchive<R>) -> HashMap<String, [usize
         if entry.is_dir() {
             continue;
         }
-        let name = entry.name().to_string();
+        let Ok(name) = entry.name() else {
+            continue;
+        };
+        let name = name.into_owned();
         if let Some(size) = read_image_size(entry) {
             sizes.insert(name, size);
         }
