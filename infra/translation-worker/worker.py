@@ -18,7 +18,7 @@ def build_cli_command(
     if mode not in {"mono", "dual", "both"}:
         raise ValueError("invalid translation mode")
     args = [
-        "pdf2zh_next", str(source), "--output", str(destination),
+        sys.executable, "/app/engine.py", str(source), "--output", str(destination),
         "--openaicompatible", "--lang-in", "en", "--lang-out", "zh-CN",
         "--qps", "1", "--pool-max-workers", "1", "--report-interval", "5",
         "--no-auto-extract-glossary",
@@ -36,29 +36,6 @@ def output_key(account: str, job: str, kind: str) -> str:
     if not UUID.fullmatch(account) or not UUID.fullmatch(job) or kind not in {"mono", "dual"}:
         raise ValueError("invalid translation identity")
     return f"{account}/Scholar/translations/{job}/{kind}.pdf"
-
-
-def request_cache_key(
-    source_sha256: str,
-    target_language: str,
-    mode: str,
-    engine_version: str,
-    model: str,
-    glossary_sha256: str | None,
-) -> str:
-    if not SHA256.fullmatch(source_sha256):
-        raise ValueError("invalid source hash")
-    payload = {
-        "source": source_sha256,
-        "target": target_language,
-        "mode": mode,
-        "engine": engine_version,
-        "model": model,
-        "glossary": glossary_sha256,
-    }
-    return hashlib.sha256(
-        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
-    ).hexdigest()
 
 
 def verify_source_bytes(content: bytes, expected_sha256: str, expected_size: int) -> None:
@@ -82,6 +59,25 @@ def child_environment(base_url: str, model: str, api_key: str, cache_dir: str) -
         "PDF2ZH_OPENAI_COMPATIBLE_MODEL": model,
         "PDF2ZH_OPENAI_COMPATIBLE_API_KEY": api_key,
     }
+
+
+def prepare_asset_links(account_cache: Path, asset_root: Path) -> None:
+    """Use verified read-only BabelDOC assets with an account-specific text cache."""
+    source = asset_root / ".cache" / "babeldoc"
+    target = account_cache / ".cache" / "babeldoc"
+    target.mkdir(mode=0o700, parents=True, exist_ok=True)
+    for name in ("fonts", "cmap", "models", "tiktoken"):
+        asset = source / name
+        if not asset.is_dir():
+            raise JobFailure("translation_assets_missing")
+        link = target / name
+        if link.is_symlink():
+            if link.resolve() != asset.resolve():
+                raise JobFailure("translation_assets_invalid")
+        elif link.exists():
+            raise JobFailure("translation_assets_invalid")
+        else:
+            link.symlink_to(asset, target_is_directory=True)
 
 
 def verify_glossary_text(content: str, expected_sha256: str) -> None:
@@ -148,12 +144,34 @@ def inspect_output(path: Path, source_sha256: str, source_pages: int) -> dict[st
 
 def find_output(directory: Path, kind: str) -> Path:
     candidates = [
-        p for p in directory.rglob(f"*-{kind}.pdf")
-        if p.is_file() and not p.is_symlink() and directory.resolve() in p.resolve().parents
+        p for p in directory.rglob("*.pdf")
+        if p.name.endswith((f"-{kind}.pdf", f".{kind}.pdf"))
+        and p.is_file()
+        and not p.is_symlink()
+        and directory.resolve() in p.resolve().parents
     ]
     if len(candidates) != 1:
         raise JobFailure("missing_output")
     return candidates[0]
+
+
+def engine_progress(log_path: Path) -> int:
+    """Map the CLI's tqdm percentage to the queue's processing range."""
+    if not log_path.exists():
+        return 20
+    with log_path.open("rb") as log:
+        log.seek(0, 2)
+        log.seek(max(0, log.tell() - 32768))
+        tail = log.read()
+    structured = re.findall(rb"@@SCHOLAR_PROGRESS:([0-9]{1,3})", tail)
+    if structured:
+        percent = min(100, int(structured[-1]))
+        return 20 + round(percent * 0.55)
+    readings = re.findall(rb"(?<![0-9])([0-9]{1,3})%\|", tail)
+    if not readings:
+        return 20
+    percent = min(100, int(readings[-1]))
+    return 20 + round(percent * 0.55)
 
 
 def _terminate_process(process) -> None:
@@ -268,21 +286,22 @@ def run_engine(
         )
         started = time.monotonic()
         last_renewal = started
-        while process.poll() is None:
-            time.sleep(3)
-            if db.canceled(job):
+        try:
+            while process.poll() is None:
+                time.sleep(3)
+                if db.canceled(job):
+                    raise JobFailure("canceled")
+                if time.monotonic() - started > timeout_seconds:
+                    raise JobFailure("engine_timeout")
+                if time.monotonic() - last_renewal >= 25:
+                    if not db.renew(job, engine_progress(log_path)):
+                        raise JobFailure("lease_lost")
+                    last_renewal = time.monotonic()
+            if process.returncode != 0:
+                raise JobFailure("engine_failed")
+        finally:
+            if process.poll() is None:
                 _terminate_process(process)
-                raise JobFailure("canceled")
-            if time.monotonic() - started > timeout_seconds:
-                _terminate_process(process)
-                raise JobFailure("engine_timeout")
-            if time.monotonic() - last_renewal >= 25:
-                if not db.renew(job, 20):
-                    _terminate_process(process)
-                    raise JobFailure("lease_lost")
-                last_renewal = time.monotonic()
-        if process.returncode != 0:
-            raise JobFailure("engine_failed")
 
 
 def _s3_client():
@@ -299,9 +318,11 @@ def _s3_client():
 
 def process_job(job, db: Database, s3, *, bucket: str, base_url: str,
                 api_key: str, cache_dir: str, timeout_seconds: int) -> str:
+    import os
     import tempfile
 
     uploaded: list[str] = []
+    publication_uncertain = False
     try:
         source = db.source(job)
         if not source or not source["object_key"].startswith(f"{job['user_id']}/Scholar/versions/"):
@@ -320,14 +341,12 @@ def process_job(job, db: Database, s3, *, bucket: str, base_url: str,
         if not db.renew(job, 10):
             raise JobFailure("lease_lost")
 
-        cache_identity = request_cache_key(
-            job["source_sha256"], "zh-CN", job["mode"], "pdf2zh-next/2.9.0",
-            job["model"], job["glossary_sha256"],
-        )
-        account_cache = Path(cache_dir) / str(job["user_id"]) / cache_identity
-        account_cache.mkdir(mode=0o700, parents=True, exist_ok=True)
-        with tempfile.TemporaryDirectory(prefix="scholar-translate-") as folder:
+        with tempfile.TemporaryDirectory(prefix="scholar-translate-", dir=cache_dir) as folder:
             work = Path(folder)
+            job_cache = work / "cache"
+            job_cache.mkdir(mode=0o700)
+            asset_root = Path(os.environ.get("SCHOLAR_TRANSLATION_ASSET_DIR", "/assets"))
+            prepare_asset_links(job_cache, asset_root)
             input_path = work / "source.pdf"
             output_dir = work / "output"
             output_dir.mkdir()
@@ -344,7 +363,7 @@ def process_job(job, db: Database, s3, *, bucket: str, base_url: str,
                 glossary_path.chmod(0o444)
             run_engine(
                 job, input_path, output_dir, db, base_url,
-                api_key, str(account_cache), timeout_seconds, glossary_path,
+                api_key, str(job_cache), timeout_seconds, glossary_path,
             )
             if not db.renew(job, 80):
                 raise JobFailure("lease_lost")
@@ -370,9 +389,12 @@ def process_job(job, db: Database, s3, *, bucket: str, base_url: str,
                 outputs.append({"kind": kind, "objectKey": key, **metadata})
             if not db.renew(job, 95):
                 raise JobFailure("lease_lost")
-            if not db.publish(job, outputs, "pdf2zh-next/2.9.0"):
+            publication_uncertain = True
+            published = db.publish(job, outputs, "pdf2zh-next/2.9.0")
+            if not published:
                 if db.succeeded(job):
                     return "succeeded"
+                publication_uncertain = False
                 raise JobFailure("publish_rejected")
             return "succeeded"
     except JobFailure as failure:
@@ -386,9 +408,18 @@ def process_job(job, db: Database, s3, *, bucket: str, base_url: str,
         # File text, model credentials and engine logs stay in the private
         # temporary directory; only the failure class is exposed.
         print(f"translation job {job['id']} failed: {type(exc).__name__}", flush=True)
-        db.finish(job, "failed", "worker_internal")
+        if publication_uncertain:
+            try:
+                if db.succeeded(job):
+                    return "succeeded"
+            except Exception:
+                pass
+        try:
+            db.finish(job, "failed", "worker_internal")
+        except Exception:
+            pass
         result = "worker_internal"
-    for key in uploaded:
+    for key in ([] if publication_uncertain else uploaded):
         try:
             s3.delete_object(Bucket=bucket, Key=key)
         except Exception:
@@ -425,7 +456,7 @@ def main() -> None:
     base_url = os.environ["SCHOLAR_TRANSLATION_BASE_URL"]
     key_file = Path(os.environ["SCHOLAR_TRANSLATION_API_KEY_FILE"])
     api_key = key_file.read_text().strip()
-    cache_dir = os.environ.get("SCHOLAR_TRANSLATION_CACHE_DIR", "/cache")
+    cache_dir = os.environ.get("SCHOLAR_TRANSLATION_CACHE_DIR", "/tmp")
     timeout_seconds = int(os.environ.get("SCHOLAR_TRANSLATION_TIMEOUT_SECONDS", "1800"))
     if not 60 <= timeout_seconds <= 3600:
         raise ValueError("invalid translation timeout")

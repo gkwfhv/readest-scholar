@@ -3,19 +3,48 @@ services:
   client:
     environment:
       SCHOLAR_TRANSLATION_MODEL: ${SCHOLAR_TRANSLATION_MODEL:?Set the local model ID}
+  translation_asset_warmup:
+    image: scholar-translation-worker:phase6
+    build:
+      context: ../..
+      dockerfile: infra/translation-worker/Dockerfile
+    entrypoint: ["python", "/app/warmup-assets.py"]
+    environment:
+      HOME: /assets
+      XDG_CACHE_HOME: /assets
+      XDG_CONFIG_HOME: /assets
+      BABELDOC_ASSET_WORKERS: "3"
+    volumes:
+      - scholar_translation_assets:/assets
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=256m
+    cpus: 1.0
+    mem_limit: 1g
+    pids_limit: 48
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
   translator:
     image: scholar-translation-worker:phase6
     build:
       context: ../..
       dockerfile: infra/translation-worker/Dockerfile
     depends_on:
-      - db
-      - minio
+      db:
+        condition: service_started
+      minio:
+        condition: service_started
+      translation_asset_warmup:
+        condition: service_completed_successfully
     environment:
+      SCHOLAR_TRANSLATION_ASSET_DIR: /assets
       SCHOLAR_TRANSLATION_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/postgres
       SCHOLAR_TRANSLATION_BASE_URL: ${SCHOLAR_TRANSLATION_BASE_URL:?Use the local model endpoint}
       SCHOLAR_TRANSLATION_API_KEY_FILE: /run/secrets/translation_model_key
-      SCHOLAR_TRANSLATION_CACHE_DIR: /cache
+      SCHOLAR_TRANSLATION_CACHE_DIR: /tmp
       SCHOLAR_TRANSLATION_TIMEOUT_SECONDS: "1800"
       S3_ENDPOINT: http://minio:9000
       S3_REGION: us-east-1
@@ -28,7 +57,7 @@ services:
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=650m
     volumes:
-      - scholar_translation_cache:/cache
+      - scholar_translation_assets:/assets:ro
     cpus: 2.0
     mem_limit: 4g
     pids_limit: 128
@@ -43,4 +72,4 @@ secrets:
     file: ${SCHOLAR_TRANSLATION_MODEL_KEY_FILE:?Point to a private 0600 test key}
 
 volumes:
-  scholar_translation_cache:
+  scholar_translation_assets:
