@@ -7,15 +7,16 @@ export interface PdfAnswerEvidence {
 }
 
 const CITATION = /\[p\.\s*(\d+)\]/gi;
-const NUMERIC_VALUE = /(?<![\p{L}\p{N}_])(\d[\d,]*(?:\.\d+)?)(\s*%)?(?![\p{L}\p{N}_])/gu;
+// Capture the leading boundary instead of using lookbehind; this regex ships to browsers.
+const NUMERIC_VALUE = /(^|[^\p{L}\p{N}_])(\d[\d,]*(?:\.\d+)?)(\s*%)?(?![\p{L}\p{N}_])/gu;
 
 function materialNumbers(text: string): string[] {
   return [...text.matchAll(NUMERIC_VALUE)]
     .filter((match) => {
-      const value = match[1]!;
-      return Boolean(match[2]) || /[.,]/.test(value) || value.length >= 2;
+      const value = match[2]!;
+      return Boolean(match[3]) || /[.,]/.test(value) || value.length >= 2;
     })
-    .map((match) => match[1]!.replaceAll(',', '') + (match[2] ? '%' : ''));
+    .map((match) => match[2]!.replaceAll(',', '') + (match[3] ? '%' : ''));
 }
 
 /**

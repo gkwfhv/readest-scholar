@@ -45,6 +45,16 @@ describe('PDF answer citation gate', () => {
     ).toMatch(/cannot verify|can't verify/i);
   });
 
+  it('keeps numeric boundaries without treating identifier digits as evidence', () => {
+    const evidence = [{ pageNumber: 3, text: 'Variant A80 used a score of 28.4/42%.' }];
+    expect(verifyPdfAnswer('The score was 28.4/42% [p. 3].', evidence)).toBe(
+      'The score was 28.4/42% [p. 3].',
+    );
+    expect(verifyPdfAnswer('The rate was 80% [p. 3].', evidence)).toMatch(
+      /cannot verify|can't verify/i,
+    );
+  });
+
   it('refuses empty output', () => {
     expect(verifyPdfAnswer('   ', pageEight)).toMatch(/cannot verify|can't verify/i);
   });
