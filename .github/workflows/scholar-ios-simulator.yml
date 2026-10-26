@@ -67,7 +67,7 @@ jobs:
           git checkout -- src-tauri/gen/apple
           (cd src-tauri/gen/apple && xcodegen generate)
           test -f src-tauri/gen/apple/ReadestWidget/Info.plist
-          pnpm tauri ios build --debug --target aarch64-sim --ci -- CODE_SIGNING_ALLOWED=NO
+          pnpm tauri ios build --debug --target aarch64-sim --ci
           APP=$(find src-tauri/gen/apple/build -type d -name '*.app' -print -quit)
           test -n "$APP"
           BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$APP/Info.plist")
