@@ -164,6 +164,9 @@ export const openFixtureBook = async (fixtureFile: string): Promise<CdpPage> => 
               url: location.href,
               pendingFiles: window.OPEN_WITH_FILES,
               openWithStage: window.__READEST_OPEN_WITH_STAGE,
+              openWithTrace: window.__READEST_OPEN_WITH_TRACE,
+              openWithError: window.__READEST_OPEN_WITH_ERROR,
+              libraryGates: window.__READEST_LIBRARY_GATES,
               libraryVisible: !!document.querySelector('[aria-label="Your Library"]'),
               bodyText: document.body?.innerText?.slice(0, 300)
             };`),

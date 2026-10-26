@@ -149,7 +149,14 @@ const enqueueImportRun = createSerialRunner();
 // Phase 7 cold-start diagnostic: expose a stage name, without a file path or account data.
 const markOpenWithStage = (stage: string) => {
   if (typeof window !== 'undefined') {
-    (window as Window & { __READEST_OPEN_WITH_STAGE?: string }).__READEST_OPEN_WITH_STAGE = stage;
+    const diagnosticWindow = window as Window & {
+      __READEST_OPEN_WITH_STAGE?: string;
+      __READEST_OPEN_WITH_TRACE?: string[];
+    };
+    diagnosticWindow.__READEST_OPEN_WITH_STAGE = stage;
+    const trace = (diagnosticWindow.__READEST_OPEN_WITH_TRACE ??= []);
+    trace.push(stage);
+    if (trace.length > 30) trace.shift();
   }
 };
 const LIBRARY_SEARCH_MODES: LibrarySearchConfig['mode'][] = [
@@ -234,6 +241,16 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     setCheckLastOpenBooks,
   } = useLibraryStore();
   const _ = useTranslation();
+  useEffect(() => {
+    (
+      window as Window & { __READEST_LIBRARY_GATES?: Record<string, boolean> }
+    ).__READEST_LIBRARY_GATES = {
+      checkOpenWithBooks,
+      checkLastOpenBooks,
+      checkPendingLaunchLink,
+      libraryLoaded: libraryLoadedFromDisk,
+    };
+  }, [checkOpenWithBooks, checkLastOpenBooks, checkPendingLaunchLink, libraryLoadedFromDisk]);
   const { selectFiles } = useFileSelector(appService, _);
   const { safeAreaInsets: insets, isRoundedWindow } = useThemeStore();
   const { clearBookData } = useBookDataStore();
@@ -637,9 +654,12 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
           }
         } catch (error) {
           markOpenWithStage('process:ingestFileError');
+          (window as Window & { __READEST_OPEN_WITH_ERROR?: string }).__READEST_OPEN_WITH_ERROR =
+            error instanceof Error ? error.message.slice(0, 300) : String(error).slice(0, 300);
           console.log('Failed to import book:', file, error);
         }
       }
+      markOpenWithStage(`process:books=${bookIds.length}`);
       setLibrary(libraryBooks);
       appService.saveLibraryBooks(libraryBooks);
 
@@ -795,7 +815,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
       if (checkOpenWithBooks || new URLSearchParams(libraryInitKey).has('reload')) {
         opened = await handleOpenWithBooks(appService, library);
       }
-      markOpenWithStage('init:openWithDone');
+      markOpenWithStage(`init:openWithDone:${opened}`);
       setCheckOpenWithBooks(opened);
       if (!opened && checkLastOpenBooks && settings.openLastBooks) {
         opened = await handleOpenLastBooks(appService, settings.lastOpenBooks, library);
@@ -819,7 +839,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     const handleOpenWithBooks = async (appService: AppService, library: Book[]) => {
       markOpenWithStage('init:parseOpenWithFiles');
       const openWithFiles = (await parseOpenWithFiles(appService)) || [];
-      markOpenWithStage('init:parseOpenWithFilesDone');
+      markOpenWithStage(`init:parseOpenWithFilesDone:${openWithFiles.length}`);
 
       if (openWithFiles.length > 0) {
         return await processOpenWithFiles(appService, openWithFiles, library);
