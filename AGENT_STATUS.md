@@ -1,6 +1,8 @@
 # Agent 状态
 
-更新时间：2026-10-23。
+更新时间：2026-10-26。
+
+最新进展：Phase 5 已以服务器本地 4B 模型、真实论文摘录和来源门禁完成非生产自验收（PR #53）；Phase 6 的翻译 Worker、真实双栏/公式表格样本、取消重试、服务器全量单测与 GitHub baseline/PR checks/CodeQL/Nix checks 通过（草稿 PR #54）。Phase 7 的 Android x86_64 APK 构建通过，但模拟器 E2E 两轮均在首个套件等待阅读页时超时（其余 16 项通过、2 项跳过）；正在修复。没有真机，移动端保持 experimental。开发、编译和 Git 推送在 Linux 服务器执行。
 
 ## 已完成
 
