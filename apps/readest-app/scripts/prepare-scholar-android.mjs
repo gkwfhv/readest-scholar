@@ -37,4 +37,32 @@ for (const [sourceSet, fileName] of [
   fs.rmSync(upstreamFile);
 }
 
+// The fork must not claim readest.com App Links or intercept upstream
+// OAuth redirects. Provider redirects need Scholar-owned credentials.
+const manifestPath = path.join(androidDir, 'src/main/AndroidManifest.xml');
+const manifest = fs.readFileSync(manifestPath, 'utf8');
+let removedFilters = 0;
+const preparedManifest = manifest.replace(
+  /<intent-filter\b[^>]*>[\s\S]*?<\/intent-filter>/g,
+  (filter) => {
+    if (filter.includes('android:host="auth-callback"') && filter.includes('android:scheme="readest"')) {
+      return filter.replace('android:scheme="readest"', 'android:scheme="readest-scholar"');
+    }
+    if (
+      filter.includes('android:host="web.readest.com"') ||
+      filter.includes('android:scheme="readest"') ||
+      filter.includes('android:scheme="readest-onedrive"') ||
+      filter.includes('android:scheme="com.googleusercontent.apps.209390247301-ctpmep68ppfa56r1b8tr35e4qi4p60kq"')
+    ) {
+      removedFilters++;
+      return '';
+    }
+    return filter;
+  },
+);
+if (removedFilters < 3 || !preparedManifest.includes('android:scheme="readest-scholar"')) {
+  throw new Error('expected upstream Android App Link and OAuth intent filters');
+}
+fs.writeFileSync(manifestPath, preparedManifest);
+
 console.log(`Prepared Android namespace and activity for ${scholarId}`);

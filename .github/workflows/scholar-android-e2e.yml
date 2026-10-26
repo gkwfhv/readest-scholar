@@ -107,6 +107,14 @@ jobs:
           APK=$(find src-tauri/gen/android/app/build/outputs/apk -name '*-debug.apk' | head -n 1)
           echo "APK=$PWD/$APK" >> "$GITHUB_ENV"
           test -n "$APK"
+          AAPT2=$(find "$ANDROID_HOME/build-tools" -type f -name aapt2 | sort -V | tail -n 1)
+          test -x "$AAPT2"
+          "$AAPT2" dump xmltree "$APK" --file AndroidManifest.xml > "$RUNNER_TEMP/scholar-android-manifest.txt"
+          grep -F 'readest-scholar' "$RUNNER_TEMP/scholar-android-manifest.txt"
+          if grep -E 'web\.readest\.com|readest-onedrive|com\.googleusercontent\.apps\.209390247301|android:scheme.*"readest"' "$RUNNER_TEMP/scholar-android-manifest.txt"; then
+            echo 'Scholar APK still advertises an upstream link or OAuth callback' >&2
+            exit 1
+          fi
 
       - name: cache AVD snapshot
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -142,12 +150,15 @@ jobs:
             adb install -r "$APK"
             adb shell pm list packages io.github.gkwfhv.readestscholar | grep -Fx 'package:io.github.gkwfhv.readestscholar'
             cd apps/readest-app && READEST_ANDROID_SCREENSHOT_PATH="$GITHUB_WORKSPACE/scholar-android-reader.png" READEST_ANDROID_PACKAGE=io.github.gkwfhv.readestscholar READEST_ANDROID_REQUIRE_DEVICE=true pnpm test:android
+            adb shell am force-stop io.github.gkwfhv.readestscholar && adb shell monkey -p io.github.gkwfhv.readestscholar -c android.intent.category.LAUNCHER 1 >/dev/null && sleep 25 && adb exec-out screencap -p > "$GITHUB_WORKSPACE/scholar-android-library.png" && test -s "$GITHUB_WORKSPACE/scholar-android-library.png"
 
       - name: upload Android screen evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: scholar-android-reader-screen
-          path: scholar-android-reader.png
+          path: |
+            scholar-android-reader.png
+            scholar-android-library.png
           if-no-files-found: error
           retention-days: 7
