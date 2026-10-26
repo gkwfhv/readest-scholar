@@ -149,20 +149,6 @@ const enqueueImportRun = createSerialRunner();
 // initialization while the first one is importing. Both paths migrate the same
 // database and mutate the same library. Run them one at a time.
 const enqueueLibraryInit = createSerialRunner();
-
-// Phase 7 cold-start diagnostic: expose a stage name, without a file path or account data.
-const markOpenWithStage = (stage: string) => {
-  if (typeof window !== 'undefined') {
-    const diagnosticWindow = window as Window & {
-      __READEST_OPEN_WITH_STAGE?: string;
-      __READEST_OPEN_WITH_TRACE?: string[];
-    };
-    diagnosticWindow.__READEST_OPEN_WITH_STAGE = stage;
-    const trace = (diagnosticWindow.__READEST_OPEN_WITH_TRACE ??= []);
-    trace.push(stage);
-    if (trace.length > 30) trace.shift();
-  }
-};
 const LIBRARY_SEARCH_MODES: LibrarySearchConfig['mode'][] = [
   'contains',
   'whole-words',
@@ -245,16 +231,6 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     setCheckLastOpenBooks,
   } = useLibraryStore();
   const _ = useTranslation();
-  useEffect(() => {
-    (
-      window as Window & { __READEST_LIBRARY_GATES?: Record<string, boolean> }
-    ).__READEST_LIBRARY_GATES = {
-      checkOpenWithBooks,
-      checkLastOpenBooks,
-      checkPendingLaunchLink,
-      libraryLoaded: libraryLoadedFromDisk,
-    };
-  }, [checkOpenWithBooks, checkLastOpenBooks, checkPendingLaunchLink, libraryLoadedFromDisk]);
   const { selectFiles } = useFileSelector(appService, _);
   const { safeAreaInsets: insets, isRoundedWindow } = useThemeStore();
   const { clearBookData } = useBookDataStore();
@@ -638,7 +614,6 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
       for (const file of openWithFiles) {
         console.log('Open with book:', file);
         try {
-          markOpenWithStage('process:ingestFile');
           const temp = appService.isMobile ? false : !settings.autoImportBooksOnOpen;
           // A file shared into Readest on mobile (the OS share-sheet) is a
           // "Send to Readest" capture — force it to the cloud so it syncs to
@@ -652,18 +627,13 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
             },
             { appService, settings, isLoggedIn: !!user },
           );
-          markOpenWithStage('process:ingestFileDone');
           if (book) {
             bookIds.push(book.hash);
           }
         } catch (error) {
-          markOpenWithStage('process:ingestFileError');
-          (window as Window & { __READEST_OPEN_WITH_ERROR?: string }).__READEST_OPEN_WITH_ERROR =
-            error instanceof Error ? error.message.slice(0, 300) : String(error).slice(0, 300);
           console.log('Failed to import book:', file, error);
         }
       }
-      markOpenWithStage(`process:books=${bookIds.length}`);
       setLibrary(libraryBooks);
       // The next queued initialization must not read the library before this
       // import is durable.
@@ -790,9 +760,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     const hasCachedLibrary = libraryLoadedFromDisk;
     const loadingTimeout = hasCachedLibrary ? null : setTimeout(() => setLoading(true), 500);
     const initLibrary = async () => {
-      markOpenWithStage('init:getAppService');
       const appService = await envConfig.getAppService();
-      markOpenWithStage('init:loadSettings');
       const settings = await appService.loadSettings();
       setSettings(settings);
 
@@ -812,9 +780,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
       }
 
       // Reuse the library from the store when we return from the reader
-      markOpenWithStage('init:loadLibraryBooks');
       const library = hasCachedLibrary ? libraryBooks : await appService.loadLibraryBooks();
-      markOpenWithStage('init:openWith');
       let opened = false;
       // A VIEW intent can arrive while the first library initialization is
       // finishing. Its cleanup clears checkOpenWithBooks, but the unique
@@ -822,7 +788,6 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
       if (checkOpenWithBooks || new URLSearchParams(libraryInitKey).has('reload')) {
         opened = await handleOpenWithBooks(appService, library);
       }
-      markOpenWithStage(`init:openWithDone:${opened}`);
       setCheckOpenWithBooks(opened);
       if (!opened && checkLastOpenBooks && settings.openLastBooks) {
         opened = await handleOpenLastBooks(appService, settings.lastOpenBooks, library);
@@ -844,9 +809,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     };
 
     const handleOpenWithBooks = async (appService: AppService, library: Book[]) => {
-      markOpenWithStage('init:parseOpenWithFiles');
       const openWithFiles = (await parseOpenWithFiles(appService)) || [];
-      markOpenWithStage(`init:parseOpenWithFilesDone:${openWithFiles.length}`);
 
       if (openWithFiles.length > 0) {
         return await processOpenWithFiles(appService, openWithFiles, library);
