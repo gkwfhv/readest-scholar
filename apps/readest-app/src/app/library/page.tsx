@@ -775,7 +775,10 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
       // Reuse the library from the store when we return from the reader
       const library = hasCachedLibrary ? libraryBooks : await appService.loadLibraryBooks();
       let opened = false;
-      if (checkOpenWithBooks) {
+      // A VIEW intent can arrive while the first library initialization is
+      // finishing. Its cleanup clears checkOpenWithBooks, but the unique
+      // reload URL still records that an incoming file needs to be consumed.
+      if (checkOpenWithBooks || new URLSearchParams(libraryInitKey).has('reload')) {
         opened = await handleOpenWithBooks(appService, library);
       }
       setCheckOpenWithBooks(opened);

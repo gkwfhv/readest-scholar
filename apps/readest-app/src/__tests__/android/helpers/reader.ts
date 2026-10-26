@@ -150,10 +150,32 @@ export const openFixtureBook = async (fixtureFile: string): Promise<CdpPage> => 
     { timeoutMs: 90_000, intervalMs: 500, label: 'reader page' },
   ).catch(async (error: unknown) => {
     const nativeLog = await adbShell(
-      'logcat -d -t 300 -s NativeBridgePlugin:D MainActivity:D "*:S"',
+      'logcat -d -s NativeBridgePlugin:D MainActivity:D "*:S"',
     ).catch(() => '');
+    let pageState = '';
+    try {
+      await forwardWebViewDevtools(APP_PKG, CDP_PORT);
+      const candidate = (await listPages(CDP_PORT)).find((p) => p.type === 'page');
+      if (candidate) {
+        const page = await CdpPage.connect(CDP_PORT, candidate.id);
+        try {
+          pageState = JSON.stringify(
+            await page.evaluate(`return {
+              url: location.href,
+              pendingFiles: window.OPEN_WITH_FILES,
+              libraryVisible: !!document.querySelector('[aria-label="Your Library"]'),
+              bodyText: document.body?.innerText?.slice(0, 300)
+            };`),
+          );
+        } finally {
+          page.close();
+        }
+      }
+    } catch (diagnosticError) {
+      pageState = String(diagnosticError);
+    }
     throw new Error(
-      `${String(error)}; VIEW intent: ${launchOutput.trim()}; CDP pages: ${JSON.stringify(lastPages)}; native intent log: ${nativeLog.slice(-4000)}`,
+      `${String(error)}; VIEW intent: ${launchOutput.trim()}; CDP pages: ${JSON.stringify(lastPages)}; page state: ${pageState}; native intent log: ${nativeLog.slice(-4000)}`,
     );
   });
   const page = await CdpPage.connect(CDP_PORT, target.id);
