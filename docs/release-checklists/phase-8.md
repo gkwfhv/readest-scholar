@@ -9,6 +9,7 @@
 - Phase 7 iOS：[run 40323775458](https://github.com/gkwfhv/readest-scholar/actions/runs/40323775458) 完成无签名模拟器构建、编译产物品牌元数据核对、安装、启动和非空白书库首屏截图。证据在 [PR #59](https://github.com/gkwfhv/readest-scholar/pull/59)。
 - `scholar-baseline.yml` 生成生产 npm 许可证清单与源码 CycloneDX SBOM；`docker-image.yml` 为现有 GHCR 镜像生成双架构 SBOM；CodeQL 独立检查。
 - 本分支限制上游 `release.yml`、`nightly.yml` 和 `upload-to-r2.yml` 只在 `readest/readest` 仓库运行，避免 Scholar fork 执行上游分发流程。 `docker-image.yml` 在 Scholar 仓库后续构建使用 `ghcr.io/gkwfhv/readest-scholar`，上游仓库仍使用 `readest`；此改动尚未在主线发布镜像。
+- [生产 npm 依赖审计](../evidence/phase8/production-dependency-audit-2026-10-26.md)在服务器容器更新依赖后为 0 条公告，并增加 PR/主线只读 CI；Rust、容器镜像与第三方许可证仍待审查。
 - [PR #61](https://github.com/gkwfhv/readest-scholar/pull/61) 的依赖更新将生产 npm 审计降至 0 条，RustSec 命中从 14 条降至 5 条；剩余条目与调用路径见其 Rust 审计记录。尚未作正式风险接受。
 - [桌面候选包工件检查](../evidence/phase8/desktop-candidates-2026-10-26.md)完成 macOS arm64 DMG、Windows x64 NSIS、Linux amd64 DEB 的无签名调试构建与哈希/品牌元数据检查；[Linux 最终 CI](https://github.com/gkwfhv/readest-scholar/actions/runs/40356196886) 还完成 DEB 安装、Xvfb 启动与 Scholar D-Bus 身份检查。macOS/Windows 安装启动尚未验收。
 
