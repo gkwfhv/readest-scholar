@@ -18,6 +18,9 @@ concurrency:
   group: publish-docker-image-${{ github.event.release.tag_name || github.ref }}
   cancel-in-progress: true
 
+env:
+  IMAGE_REPOSITORY: ${{ github.repository == 'readest/readest' && 'readest' || 'readest-scholar' }}
+
 permissions:
   contents: read
 
@@ -63,7 +66,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          images: ghcr.io/${{ github.repository_owner }}/readest
+          images: ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_REPOSITORY }}
 
       - name: Build and push by digest
         id: build
@@ -75,9 +78,9 @@ jobs:
           platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: ${{ env.BUILD_ARGS }}
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/readest:buildcache-${{ env.PLATFORM_PAIR }}
-          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/readest:buildcache-${{ env.PLATFORM_PAIR }},mode=max
-          outputs: type=image,name=ghcr.io/${{ github.repository_owner }}/readest,push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_REPOSITORY }}:buildcache-${{ env.PLATFORM_PAIR }}
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_REPOSITORY }}:buildcache-${{ env.PLATFORM_PAIR }},mode=max
+          outputs: type=image,name=ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_REPOSITORY }},push-by-digest=true,name-canonical=true,push=true
 
       - name: Export digest
         run: |
@@ -93,7 +96,7 @@ jobs:
         env:
           SYFT: ${{ steps.syft.outputs.cmd }}
         run: |
-          "$SYFT" scan "ghcr.io/${{ github.repository_owner }}/readest@${{ steps.build.outputs.digest }}" \
+          "$SYFT" scan "ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_REPOSITORY }}@${{ steps.build.outputs.digest }}" \
             -o cyclonedx-json="scholar-image-${{ env.PLATFORM_PAIR }}.cdx.json"
 
       - name: Upload image SBOM
@@ -138,7 +141,7 @@ jobs:
 
       - name: Detect Docker Hub credentials
         id: dockerhub
-        if: github.event_name == 'workflow_dispatch'
+        if: github.repository == 'readest/readest' && github.event_name == 'workflow_dispatch'
         run: |
           if [ -n "${{ secrets.DOCKERHUB_USERNAME }}" ] && [ -n "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
@@ -158,7 +161,7 @@ jobs:
         if: steps.dockerhub.outputs.enabled != 'true'
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          images: ghcr.io/${{ github.repository_owner }}/readest
+          images: ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_REPOSITORY }}
           tags: |
             type=raw,value=main,enable={{is_default_branch}}
             type=semver,pattern={{version}},enable=${{ github.event_name == 'release' }}
@@ -171,7 +174,7 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: |
-            ghcr.io/${{ github.repository_owner }}/readest
+            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_REPOSITORY }}
             docker.io/${{ secrets.DOCKERHUB_USERNAME }}/readest
           tags: |
             type=raw,value=main,enable={{is_default_branch}}
@@ -187,7 +190,7 @@ jobs:
         run: |
           docker buildx imagetools create \
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf 'ghcr.io/${{ github.repository_owner }}/readest@sha256:%s ' *)
+            $(printf 'ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_REPOSITORY }}@sha256:%s ' *)
 
       - name: Create manifest list and push (GHCR + Docker Hub)
         if: steps.dockerhub.outputs.enabled == 'true'
@@ -197,7 +200,7 @@ jobs:
         run: |
           docker buildx imagetools create \
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf 'ghcr.io/${{ github.repository_owner }}/readest@sha256:%s ' *)
+            $(printf 'ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_REPOSITORY }}@sha256:%s ' *)
 
       - name: Published image summary
         run: |

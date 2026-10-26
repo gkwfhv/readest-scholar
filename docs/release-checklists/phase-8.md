@@ -8,7 +8,7 @@
 - Phase 7 Android：基线 [run 40325146120](https://github.com/gkwfhv/readest-scholar/actions/runs/40325146120) 和 Scholar 身份包 [run 40325199271](https://github.com/gkwfhv/readest-scholar/actions/runs/40325199271) 在 API 34 AOSP x86_64 模拟器上各完成 5 套件、18/18 阅读交互测试；后者冷启动书库、CDP 布局检查与截图均通过。证据与先前失败诊断在 [PR #57](https://github.com/gkwfhv/readest-scholar/pull/57)。
 - Phase 7 iOS：[run 40323775458](https://github.com/gkwfhv/readest-scholar/actions/runs/40323775458) 完成无签名模拟器构建、编译产物品牌元数据核对、安装、启动和非空白书库首屏截图。证据在 [PR #59](https://github.com/gkwfhv/readest-scholar/pull/59)。
 - `scholar-baseline.yml` 生成生产 npm 许可证清单与源码 CycloneDX SBOM；`docker-image.yml` 为现有 GHCR 镜像生成双架构 SBOM；CodeQL 独立检查。
-- 本分支限制上游 `release.yml`、`nightly.yml` 和 `upload-to-r2.yml` 只在 `readest/readest` 仓库运行，避免 Scholar fork 执行上游分发流程。
+- 本分支限制上游 `release.yml`、`nightly.yml` 和 `upload-to-r2.yml` 只在 `readest/readest` 仓库运行，避免 Scholar fork 执行上游分发流程。 `docker-image.yml` 在 Scholar 仓库后续构建使用 `ghcr.io/gkwfhv/readest-scholar`，上游仓库仍使用 `readest`；此改动尚未在主线发布镜像。
 - [PR #61](https://github.com/gkwfhv/readest-scholar/pull/61) 的依赖更新将生产 npm 审计降至 0 条，RustSec 命中从 14 条降至 5 条；剩余条目与调用路径见其 Rust 审计记录。尚未作正式风险接受。
 
 ## 发布前待完成
