@@ -101,7 +101,17 @@ export const openFixtureBook = async (fixtureFile: string): Promise<CdpPage> => 
   // the remount window and finds no foliate-view (nightly: "Cannot read
   // properties of null (reading 'renderer')").
   await adbShell(`am force-stop ${APP_PKG}`);
-  await sleep(1_000);
+  await waitFor(
+    async () => {
+      const pid = await adbShell(`pidof ${APP_PKG}`).catch(() => '');
+      return pid.trim() ? null : true;
+    },
+    { timeoutMs: 15_000, label: 'previous app process exit' },
+  );
+  // The emulator can still be releasing WebView/graphics resources after
+  // pidof stops seeing the old app. Re-launching during that window has
+  // intermittently stranded the second fixture at the library.
+  await sleep(3_000);
   await pushFile(fixtureFile, remote);
 
   // Register the file with MediaStore so a content:// URI exists — receivers

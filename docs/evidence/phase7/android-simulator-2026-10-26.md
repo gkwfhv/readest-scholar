@@ -17,3 +17,5 @@
 ## 后续稳定性回归
 
 文档提交 [run 40292512008](https://github.com/gkwfhv/readest-scholar/actions/runs/40292512008) 的首次运行与同提交重跑均在第二个 `selection.android.test.ts` 的准备阶段失败：第一个套件和其余三个套件通过，合计 11 项通过、7 项跳过。重跑的 VIEW Intent 已送达，但 90 秒内仍只见首页 CDP 页面，`adb shell pidof com.bilingify.readest` 返回进程不存在；模拟器同时报告 ColorBuffer 错误。首次运行仅报告 120 秒 hook 超时。当前证据不足以区分应用崩溃、系统回收和模拟器图形故障。已在测试辅助代码中增加崩溃日志与进程退出信息采集，下一轮以这些证据定位；此前两次通过不作为稳定性验收。
+
+诊断提交 [run 40297586723](https://github.com/gkwfhv/readest-scholar/actions/runs/40297586723) 又一次 18/18 通过，第二套件 32.1 秒；它没有复现进程退出。因此已调整夹具：`am force-stop` 后先确认旧 PID 消失，再等待模拟器释放 WebView/图形资源；下一次连续 CI 复验仍为稳定性判据，而不是把这次成功视为根因确认。
