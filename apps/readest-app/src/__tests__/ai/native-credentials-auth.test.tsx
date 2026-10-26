@@ -55,7 +55,10 @@ describe('native AI credential account switch', () => {
   it('ignores a delayed keychain read from the previous account', async () => {
     let resolveAlice!: (value: { openrouterApiKey: string }) => void;
     vi.mocked(loadNativeAiCredentials).mockImplementationOnce(
-      () => new Promise((resolve) => { resolveAlice = resolve; }),
+      () =>
+        new Promise((resolve) => {
+          resolveAlice = resolve;
+        }),
     );
     const { result } = renderHook(() => useAuth(), { wrapper: AuthProvider });
     act(() => {
@@ -76,7 +79,9 @@ describe('native AI credential account switch', () => {
   it('clears the old key before exposing the new account and hydrates only its slot', async () => {
     const { result } = renderHook(() => useAuth(), { wrapper: AuthProvider });
     act(() => {
-      result.current.login('bob-token', { id: 'bob' } as Parameters<typeof result.current.login>[1]);
+      result.current.login('bob-token', { id: 'bob' } as Parameters<
+        typeof result.current.login
+      >[1]);
     });
     expect(useSettingsStore.getState().settings.aiSettings.openrouterApiKey).toBeUndefined();
     await waitFor(() =>
@@ -89,7 +94,9 @@ describe('native AI credential account switch', () => {
     });
     expect(useSettingsStore.getState().settings.aiSettings.openrouterApiKey).toBeUndefined();
     await waitFor(() =>
-      expect(useSettingsStore.getState().settings.aiSettings.openrouterApiKey).toBe('key-for-alice'),
+      expect(useSettingsStore.getState().settings.aiSettings.openrouterApiKey).toBe(
+        'key-for-alice',
+      ),
     );
   });
 });

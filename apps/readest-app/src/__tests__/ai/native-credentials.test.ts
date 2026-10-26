@@ -144,7 +144,10 @@ describe('native settings load race', () => {
     const { loadSettings } = await import('@/services/settingsService');
     let release!: (result: { value: string }) => void;
     vi.mocked(getSecureItem).mockImplementationOnce(
-      () => new Promise((resolve) => { release = resolve; }),
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
     );
     localStorage.setItem('user', JSON.stringify({ id: 'alice' }));
     const files = new Map<string, string>([
