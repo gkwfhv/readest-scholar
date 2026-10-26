@@ -22,6 +22,7 @@ concurrency:
 
 jobs:
   compute-version:
+    if: github.repository == 'readest/readest'
     runs-on: ubuntu-latest
     outputs:
       nightly_version: ${{ steps.v.outputs.nightly_version }}

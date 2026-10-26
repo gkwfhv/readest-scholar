@@ -30,6 +30,6 @@ Phase 2 已从[手动 DOI 元数据](docs/evidence/phase2/doi-metadata-2026-10-2
 | 5 AI 引用 | 非生产范围自验收通过；开放 PR #53；见 [验收记录](docs/evidence/phase5/acceptance-2026-10-26.md) 与 [4B 真实模型 QA](docs/evidence/phase5/local-model-4b-citation-2026-10-26.md) | 现有 `ragService` | 页码可点，无证据拒答；数值错页防护已实测，非数值断言仍需人工核对 |
 | 6 pdf2zh Worker | 非生产范围自验收通过；服务器金样本、队列、全量单测、Web 候选与 GitHub CI 通过；开放 PR #54；见 [Phase 6 验收记录](docs/evidence/phase6/acceptance-2026-10-26.md) | 独立任务表 | 双栏与公式表格可读、原件不变、取消重试和页级兼容已实测 |
 | 7 跨平台 | iOS 模拟器子集通过：[基线 PR #56](https://github.com/gkwfhv/readest-scholar/pull/56)与 [Scholar 身份包 PR #59](https://github.com/gkwfhv/readest-scholar/pull/59)完成编译、安装、启动和首屏检查。Android [基线 PR #55](https://github.com/gkwfhv/readest-scholar/pull/55)与 [Scholar 身份包 PR #57](https://github.com/gkwfhv/readest-scholar/pull/57)各有一次 18/18 通过，但第二套件后续失败，稳定性待验收；暂无真机 | Rust、签名凭据、真机 | 真机、PDF/离线同步、后台限制、Apple Pencil 等未验收能力标 experimental，不进入稳定版 |
-| 8 发布 | 未开始 | 人工授权 | 本文件不授权发布 |
+| 8 发布 | 准备中：已隔离上游发布工作流，见 [发布准备清单](docs/release-checklists/phase-8.md)；尚未创建候选 Release | 受保护审批、签名凭据、真机证据 | 本文件不授权发布；未满足条件不得标为稳定版 |
 
 Phase 4、5、6 只在协议和文件身份确定后并行。移动构建不能留到最后才第一次跑。
