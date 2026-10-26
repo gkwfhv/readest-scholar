@@ -37,3 +37,13 @@
 ![Scholar Android 模拟器 EPUB 阅读器](android-scholar-reader-2026-10-26.png)
 
 截图为 320×640 API 34 模拟器、英文 EPUB 第四章页面；页眉、章节标题、正文及底部页码均可见，未见裁剪或重叠。PNG SHA-256：`af2d96bf09b1cdc2b1cfd4b396cf31aeb47076bc14437fe8931b5e484c193b4e`；[原始 CI 工件](https://github.com/gkwfhv/readest-scholar/actions/runs/40311571914/artifacts/12646440737) 摘要 `sha256:6f6e51c6265a24bc15a713941309cce1227b75a9e623de5e68acfef42e565bd9`。Android 书库页、PDF、同步、后台限制和真实设备仍未验收。
+
+## Scholar 冷启动书库验收
+
+此前品牌包的阅读器截图正常，但冷启动书库页在 CI 截图中为空。CDP 诊断证实 WebView 已加载根路由 `/`，而书库初始化队列仅允许 `/library`，导致根路由没有执行 `initLibrary()`。[修复提交 `6a87294`](https://github.com/gkwfhv/readest-scholar/commit/6a872948a81520f84dc4f2dbc91507d9449bd7dc) 允许根路由初始化书库。另将模拟器从偶发 Google Play 服务崩溃的 Google APIs 镜像切换到 API 34 AOSP x86_64；此前一次退出信息为 `DEPENDENCY DIED`，该系统故障与书库路由错误分开处理。
+
+修复后，基线 [run 40325146120](https://github.com/gkwfhv/readest-scholar/actions/runs/40325146120) 和品牌包 [run 40325199271](https://github.com/gkwfhv/readest-scholar/actions/runs/40325199271) 均完成 5 套件、18/18 项 Android 阅读交互测试。品牌包随后冷启动到 `http://tauri.localhost/`，CDP 读取到书库布局宽 320px 与非空文本，ADB 截图显示搜索栏、书架卡片、书名和导入入口。
+
+![Readest Scholar Android 模拟器冷启动书库](android-scholar-library-2026-10-26.png)
+
+截图来自 [原始 CI 工件](https://github.com/gkwfhv/readest-scholar/actions/runs/40325199271/artifacts/12651606930)，PNG SHA-256：`7e19ea51324f1f01aaaf2b46e2bb828f28ea5a8994936ba73a04c4a2eb1266c0`。这是 API 34 模拟器的 320×640 调试包画面；书籍封面在此截图中为占位白卡，标题与控制栏可见。Android 真机、系统后台行为、PDF 与跨端同步仍需独立验收，不能由本截图推出。
