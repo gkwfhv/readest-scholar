@@ -13,7 +13,8 @@ SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
 
 def build_cli_command(
-    source: Path, destination: Path, mode: str, glossary: Path | None = None
+    source: Path, destination: Path, mode: str, glossary: Path | None = None,
+    *, white_background_compat: bool = False, pages: str | None = None,
 ) -> list[str]:
     if mode not in {"mono", "dual", "both"}:
         raise ValueError("invalid translation mode")
@@ -25,11 +26,55 @@ def build_cli_command(
     ]
     if glossary is not None:
         args.extend(["--glossaries", str(glossary)])
+    if white_background_compat:
+        args.append("--ocr-workaround")
+    if pages is not None:
+        args.extend(["--pages", pages, "--only-include-translated-page"])
     if mode == "mono":
         args.append("--no-dual")
     elif mode == "dual":
         args.append("--no-mono")
     return args
+
+
+def parse_page_selection(spec: str, page_count: int) -> list[int]:
+    """Validate a human page list and return zero-based page indexes."""
+    if not isinstance(spec, str) or len(spec) > 120 or not re.fullmatch(
+        r"[1-9][0-9]*(?:-[1-9][0-9]*)?(?:,[1-9][0-9]*(?:-[1-9][0-9]*)?)*", spec
+    ):
+        raise JobFailure("invalid_pages")
+    selected: set[int] = set()
+    for part in spec.split(","):
+        bounds = [int(item) for item in part.split("-")]
+        first, last = (bounds[0], bounds[0]) if len(bounds) == 1 else bounds
+        if last < first or last > page_count or last - first > 499:
+            raise JobFailure("invalid_pages")
+        for page in range(first, last + 1):
+            if page in selected:
+                raise JobFailure("invalid_pages")
+            selected.add(page)
+    return [page - 1 for page in sorted(selected)]
+
+
+def merge_page_outputs(
+    original: Path, compatibility: Path, destination: Path, selected: list[int],
+    expected_pages: int | None = None,
+) -> None:
+    """Replace only selected bilingual/mono pages; keep other vector pages intact."""
+    from pypdf import PdfReader, PdfWriter
+
+    base = PdfReader(original, strict=True)
+    alternate = PdfReader(compatibility, strict=True)
+    if (not selected or max(selected) >= len(base.pages)
+        or len(alternate.pages) != len(selected)
+        or (expected_pages is not None and len(base.pages) != expected_pages)):
+        raise JobFailure("invalid_compatibility_output")
+    replacement = dict(zip(selected, alternate.pages, strict=True))
+    writer = PdfWriter()
+    for index, page in enumerate(base.pages):
+        writer.add_page(replacement.get(index, page))
+    with destination.open("wb") as stream:
+        writer.write(stream)
 
 
 def output_key(account: str, job: str, kind: str) -> str:
@@ -127,7 +172,20 @@ def pdf_page_count(content: bytes, *, limit: int) -> int:
     return count
 
 
-def inspect_output(path: Path, source_sha256: str, source_pages: int) -> dict[str, int | str]:
+def count_raw_style_markers(content: bytes) -> int:
+    """Count visible HTML style tags in a PDF's extracted text."""
+    import fitz
+
+    try:
+        with fitz.open(stream=content, filetype="pdf") as document:
+            return sum(page.get_text().lower().count("<style") for page in document)
+    except Exception as exc:
+        raise JobFailure("invalid_output_pdf") from exc
+
+
+def inspect_output(
+    path: Path, source_sha256: str, source_pages: int, source_content: bytes,
+) -> dict[str, int | str]:
     if path.is_symlink() or not path.is_file():
         raise JobFailure("missing_output")
     if path.stat().st_size > 200 * 1024 * 1024:
@@ -139,6 +197,9 @@ def inspect_output(path: Path, source_sha256: str, source_pages: int) -> dict[st
     if digest == source_sha256:
         raise JobFailure("untranslated_output")
     pages = pdf_page_count(content, limit=min(1000, 2 * source_pages + 2))
+    # A paper about HTML may legitimately contain style tags in its source.
+    if count_raw_style_markers(content) and count_raw_style_markers(source_content) == 0:
+        raise JobFailure("invalid_translation_markup")
     return {"sha256": digest, "fileSize": len(content), "pageCount": pages}
 
 
@@ -265,19 +326,30 @@ class Database:
 def run_engine(
     job, source: Path, output_dir: Path, db: Database, base_url: str,
     api_key: str, cache_dir: str, timeout_seconds: int,
-    glossary: Path | None = None,
+    glossary: Path | None = None, *,
+    white_background_compat: bool | None = None,
+    pages: str | None = None,
+    progress_start: int = 20,
+    progress_end: int = 75,
 ) -> None:
     import subprocess
     import time
 
-    command = build_cli_command(source, output_dir, job["mode"], glossary)
+    if white_background_compat is None:
+        white_background_compat = (
+            job.get("request_options", {}).get("whiteBackgroundCompatibility") is True
+        )
+    command = build_cli_command(
+        source, output_dir, job["mode"], glossary,
+        white_background_compat=white_background_compat, pages=pages,
+    )
     if job["model"].lower().startswith("qwen3"):
         command.extend([
             "--custom-system-prompt",
             "/no_think Translate English academic prose into fluent Chinese. "
             "Preserve equations, citations, symbols and terminology. Return only the translation.",
         ])
-    log_path = output_dir.parent / "engine.log"
+    log_path = output_dir.parent / ("engine-pages.log" if pages else "engine.log")
     with log_path.open("wb") as log:
         process = subprocess.Popen(
             command, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
@@ -294,7 +366,11 @@ def run_engine(
                 if time.monotonic() - started > timeout_seconds:
                     raise JobFailure("engine_timeout")
                 if time.monotonic() - last_renewal >= 25:
-                    if not db.renew(job, engine_progress(log_path)):
+                    stage_progress = engine_progress(log_path)
+                    scaled = progress_start + round(
+                        (stage_progress - 20) * (progress_end - progress_start) / 55
+                    )
+                    if not db.renew(job, scaled):
                         raise JobFailure("lease_lost")
                     last_renewal = time.monotonic()
             if process.returncode != 0:
@@ -361,17 +437,50 @@ def process_job(job, db: Database, s3, *, bucket: str, base_url: str,
                 glossary_path = work / "glossary.csv"
                 glossary_path.write_text(glossary_text, encoding="utf-8")
                 glossary_path.chmod(0o444)
-            run_engine(
-                job, input_path, output_dir, db, base_url,
-                api_key, str(job_cache), timeout_seconds, glossary_path,
-            )
+            page_spec = job.get("request_options", {}).get("whiteBackgroundPages")
+            selected_pages = parse_page_selection(page_spec, pages) if page_spec else None
+            if selected_pages and not (
+                job.get("request_options", {}).get("whiteBackgroundCompatibility") is True
+            ):
+                raise JobFailure("invalid_pages")
+            if selected_pages:
+                run_engine(
+                    job, input_path, output_dir, db, base_url,
+                    api_key, str(job_cache), timeout_seconds, glossary_path,
+                    white_background_compat=False, progress_end=55,
+                )
+            else:
+                run_engine(
+                    job, input_path, output_dir, db, base_url,
+                    api_key, str(job_cache), timeout_seconds, glossary_path,
+                )
+            if selected_pages:
+                compatibility_dir = work / "compatibility"
+                compatibility_dir.mkdir()
+                normalized_pages = ",".join(str(index + 1) for index in selected_pages)
+                run_engine(
+                    job, input_path, compatibility_dir, db, base_url,
+                    api_key, str(job_cache), timeout_seconds, glossary_path,
+                    white_background_compat=True, pages=normalized_pages,
+                    progress_start=55, progress_end=78,
+                )
+                merged_dir = work / "merged"
+                merged_dir.mkdir()
+                kinds = ("mono", "dual") if job["mode"] == "both" else (job["mode"],)
+                for kind in kinds:
+                    normal = find_output(output_dir, kind)
+                    alternate = find_output(compatibility_dir, kind)
+                    merge_page_outputs(
+                        normal, alternate, merged_dir / normal.name, selected_pages, pages
+                    )
+                output_dir = merged_dir
             if not db.renew(job, 80):
                 raise JobFailure("lease_lost")
             kinds = ("mono", "dual") if job["mode"] == "both" else (job["mode"],)
             outputs = []
             for kind in kinds:
                 path = find_output(output_dir, kind)
-                metadata = inspect_output(path, job["source_sha256"], pages)
+                metadata = inspect_output(path, job["source_sha256"], pages, content)
                 key = output_key(str(job["user_id"]), str(job["id"]), kind)
                 data = path.read_bytes()
                 s3.put_object(

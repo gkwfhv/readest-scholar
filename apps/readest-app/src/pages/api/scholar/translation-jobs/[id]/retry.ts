@@ -21,7 +21,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const { data: job, error } = await createSupabaseAdminClient().rpc(
-    'retry_scholar_translation_job_v1',
+    'retry_scholar_translation_job_v3',
     { p_user_id: user.id, p_job_id: id, p_idempotency_key: idempotencyKey },
   );
   if (error?.code === '42501') return res.status(404).json({ error: 'Translation job not found' });

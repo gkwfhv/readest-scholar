@@ -15,6 +15,8 @@ from worker import _s3_client
 BUCKET = os.environ["S3_BUCKET_NAME"]
 MODEL = os.environ.get("SCHOLAR_TRANSLATION_MODEL", "Qwen3-0.6B-Q8_0")
 DB = os.environ["SCHOLAR_TRANSLATION_DATABASE_URL"]
+WHITE_BACKGROUND = os.environ.get("SCHOLAR_TRANSLATION_WHITE_BACKGROUND_COMPAT") == "true"
+WHITE_PAGES = os.environ.get("SCHOLAR_TRANSLATION_WHITE_BACKGROUND_PAGES")
 
 
 def source_pdf():
@@ -68,9 +70,9 @@ def setup():
                     (user_id, file_id, version_id, op_id, key, digest, len(content)),
                 )
                 cursor.execute(
-                    """SELECT id FROM public.enqueue_scholar_translation_job_v1(
-                       %s,%s,%s,%s,'dual','zh-CN','openai-compatible',%s,NULL)""",
-                    (user_id, file_id, version_id, request_id, MODEL),
+                    """SELECT id FROM public.enqueue_scholar_translation_job_v3(
+                       %s,%s,%s,%s,'dual','zh-CN','openai-compatible',%s,NULL,%s,%s)""",
+                    (user_id, file_id, version_id, request_id, MODEL, WHITE_BACKGROUND, WHITE_PAGES),
                 )
                 job_id = cursor.fetchone()[0]
                 connection.commit()
@@ -141,18 +143,20 @@ def repeat(job_id):
     with psycopg.connect(DB, autocommit=True) as connection:
         with connection.cursor() as cursor:
             cursor.execute(
-                """SELECT user_id,source_file_id,source_version_id,mode,model
+                """SELECT user_id,source_file_id,source_version_id,mode,model,request_options
                    FROM public.scholar_translation_jobs WHERE id=%s AND state='succeeded'""",
                 (job_id,),
             )
             row = cursor.fetchone()
             if not row:
                 raise RuntimeError("completed probe job missing")
-            user_id, file_id, version_id, mode, model = row
+            user_id, file_id, version_id, mode, model, options = row
             cursor.execute(
-                """SELECT id FROM public.enqueue_scholar_translation_job_v1(
-                   %s,%s,%s,%s,%s,'zh-CN','openai-compatible',%s,NULL)""",
-                (user_id, file_id, version_id, uuid.uuid4(), mode, model),
+                """SELECT id FROM public.enqueue_scholar_translation_job_v3(
+                   %s,%s,%s,%s,%s,'zh-CN','openai-compatible',%s,NULL,%s,%s)""",
+                (user_id, file_id, version_id, uuid.uuid4(), mode, model,
+                 options.get("whiteBackgroundCompatibility") is True,
+                 options.get("whiteBackgroundPages")),
             )
             repeated = cursor.fetchone()[0]
             print(json.dumps({"repeatJobId": str(repeated)}), flush=True)
@@ -190,18 +194,20 @@ def cancel_retry(job_id):
     with psycopg.connect(DB, autocommit=True) as connection:
         with connection.cursor() as cursor:
             cursor.execute(
-                """SELECT user_id,source_file_id,source_version_id,model
+                """SELECT user_id,source_file_id,source_version_id,model,request_options
                    FROM public.scholar_translation_jobs WHERE id=%s AND state='succeeded'""",
                 (job_id,),
             )
             row = cursor.fetchone()
             if not row:
                 raise RuntimeError("completed probe job missing")
-            user_id, file_id, version_id, model = row
+            user_id, file_id, version_id, model, options = row
             cursor.execute(
-                """SELECT id FROM public.enqueue_scholar_translation_job_v1(
-                   %s,%s,%s,%s,'dual','zh-CN','openai-compatible',%s,NULL)""",
-                (user_id, file_id, version_id, uuid.uuid4(), model),
+                """SELECT id FROM public.enqueue_scholar_translation_job_v3(
+                   %s,%s,%s,%s,'dual','zh-CN','openai-compatible',%s,NULL,%s,%s)""",
+                (user_id, file_id, version_id, uuid.uuid4(), model,
+                 options.get("whiteBackgroundCompatibility") is True,
+                 options.get("whiteBackgroundPages")),
             )
             canceled_job = cursor.fetchone()[0]
             deadline = time.monotonic() + 90
@@ -240,7 +246,7 @@ def cancel_retry(job_id):
             )
             assert cursor.fetchone()[0] == 0
             cursor.execute(
-                "SELECT id FROM public.retry_scholar_translation_job_v1(%s,%s,%s)",
+                "SELECT id FROM public.retry_scholar_translation_job_v3(%s,%s,%s)",
                 (user_id, canceled_job, uuid.uuid4()),
             )
             retry_job = cursor.fetchone()[0]

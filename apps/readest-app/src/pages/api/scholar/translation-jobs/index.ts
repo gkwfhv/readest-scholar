@@ -7,6 +7,28 @@ const isUuid = (value: unknown): value is string =>
   typeof value === 'string' &&
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
+const validPageSelection = (value: unknown): value is string => {
+  if (
+    typeof value !== 'string' ||
+    value.length > 120 ||
+    !/^[1-9][0-9]*(?:-[1-9][0-9]*)?(?:,[1-9][0-9]*(?:-[1-9][0-9]*)?)*$/.test(value)
+  )
+    return false;
+  const seen = new Set<number>();
+  for (const part of value.split(',')) {
+    const bounds = part.split('-');
+    const start = Number(bounds[0]);
+    const end = Number(bounds[1] ?? bounds[0]);
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || end < start || end > 500)
+      return false;
+    for (let page = start; page <= end; page++) {
+      if (seen.has(page)) return false;
+      seen.add(page);
+    }
+  }
+  return true;
+};
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   await runMiddleware(req, res, corsAllMethods);
   if (req.method !== 'POST' && req.method !== 'GET')
@@ -30,12 +52,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json({ jobs: jobs ?? [] });
   }
 
-  const { fileId, versionId, idempotencyKey, mode, glossarySha256 } = req.body ?? {};
+  const {
+    fileId,
+    versionId,
+    idempotencyKey,
+    mode,
+    glossarySha256,
+    whiteBackgroundCompatibility,
+    whiteBackgroundPages,
+  } = req.body ?? {};
   if (
     !isUuid(fileId) ||
     !isUuid(versionId) ||
     !isUuid(idempotencyKey) ||
     !['mono', 'dual', 'both'].includes(mode) ||
+    (whiteBackgroundCompatibility !== undefined &&
+      typeof whiteBackgroundCompatibility !== 'boolean') ||
+    (whiteBackgroundPages !== undefined &&
+      (whiteBackgroundCompatibility !== true || !validPageSelection(whiteBackgroundPages))) ||
     (glossarySha256 !== undefined &&
       (typeof glossarySha256 !== 'string' || !/^[0-9a-f]{64}$/.test(glossarySha256)))
   ) {
@@ -50,7 +84,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const supabase = createSupabaseAdminClient();
-  const { data: job, error } = await supabase.rpc('enqueue_scholar_translation_job_v1', {
+  const { data: job, error } = await supabase.rpc('enqueue_scholar_translation_job_v3', {
     p_user_id: user.id,
     p_source_file_id: fileId,
     p_source_version_id: versionId,
@@ -60,6 +94,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     p_engine: 'openai-compatible',
     p_model: model,
     p_glossary_sha256: glossarySha256 ?? null,
+    p_white_background_compat: whiteBackgroundCompatibility ?? false,
+    p_white_background_pages: whiteBackgroundPages ?? null,
   });
   if (error) {
     if (error.code === 'PT409') return res.status(409).json({ error: 'Idempotency key conflict' });

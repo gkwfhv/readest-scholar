@@ -48,11 +48,45 @@ describe('Scholar translation enqueue API', () => {
   it('queues only under the authenticated account', async () => {
     const res = await call({ ...valid, userId: '00000000-0000-4000-8000-000000000099' });
     expect(state.rpc).toHaveBeenCalledWith(
-      'enqueue_scholar_translation_job_v1',
+      'enqueue_scholar_translation_job_v3',
       expect.objectContaining({ p_user_id: state.userId, p_source_file_id: fileId }),
     );
     expect(res.status).toHaveBeenCalledWith(202);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ id: jobId, state: 'queued' }));
+  });
+  it('passes white-background compatibility to the owned job queue', async () => {
+    const res = await call({
+      ...valid,
+      whiteBackgroundCompatibility: true,
+      whiteBackgroundPages: '2',
+    });
+    expect(state.rpc).toHaveBeenCalledWith(
+      'enqueue_scholar_translation_job_v3',
+      expect.objectContaining({
+        p_user_id: state.userId,
+        p_white_background_compat: true,
+        p_white_background_pages: '2',
+      }),
+    );
+    expect(res.status).toHaveBeenCalledWith(202);
+  });
+  it('rejects invalid or unscoped page selections', async () => {
+    for (const pages of ['0', '3-2', '1;rm']) {
+      const res = await call({
+        ...valid,
+        whiteBackgroundCompatibility: true,
+        whiteBackgroundPages: pages,
+      });
+      expect(res.status).toHaveBeenCalledWith(400);
+    }
+    const res = await call({ ...valid, whiteBackgroundPages: '2' });
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(state.rpc).not.toHaveBeenCalled();
+  });
+  it('rejects a non-boolean white-background option', async () => {
+    const res = await call({ ...valid, whiteBackgroundCompatibility: 'yes' });
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(state.rpc).not.toHaveBeenCalled();
   });
   it('rejects unauthenticated requests before touching the queue', async () => {
     state.userId = '';

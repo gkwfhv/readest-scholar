@@ -16,6 +16,8 @@ interface Job {
   progress: number;
   mode: Mode;
   errorCode?: string | null;
+  whiteBackgroundCompatibility?: boolean;
+  whiteBackgroundPages?: string | null;
   outputs?: { kind: 'mono' | 'dual'; downloadUrl: string; sha256: string; fileSize: number }[];
 }
 interface FileStatus {
@@ -28,6 +30,8 @@ export default function ScholarTranslationPanel({ book }: { book: Book }) {
   const [status, setStatus] = useState<FileStatus | null>(null);
   const [job, setJob] = useState<Job | null>(null);
   const [mode, setMode] = useState<Mode>('dual');
+  const [whiteBackgroundCompatibility, setWhiteBackgroundCompatibility] = useState(false);
+  const [whiteBackgroundPages, setWhiteBackgroundPages] = useState('');
   const [glossarySha, setGlossarySha] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -183,6 +187,9 @@ export default function ScholarTranslationPanel({ book }: { book: Book }) {
     setBusy(true);
     setError('');
     try {
+      if (action === 'start' && whiteBackgroundCompatibility && !whiteBackgroundPages.trim()) {
+        throw new Error(_('Enter the compatibility page numbers.'));
+      }
       const path =
         action === 'start'
           ? '/scholar/translation-jobs'
@@ -196,6 +203,10 @@ export default function ScholarTranslationPanel({ book }: { book: Book }) {
               versionId: status.activeVersionId,
               idempotencyKey: crypto.randomUUID(),
               mode,
+              whiteBackgroundCompatibility,
+              ...(whiteBackgroundCompatibility
+                ? { whiteBackgroundPages: whiteBackgroundPages.trim() }
+                : {}),
               ...(glossarySha ? { glossarySha256: glossarySha } : {}),
             }
           : action === 'retry'
@@ -257,6 +268,38 @@ export default function ScholarTranslationPanel({ book }: { book: Book }) {
             />
           </label>
           {glossarySha && <span className='text-xs text-success'>{_('Glossary ready')}</span>}
+          <label className='eink-bordered flex w-full items-start gap-2 rounded-md border border-base-300 p-2 text-xs'>
+            <input
+              type='checkbox'
+              className='checkbox checkbox-xs eink-bordered mt-0.5'
+              checked={whiteBackgroundCompatibility}
+              disabled={busy}
+              onChange={(event) => setWhiteBackgroundCompatibility(event.target.checked)}
+            />
+            <span>
+              <span className='font-medium'>{_('White-background compatibility')}</span>
+              <span className='mt-1 block text-base-content/65'>
+                {_('Use on white pages when original text overlaps the translation.')}
+              </span>
+            </span>
+          </label>
+          {whiteBackgroundCompatibility && (
+            <label className='w-full text-xs'>
+              {_('Compatibility pages')}
+              <input
+                type='text'
+                className='input input-bordered input-sm eink-bordered mt-1 block w-full max-w-48'
+                value={whiteBackgroundPages}
+                maxLength={120}
+                placeholder='2,4-6'
+                disabled={busy}
+                onChange={(event) => setWhiteBackgroundPages(event.target.value)}
+              />
+              <span className='mt-1 block text-base-content/65'>
+                {_('Select text-only pages; cleanup can cover labels inside figures.')}
+              </span>
+            </label>
+          )}
           <button
             type='button'
             className='btn btn-sm btn-contrast'
@@ -278,9 +321,19 @@ export default function ScholarTranslationPanel({ book }: { book: Book }) {
             {stateLabel[job.state]} · {job.progress}% ·{' '}
             {job.mode === 'dual' ? _('Bilingual') : job.mode === 'mono' ? _('Chinese') : _('Both')}
           </p>
+          {job.whiteBackgroundCompatibility && (
+            <p className='mt-1'>
+              {_('White-background compatibility')}
+              {job.whiteBackgroundPages ? ` · ${_('Pages')} ${job.whiteBackgroundPages}` : ''}
+            </p>
+          )}
           {job.errorCode && (
             <p role='alert' className='text-error'>
-              {job.errorCode}
+              {job.errorCode === 'invalid_translation_markup'
+                ? _(
+                    'The translated PDF contains invalid formatting. Contact your server administrator.',
+                  )
+                : job.errorCode}
             </p>
           )}
           {(job.state === 'queued' || job.state === 'running') && (

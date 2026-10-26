@@ -52,7 +52,7 @@ describe('Scholar translation controls', () => {
   });
   it('retries into a new job with a fresh idempotency key', async () => {
     const res = await call(retryHandler, jobId, { idempotencyKey: retryId });
-    expect(state.rpc).toHaveBeenCalledWith('retry_scholar_translation_job_v1', {
+    expect(state.rpc).toHaveBeenCalledWith('retry_scholar_translation_job_v3', {
       p_user_id: state.userId,
       p_job_id: jobId,
       p_idempotency_key: retryId,

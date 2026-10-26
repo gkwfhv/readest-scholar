@@ -1,4 +1,5 @@
 import hashlib
+import inspect
 import os
 import subprocess
 import sys
@@ -9,7 +10,7 @@ from unittest.mock import patch
 from io import BytesIO
 from pathlib import Path
 
-from worker import JobFailure, build_cli_command, child_environment, engine_progress, find_output, output_key, prepare_asset_links, process_job, run_engine, verify_glossary_text, verify_source_bytes
+from worker import JobFailure, inspect_output, build_cli_command, merge_page_outputs, parse_page_selection, child_environment, engine_progress, find_output, output_key, prepare_asset_links, process_job, run_engine, verify_glossary_text, verify_source_bytes
 
 
 class WorkerContractTests(unittest.TestCase):
@@ -22,6 +23,80 @@ class WorkerContractTests(unittest.TestCase):
         self.assertEqual(args[args.index("--qps") + 1], "1")
         self.assertNotIn("--openai-compatible-api-key", args)
         self.assertNotIn("--openai-compatible-base-url", args)
+
+    def test_white_background_compatibility_is_explicit(self):
+        source = Path("/tmp/source.pdf")
+        target = Path("/tmp/out")
+        self.assertIn(
+            "white_background_compat",
+            inspect.signature(build_cli_command).parameters,
+            "white-background PDF compatibility must be an explicit worker option",
+        )
+        normal = build_cli_command(source, target, "dual")
+        white_background = build_cli_command(
+            source, target, "dual", white_background_compat=True
+        )
+        self.assertNotIn("--ocr-workaround", normal)
+        self.assertIn("--ocr-workaround", white_background)
+
+    def test_selected_white_pages_preserve_other_pages(self):
+        from pypdf import PdfReader, PdfWriter
+        self.assertEqual(parse_page_selection("2,4-5", 5), [1, 3, 4])
+        for invalid in ("0", "6", "3-2", "2,2", "1;rm"):
+            with self.assertRaises(JobFailure):
+                parse_page_selection(invalid, 5)
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            original = root / "original.pdf"
+            cleaned = root / "cleaned.pdf"
+            merged = root / "merged.pdf"
+            writer = PdfWriter()
+            writer.add_blank_page(width=100, height=100)
+            writer.add_blank_page(width=200, height=200)
+            with original.open("wb") as target:
+                writer.write(target)
+            writer = PdfWriter()
+            writer.add_blank_page(width=300, height=300)
+            with cleaned.open("wb") as target:
+                writer.write(target)
+            merge_page_outputs(original, cleaned, merged, [1])
+            pages = PdfReader(merged).pages
+            self.assertEqual([int(page.mediabox.width) for page in pages], [100, 300])
+
+    def test_raw_style_markup_new_in_translation_is_rejected(self):
+        import fitz
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            source = fitz.open()
+            page = source.new_page()
+            page.insert_text((30, 50), "Source paper")
+            original = source.tobytes()
+            translated = fitz.open()
+            page = translated.new_page()
+            page.insert_text((30, 50), 'Chinese translation <style id="1">')
+            output = root / "translated.pdf"
+            translated.save(output)
+            with self.assertRaisesRegex(JobFailure, "invalid_translation_markup"):
+                inspect_output(output, hashlib.sha256(original).hexdigest(), 1, original)
+
+            source_with_markup = fitz.open()
+            page = source_with_markup.new_page()
+            page.insert_text((30, 50), 'Code example <style id="1">')
+            original_with_markup = source_with_markup.tobytes()
+            inspect_output(
+                output, hashlib.sha256(original_with_markup).hexdigest(), 1,
+                original_with_markup,
+            )
+
+    def test_partial_compatibility_cli_selects_only_requested_pages(self):
+        args = build_cli_command(
+            Path("/tmp/source.pdf"), Path("/tmp/out"), "dual",
+            white_background_compat=True, pages="2,4-5",
+        )
+        self.assertEqual(args[args.index("--pages") + 1], "2,4-5")
+        self.assertIn("--only-include-translated-page", args)
+        self.assertIn("--ocr-workaround", args)
 
     def test_sealed_worker_environment_is_not_readable_by_same_uid_child(self):
         probe = (
@@ -257,8 +332,8 @@ class WorkerContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as cache, patch(
             "worker.prepare_asset_links"
         ), patch("worker.pdf_page_count", return_value=1), patch(
-            "worker.run_engine", side_effect=fake_engine
-        ):
+            "worker.count_raw_style_markers", return_value=0
+        ), patch("worker.run_engine", side_effect=fake_engine):
             result = process_job(
                 {"id": job_id, "user_id": account, "source_sha256": source_hash,
                  "source_size": len(content), "mode": "dual", "model": "local-model", "glossary_sha256": None},
@@ -320,8 +395,8 @@ class WorkerContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as cache, patch(
             "worker.prepare_asset_links"
         ), patch("worker.pdf_page_count", return_value=1), patch(
-            "worker.run_engine", side_effect=fake_engine
-        ):
+            "worker.count_raw_style_markers", return_value=0
+        ), patch("worker.run_engine", side_effect=fake_engine):
             result = process_job(
                 {"id": job_id, "user_id": account, "source_sha256": source_hash,
                  "source_size": len(content), "mode": "dual", "model": "local-model", "glossary_sha256": None},

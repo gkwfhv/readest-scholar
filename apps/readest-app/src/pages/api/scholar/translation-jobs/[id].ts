@@ -22,7 +22,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { data: job, error } = await supabase
     .from('scholar_translation_jobs')
     .select(
-      'id,state,progress,source_file_id,source_version_id,mode,target_language,error_code,created_at,updated_at,finished_at',
+      'id,state,progress,source_file_id,source_version_id,mode,target_language,request_options,error_code,created_at,updated_at,finished_at',
     )
     .eq('user_id', user.id)
     .eq('id', id)
@@ -74,6 +74,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     sourceVersionId: job.source_version_id,
     mode: job.mode,
     targetLanguage: job.target_language,
+    whiteBackgroundCompatibility: job.request_options?.whiteBackgroundCompatibility === true,
+    whiteBackgroundPages: job.request_options?.whiteBackgroundPages ?? null,
     errorCode: job.error_code,
     createdAt: job.created_at,
     updatedAt: job.updated_at,
