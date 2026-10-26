@@ -22,9 +22,11 @@ const target = await waitFor(
     await forwardWebViewDevtools(APP_PKG, port);
     const pages = await listPages(port);
     pagesSeen = pages.filter((page) => page.type === 'page').map((page) => page.url);
-    return pages.find((page) => page.type === 'page' && page.url.includes('/library'));
+    return pages.find(
+      (page) => page.type === 'page' && page.url.startsWith('http://tauri.localhost/'),
+    );
   },
-  { timeoutMs: 90_000, intervalMs: 500, label: 'library WebView page' },
+  { timeoutMs: 90_000, intervalMs: 500, label: 'app WebView page' },
 ).catch((error: unknown) => {
   throw new Error(`${String(error)}; CDP pages: ${JSON.stringify(pagesSeen)}`);
 });
