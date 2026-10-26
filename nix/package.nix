@@ -121,7 +121,7 @@ rustPlatform.buildRustPackage (finalAttrs: {
     # Regenerate whenever pnpm-lock.yaml changes: the nix-deps-check workflow
     # fails on pull requests that change the lockfile and prints the expected
     # hash in its log.
-    hash = "sha256-vOadRW6T/hPsGYK+Br9w+yG9c0taQjRA+grpBeJXj18=";
+    hash = "sha256-WNqbBuZgqPlwVXo6V6+Zd0siyAT8xLieuvSmRGptNgU=";
     pnpmInstallFlags = [
       # Increase number of fetch attempts to work around timeout issues on slow
       # networks: "TimeoutError: The operation was aborted due to timeout".
