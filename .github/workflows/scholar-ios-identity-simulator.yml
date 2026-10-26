@@ -98,6 +98,7 @@ jobs:
             | tail -n 500 > "$RUNNER_TEMP/scholar-ios-launch.log" || true
           ditto -c -k --sequesterRsrc --keepParent "${{ steps.build.outputs.app }}" "$RUNNER_TEMP/ios-simulator-app.zip"
           shasum -a 256 "$RUNNER_TEMP/ios-simulator-app.zip"
+          python3 apps/readest-app/scripts/check-ios-simulator-screen.py "$RUNNER_TEMP/scholar-ios-simulator.png"
 
       - name: upload Simulator evidence
         if: always()
