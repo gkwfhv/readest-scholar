@@ -25,3 +25,7 @@
 [提交 `445a034`](https://github.com/gkwfhv/readest-scholar/commit/445a0342ec37b9a6a8abf25201296892b052e1b3) 在 `am force-stop` 后等待旧 PID 消失，并留出 3 秒释放 WebView/图形资源，然后再启动下一份 EPUB。它针对连续套件间进程退出的时序风险；历史失败未稳定复现，故不能宣称已证明唯一根因。
 
 [run 40299624507](https://github.com/gkwfhv/readest-scholar/actions/runs/40299624507) 首次 job `121494023265` 和同 job 重跑 `121499803625` 均为 5 套件、18/18 通过，0 跳过、0 测试重试；先前易失败的第二套件分别用时 34.6 秒与 30.5 秒。两次使用同一代码提交和同一 GitHub runner 类型。由此接受 **API 34 x86_64 模拟器 EPUB 阅读交互** 的限定范围自验收；这两次成功不能证明长时稳定或真实设备行为。
+
+## Readest Scholar 身份包（模拟器）
+
+[Scholar Android E2E run 40290855604](https://github.com/gkwfhv/readest-scholar/actions/runs/40290855604) 在同一 API 34 x86_64 模拟器中构建并安装 Scholar 调试 APK。ADB 列包明确返回 `package:io.github.gkwfhv.readestscholar`。5 个套件、18/18 项最终通过，0 跳过，运行 133.98 秒；第二个 `top-band-selection` 用例曾重试一次后通过，说明这一触控用例仍可能受模拟器时序影响，需继续观察。随后 [run 40293065661](https://github.com/gkwfhv/readest-scholar/actions/runs/40293065661) 在第二个阅读套件失败，App 进程消失；故此结果仅证明曾成功构建、安装和运行，不能据此验收稳定性，也不扩展为真机、跨端同步或发行签名结论。
