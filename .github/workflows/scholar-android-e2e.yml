@@ -85,6 +85,9 @@ jobs:
           ENV
           cp .env.local apps/readest-app/.env.local
 
+      - name: build Scholar web assets
+        run: pnpm --filter @readest/readest-app build
+
       - name: build debug APK (x86_64)
         env:
           NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/28.2.13676358
