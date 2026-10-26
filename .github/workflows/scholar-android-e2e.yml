@@ -141,12 +141,7 @@ jobs:
           script: |
             adb install -r "$APK"
             adb shell pm list packages io.github.gkwfhv.readestscholar | grep -Fx 'package:io.github.gkwfhv.readestscholar'
-            cd apps/readest-app
-            set +e
-            READEST_ANDROID_PACKAGE=io.github.gkwfhv.readestscholar READEST_ANDROID_REQUIRE_DEVICE=true pnpm test:android
-            test_status=$?
-            adb exec-out screencap -p > "$GITHUB_WORKSPACE/scholar-android-reader.png"
-            exit "$test_status"
+            cd apps/readest-app && sh -c 'READEST_ANDROID_PACKAGE=io.github.gkwfhv.readestscholar READEST_ANDROID_REQUIRE_DEVICE=true pnpm test:android; test_status=$?; adb exec-out screencap -p > "$GITHUB_WORKSPACE/scholar-android-reader.png" || exit 1; test -s "$GITHUB_WORKSPACE/scholar-android-reader.png" || exit 1; exit "$test_status"'
 
       - name: upload Android screen evidence
         if: always()
