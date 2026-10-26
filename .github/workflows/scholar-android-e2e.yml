@@ -123,7 +123,7 @@ jobs:
           path: |
             ~/.android/avd/*
             ~/.android/adb*
-          key: avd-api-34
+          key: avd-api-34-aosp
 
       - name: create AVD snapshot for caching
         if: steps.avd-cache.outputs.cache-hit != 'true'
@@ -131,7 +131,7 @@ jobs:
         with:
           api-level: 34
           arch: x86_64
-          target: google_apis
+          target: default
           force-avd-creation: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: false
@@ -142,7 +142,7 @@ jobs:
         with:
           api-level: 34
           arch: x86_64
-          target: google_apis
+          target: default
           force-avd-creation: false
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
