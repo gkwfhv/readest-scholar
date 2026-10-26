@@ -33,4 +33,8 @@ entitlements = read_plist(apple_dir / "Readest_iOS" / "Readest_iOS.entitlements"
 assert "com.apple.developer.associated-domains" not in entitlements
 assert entitlements["com.apple.security.application-groups"] == [f"group.{identifier}"]
 assert entitlements["com.apple.developer.icloud-container-identifiers"] == [f"iCloud.{identifier}"]
+share = (apple_dir / "ShareExtension" / "ShareViewController.swift").read_text()
+widget = (apple_dir / "ReadestWidget" / "ReadingWidgetViews.swift").read_text()
+assert 'scheme: "readest-scholar"' in share and 'scheme: "readest"' not in share
+assert 'readest-scholar://book/' in widget and 'readest://book/' not in widget
 print("Scholar iOS app, extensions, URL scheme, and entitlements match the release identity")

@@ -20,6 +20,7 @@ const files = [
   'ShareExtension/AppGroupBridge.swift',
   'ReadestWidget/ReadestWidget.entitlements',
   'ReadestWidget/WidgetSnapshot.swift',
+  'ReadestWidget/ReadingWidgetViews.swift',
 ];
 let replacements = 0;
 for (const relative of files) {
@@ -29,20 +30,26 @@ for (const relative of files) {
   replacements += count;
   let updated = original.replaceAll(upstreamId, scholarId);
   if (relative === 'project.yml') {
-    updated = updated.replace(
-      'PRODUCT_NAME: Readest\n',
-      'PRODUCT_NAME: Readest\n      INFOPLIST_KEY_CFBundleDisplayName: Readest Scholar\n',
-    );
+    updated = updated
+      .replace(
+        'PRODUCT_NAME: Readest\n',
+        'PRODUCT_NAME: Readest\n      INFOPLIST_KEY_CFBundleDisplayName: Readest Scholar\n',
+      )
+      .replaceAll('CFBundleDisplayName: Readest\n', 'CFBundleDisplayName: Readest Scholar\n');
+  }
+  if (relative === 'ShareExtension/ShareViewController.swift') {
+    updated = updated.replace('scheme: "readest"', 'scheme: "readest-scholar"');
+  }
+  if (relative === 'ReadestWidget/ReadingWidgetViews.swift') {
+    updated = updated.replace('readest://book/', 'readest-scholar://book/');
   }
   if (updated !== original) fs.writeFileSync(file, updated);
 }
-// Tauri regenerates the app and widget Info.plist files during `ios init`.
-// Scope the branding edits to those generated copies so upstream builds keep
-// their existing metadata and Scholar never advertises upstream iCloud/links.
+// Tauri creates the app Info.plist during `ios init`; XcodeGen creates the
+// widget plist later using the Scholar display name in project.yml.
 for (const relative of [
   'Readest_iOS/Info.plist',
   'ShareExtension/Info.plist',
-  'ReadestWidget/Info.plist',
 ]) {
   const file = path.join(appleDir, relative);
   const original = fs.readFileSync(file, 'utf8');
