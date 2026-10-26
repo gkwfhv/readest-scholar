@@ -88,8 +88,14 @@ jobs:
           xcrun simctl bootstatus "$DEVICE_ID" -b
           xcrun simctl install "$DEVICE_ID" "${{ steps.build.outputs.app }}"
           xcrun simctl launch "$DEVICE_ID" "${{ steps.build.outputs.bundle_id }}"
-          sleep 10
+          sleep 15
+          xcrun simctl io "$DEVICE_ID" screenshot "$RUNNER_TEMP/scholar-ios-identity-early.png"
+          sleep 45
           xcrun simctl io "$DEVICE_ID" screenshot "$RUNNER_TEMP/scholar-ios-simulator.png"
+          xcrun simctl spawn "$DEVICE_ID" launchctl list | grep -i readest || true
+          xcrun simctl spawn "$DEVICE_ID" log show --last 4m --style compact \
+            --predicate 'process CONTAINS "Readest" OR eventMessage CONTAINS "io.github.gkwfhv.readestscholar"' \
+            | tail -n 500 > "$RUNNER_TEMP/scholar-ios-launch.log" || true
           ditto -c -k --sequesterRsrc --keepParent "${{ steps.build.outputs.app }}" "$RUNNER_TEMP/ios-simulator-app.zip"
           shasum -a 256 "$RUNNER_TEMP/ios-simulator-app.zip"
 
@@ -100,6 +106,8 @@ jobs:
           name: scholar-ios-identity-simulator
           path: |
             ${{ runner.temp }}/scholar-ios-simulator.png
+            ${{ runner.temp }}/scholar-ios-identity-early.png
+            ${{ runner.temp }}/scholar-ios-launch.log
             ${{ runner.temp }}/ios-simulator-app.zip
           if-no-files-found: warn
           retention-days: 7
