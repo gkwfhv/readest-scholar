@@ -78,16 +78,21 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p candidate
-          mapfile -t bundles < <(find target -type f -path "*/bundle/${{ matrix.bundle }}/*" -name "*.${{ matrix.extension }}" -print)
-          test "${#bundles[@]}" -gt 0
-          for bundle in "${bundles[@]}"; do
+          found=0
+          while IFS= read -r bundle; do
+            found=1
             case "$(basename "$bundle")" in
               *Scholar*) ;;
               *) echo "::error::Candidate has an unexpected product name: $bundle"; exit 1 ;;
             esac
             cp "$bundle" candidate/
-          done
-          (cd candidate && sha256sum *.${{ matrix.extension }} > SHA256SUMS)
+          done < <(find target -type f -path "*/bundle/${{ matrix.bundle }}/*" -name "*.${{ matrix.extension }}" -print)
+          test "$found" -gt 0
+          if command -v sha256sum >/dev/null 2>&1; then
+            (cd candidate && sha256sum *.${{ matrix.extension }} > SHA256SUMS)
+          else
+            (cd candidate && shasum -a 256 *.${{ matrix.extension }} > SHA256SUMS)
+          fi
           {
             echo "Readest Scholar unsigned debug candidate"
             echo "commit=$(git rev-parse HEAD)"
