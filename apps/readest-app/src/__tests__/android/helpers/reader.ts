@@ -163,6 +163,7 @@ export const openFixtureBook = async (fixtureFile: string): Promise<CdpPage> => 
             await page.evaluate(`return {
               url: location.href,
               pendingFiles: window.OPEN_WITH_FILES,
+              openWithStage: window.__READEST_OPEN_WITH_STAGE,
               libraryVisible: !!document.querySelector('[aria-label="Your Library"]'),
               bodyText: document.body?.innerText?.slice(0, 300)
             };`),

@@ -145,6 +145,13 @@ const IMPORT_CHECKPOINT_INTERVAL_MS = 15 * 1000;
 // index over the same live library array, so overlapping runs re-import the
 // same files as duplicate rows (#5601).
 const enqueueImportRun = createSerialRunner();
+
+// Phase 7 cold-start diagnostic: expose a stage name, without a file path or account data.
+const markOpenWithStage = (stage: string) => {
+  if (typeof window !== 'undefined') {
+    (window as Window & { __READEST_OPEN_WITH_STAGE?: string }).__READEST_OPEN_WITH_STAGE = stage;
+  }
+};
 const LIBRARY_SEARCH_MODES: LibrarySearchConfig['mode'][] = [
   'contains',
   'whole-words',
@@ -610,6 +617,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
       for (const file of openWithFiles) {
         console.log('Open with book:', file);
         try {
+          markOpenWithStage('process:ingestFile');
           const temp = appService.isMobile ? false : !settings.autoImportBooksOnOpen;
           // A file shared into Readest on mobile (the OS share-sheet) is a
           // "Send to Readest" capture — force it to the cloud so it syncs to
@@ -623,10 +631,12 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
             },
             { appService, settings, isLoggedIn: !!user },
           );
+          markOpenWithStage('process:ingestFileDone');
           if (book) {
             bookIds.push(book.hash);
           }
         } catch (error) {
+          markOpenWithStage('process:ingestFileError');
           console.log('Failed to import book:', file, error);
         }
       }
@@ -753,7 +763,9 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     const hasCachedLibrary = libraryLoadedFromDisk;
     const loadingTimeout = hasCachedLibrary ? null : setTimeout(() => setLoading(true), 500);
     const initLibrary = async () => {
+      markOpenWithStage('init:getAppService');
       const appService = await envConfig.getAppService();
+      markOpenWithStage('init:loadSettings');
       const settings = await appService.loadSettings();
       setSettings(settings);
 
@@ -773,7 +785,9 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
       }
 
       // Reuse the library from the store when we return from the reader
+      markOpenWithStage('init:loadLibraryBooks');
       const library = hasCachedLibrary ? libraryBooks : await appService.loadLibraryBooks();
+      markOpenWithStage('init:openWith');
       let opened = false;
       // A VIEW intent can arrive while the first library initialization is
       // finishing. Its cleanup clears checkOpenWithBooks, but the unique
@@ -781,6 +795,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
       if (checkOpenWithBooks || new URLSearchParams(libraryInitKey).has('reload')) {
         opened = await handleOpenWithBooks(appService, library);
       }
+      markOpenWithStage('init:openWithDone');
       setCheckOpenWithBooks(opened);
       if (!opened && checkLastOpenBooks && settings.openLastBooks) {
         opened = await handleOpenLastBooks(appService, settings.lastOpenBooks, library);
@@ -802,7 +817,9 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     };
 
     const handleOpenWithBooks = async (appService: AppService, library: Book[]) => {
+      markOpenWithStage('init:parseOpenWithFiles');
       const openWithFiles = (await parseOpenWithFiles(appService)) || [];
+      markOpenWithStage('init:parseOpenWithFilesDone');
 
       if (openWithFiles.length > 0) {
         return await processOpenWithFiles(appService, openWithFiles, library);
