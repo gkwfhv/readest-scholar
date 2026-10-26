@@ -589,7 +589,7 @@ jobs:
 
   assemble-manifest:
     needs: [compute-version, build]
-    if: ${{ always() && needs.build.result != 'cancelled' }}
+    if: ${{ github.repository == 'readest/readest' && always() && needs.build.result != 'cancelled' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
