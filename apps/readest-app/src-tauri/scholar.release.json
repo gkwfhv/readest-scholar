@@ -17,13 +17,7 @@
       "mobile": [{ "scheme": ["readest-scholar"], "appLink": false }],
       "desktop": {
         "schemes": ["readest-scholar"]
-      },
-      "mobile": [
-        {
-          "scheme": ["readest-scholar"],
-          "appLink": false
-        }
-      ]
+      }
     },
     "updater": {
       "endpoints": []
