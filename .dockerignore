@@ -50,3 +50,7 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*
+# Local package and Python caches
+/.pnpm-store/
+**/__pycache__/
+*.pyc
