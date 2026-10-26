@@ -13,7 +13,7 @@
 
 ## 发布前待完成
 
-- [ ] 将 Phase 4–7 代码与证据按依赖顺序合入受保护主线，并在最终提交运行必需检查。Phase 7 的证据提交仍需 CI 复验。
+- [ ] 将 Phase 4–7 代码与证据按依赖顺序合入受保护主线，并在最终提交运行必需检查。Phase 7 的 Android [最终证据 run 40327652442](https://github.com/gkwfhv/readest-scholar/actions/runs/40327652442) 与 iOS [最终证据 run 40328733437](https://github.com/gkwfhv/readest-scholar/actions/runs/40328733437) 已通过。
 - [ ] 清点正式品牌、应用图标、Bundle ID、URL scheme、更新源、分享扩展、小组件及容器镜像名称；复核 Readest 商标、AGPL 和第三方许可证。
 - [ ] 在最终源码与每个平台候选产物上归档 SBOM、许可证和漏洞扫描结果；处理或经人工审批接受剩余 RustSec 项。
 - [ ] 为 Scholar 建立独立的候选版本和受保护发布工作流，不复用上游签名、Discord、R2 或自动更新目标。
