@@ -130,19 +130,29 @@ export const openFixtureBook = async (fixtureFile: string): Promise<CdpPage> => 
     // fall back to the file:// URI (works when the app has storage access)
   }
 
-  await adbShell(
+  const launchOutput = await adbShell(
     `am start -a android.intent.action.VIEW -d "${uri}" -t application/epub+zip ` +
       `--grant-read-uri-permission ${APP_PKG}`,
   );
 
+  // A fresh APK starts its WebView and initializes app storage before it can
+  // handle the VIEW intent. On the CI emulator this has exceeded 30 seconds
+  // twice, while every subsequent fixture launch completed. Give the first
+  // launch room to finish and report its actual activity/CDP state on failure.
+  let lastPages: string[] = [];
   const target = await waitFor(
     async () => {
       await forwardWebViewDevtools(APP_PKG, CDP_PORT);
       const pages = await listPages(CDP_PORT);
+      lastPages = pages.filter((p) => p.type === 'page').map((p) => p.url);
       return pages.find((p) => p.type === 'page' && p.url.includes('/reader'));
     },
-    { timeoutMs: 30_000, intervalMs: 500, label: 'reader page' },
-  );
+    { timeoutMs: 90_000, intervalMs: 500, label: 'reader page' },
+  ).catch((error: unknown) => {
+    throw new Error(
+      `${String(error)}; VIEW intent: ${launchOutput.trim()}; CDP pages: ${JSON.stringify(lastPages)}`,
+    );
+  });
   const page = await CdpPage.connect(CDP_PORT, target.id);
 
   // Wait until the book is rendered with real text content.
