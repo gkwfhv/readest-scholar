@@ -1,4 +1,4 @@
-# Phase 8 发布准备清单（2026-10-26）
+# Phase 8 发布准备清单（更新于 2026-10-27）
 
 状态：准备中；未创建预发布或稳定 Release。正式发布需要受保护审批。模拟器验收只覆盖限定范围，Android/iOS 没有真机证据，均保持 experimental。
 
@@ -10,7 +10,7 @@
 - `scholar-baseline.yml` 生成生产 npm 许可证清单与源码 CycloneDX SBOM；`docker-image.yml` 为现有 GHCR 镜像生成双架构 SBOM；CodeQL 独立检查。
 - 本分支限制上游 `release.yml`、`nightly.yml` 和 `upload-to-r2.yml` 只在 `readest/readest` 仓库运行，避免 Scholar fork 执行上游分发流程。 `docker-image.yml` 在 Scholar 仓库后续构建使用 `ghcr.io/gkwfhv/readest-scholar`，上游仓库仍使用 `readest`；此改动尚未在主线发布镜像。
 - [PR #61](https://github.com/gkwfhv/readest-scholar/pull/61) 的依赖更新将生产 npm 审计降至 0 条，RustSec 命中从 14 条降至 5 条；剩余条目与调用路径见其 Rust 审计记录。尚未作正式风险接受。
-- [桌面候选包工件检查](../evidence/phase8/desktop-candidates-2026-10-26.md)完成 macOS arm64 DMG、Windows x64 NSIS、Linux amd64 DEB 的无签名调试构建与哈希/品牌元数据检查；安装和启动尚未验收。
+- [桌面候选包工件检查](../evidence/phase8/desktop-candidates-2026-10-26.md)完成 macOS arm64 DMG、Windows x64 NSIS、Linux amd64 DEB 的无签名调试构建与哈希/品牌元数据检查；[Linux 最终 CI](https://github.com/gkwfhv/readest-scholar/actions/runs/40356196886) 还完成 DEB 安装、Xvfb 启动与 Scholar D-Bus 身份检查。macOS/Windows 安装启动尚未验收。
 
 ## 发布前待完成
 
