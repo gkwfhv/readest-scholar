@@ -152,6 +152,10 @@ export const openFixtureBook = async (fixtureFile: string): Promise<CdpPage> => 
     const nativeLog = await adbShell(
       'logcat -d -s NativeBridgePlugin:D MainActivity:D "*:S"',
     ).catch(() => '');
+    const crashLog = await adbShell(
+      'logcat -d -v time -s AndroidRuntime:E DEBUG:E libc:F ActivityManager:W ActivityTaskManager:W "*:S"',
+    ).catch(() => '');
+    const exitInfo = await adbShell(`dumpsys activity exit-info ${APP_PKG}`).catch(() => '');
     let pageState = '';
     try {
       await forwardWebViewDevtools(APP_PKG, CDP_PORT);
@@ -175,7 +179,7 @@ export const openFixtureBook = async (fixtureFile: string): Promise<CdpPage> => 
       pageState = String(diagnosticError);
     }
     throw new Error(
-      `${String(error)}; VIEW intent: ${launchOutput.trim()}; CDP pages: ${JSON.stringify(lastPages)}; page state: ${pageState}; native intent log: ${nativeLog.slice(-4000)}`,
+      `${String(error)}; VIEW intent: ${launchOutput.trim()}; CDP pages: ${JSON.stringify(lastPages)}; page state: ${pageState}; native intent log: ${nativeLog.slice(-4000)}; crash log: ${crashLog.slice(-8000)}; process exit info: ${exitInfo.slice(-4000)}`,
     );
   });
   const page = await CdpPage.connect(CDP_PORT, target.id);
