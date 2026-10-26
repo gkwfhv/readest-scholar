@@ -7,3 +7,5 @@
 ![Scholar iOS 模拟器空书库](ios-scholar-library-2026-10-26.png)
 
 App ZIP SHA-256 为 `d5bfa54422cc2697e5ea67d7e003b0c9b6009399284166adb561d1249baee536`；[CI 工件](https://github.com/gkwfhv/readest-scholar/actions/runs/40286916381/artifacts/12636300370)含两张截图、启动日志和安装包。此次覆盖身份、编译、安装、启动和首屏布局；未覆盖文件导入、触控、Apple Pencil、后台、离线同步、正式签名或真机。iOS 保持 experimental。
+
+最终自动门槛复验：[run 40290699256](https://github.com/gkwfhv/readest-scholar/actions/runs/40290699256) 在提交 `d85d70cc9ad0800654458e5f142cdfdbcc25e6a1` 成功。构建脚本核对主 App Bundle ID，模拟器启动进程 `io.github.gkwfhv.readestscholar`，延迟截图的内容区域采样到 9 种颜色，通过新增的非空白检查。该次 App ZIP SHA-256：`79fb858d222e7d8bd42d930c29224ba872cbc42501d5077759ce3d0dd1056451`；[工件](https://github.com/gkwfhv/readest-scholar/actions/runs/40290699256/artifacts/12637186985)摘要 `sha256:fd97a8ac2f5c46487e13d2cfa122bf2d35642967338b1eea0a3298f52c8eea34`。此结果仍只验收模拟器身份、启动与首屏，真实设备和其他移动能力维持 experimental。
