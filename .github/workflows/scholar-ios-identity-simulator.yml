@@ -76,6 +76,7 @@ jobs:
           test -n "$APP"
           BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$APP/Info.plist")
           test "$BUNDLE_ID" = "io.github.gkwfhv.readestscholar"
+          python3 scripts/check-scholar-ios-metadata.py "$APP" src-tauri/gen/apple
           echo "app=$PWD/$APP" >> "$GITHUB_OUTPUT"
           echo "bundle_id=$BUNDLE_ID" >> "$GITHUB_OUTPUT"
 

@@ -36,6 +36,41 @@ for (const relative of files) {
   }
   if (updated !== original) fs.writeFileSync(file, updated);
 }
+// Tauri regenerates the app and widget Info.plist files during `ios init`.
+// Scope the branding edits to those generated copies so upstream builds keep
+// their existing metadata and Scholar never advertises upstream iCloud/links.
+for (const relative of [
+  'Readest_iOS/Info.plist',
+  'ShareExtension/Info.plist',
+  'ReadestWidget/Info.plist',
+]) {
+  const file = path.join(appleDir, relative);
+  const original = fs.readFileSync(file, 'utf8');
+  let updated = original
+    .replaceAll(upstreamId, scholarId)
+    .replaceAll('Readest uses', 'Readest Scholar uses')
+    .replaceAll('Readest needs', 'Readest Scholar needs')
+    .replaceAll('<string>Readest</string>', '<string>Readest Scholar</string>');
+  if (relative === 'Readest_iOS/Info.plist') {
+    updated = updated.replaceAll('<string>readest</string>', '<string>readest-scholar</string>');
+  }
+  if (updated !== original) fs.writeFileSync(file, updated);
+}
+
+// The upstream associated domain belongs to readest.com. Scholar has no
+// approved Universal Link domain yet, so omit that entitlement until one is
+// configured for this bundle ID.
+const appEntitlements = path.join(appleDir, 'Readest_iOS/Readest_iOS.entitlements');
+const entitlements = fs.readFileSync(appEntitlements, 'utf8');
+const withoutUpstreamDomain = entitlements.replace(
+  /\s*<key>com\.apple\.developer\.associated-domains<\/key>\s*<array>\s*<string>applinks:web\.readest\.com<\/string>\s*<\/array>/,
+  '',
+);
+if (withoutUpstreamDomain === entitlements) {
+  throw new Error('expected upstream Universal Link entitlement');
+}
+fs.writeFileSync(appEntitlements, withoutUpstreamDomain);
+
 if (replacements < 7) {
   throw new Error(`expected upstream iOS app, extension, widget and App Group IDs; found ${replacements}`);
 }
