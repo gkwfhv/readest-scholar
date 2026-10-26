@@ -8,6 +8,7 @@ const appleDir = process.env['SCHOLAR_IOS_PROJECT_DIR']
   : path.join(appDir, 'src-tauri/gen/apple');
 const upstreamId = 'com.bilingify.readest';
 const scholarId = 'io.github.gkwfhv.readestscholar';
+const version = JSON.parse(fs.readFileSync(path.join(appDir, 'package.json'), 'utf8')).version;
 
 // The tracked XcodeGen project and extension code retain the upstream identity
 // after `tauri ios init`. Keep all three targets and their App Group in one
@@ -35,7 +36,10 @@ for (const relative of files) {
         'PRODUCT_NAME: Readest\n',
         'PRODUCT_NAME: Readest\n      INFOPLIST_KEY_CFBundleDisplayName: Readest Scholar\n',
       )
-      .replaceAll('CFBundleDisplayName: Readest\n', 'CFBundleDisplayName: Readest Scholar\n');
+      .replaceAll(
+        'CFBundleDisplayName: Readest\n',
+        `CFBundleDisplayName: Readest Scholar\n        CFBundleShortVersionString: ${version}\n`,
+      );
   }
   if (relative === 'ShareExtension/ShareViewController.swift') {
     updated = updated.replace('scheme: "readest"', 'scheme: "readest-scholar"');

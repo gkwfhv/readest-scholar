@@ -19,16 +19,19 @@ assert main["CFBundleIdentifier"] == identifier
 assert main["CFBundleName"] == "Readest Scholar"
 assert list(main["NSUbiquitousContainers"]) == [f"iCloud.{identifier}"]
 assert main["NSUbiquitousContainers"][f"iCloud.{identifier}"]["NSUbiquitousContainerName"] == "Readest Scholar"
-assert all("Readest Scholar" in main[key] for key in (
+usage_keys = (
     "NSLocalNetworkUsageDescription", "NSFaceIDUsageDescription", "NSPhotoLibraryAddUsageDescription"
-))
+)
+usage = {key: main.get(key) for key in usage_keys}
+assert all("Readest Scholar" in value for value in usage.values() if value is not None) and all(usage.values()), usage
 schemes = [scheme for item in main["CFBundleURLTypes"] for scheme in item["CFBundleURLSchemes"]]
 assert schemes == ["readest-scholar"], schemes
 
 for extension in ("ReadestWidget", "ShareExtension"):
     info = read_plist(app / "PlugIns" / f"{extension}.appex" / "Info.plist")
     assert info["CFBundleIdentifier"] == f"{identifier}.{extension}"
-    assert info["CFBundleDisplayName"] == "Readest Scholar"
+    assert info["CFBundleDisplayName"] == "Readest Scholar", (extension, info.get("CFBundleDisplayName"))
+    assert info["CFBundleShortVersionString"] == main["CFBundleShortVersionString"], (extension, info.get("CFBundleShortVersionString"), main.get("CFBundleShortVersionString"))
 
 entitlements = read_plist(apple_dir / "Readest_iOS" / "Readest_iOS.entitlements")
 assert "com.apple.developer.associated-domains" not in entitlements
