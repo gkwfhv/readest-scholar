@@ -1,3 +1,5 @@
+import { execFileSync } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { motionGesture } from './helpers/adb';
@@ -52,6 +54,13 @@ describe.runIf(env)('Android text selection over CDP (#1553)', () => {
     console.info('[android selection] finding hyphenation targets');
     targets = await findSelectionTargets(page);
     console.info('[android selection] targets ready');
+    const screenshotPath = process.env['READEST_ANDROID_SCREENSHOT_PATH'];
+    if (screenshotPath) {
+      writeFileSync(
+        screenshotPath,
+        execFileSync('adb', ['exec-out', 'screencap', '-p'], { maxBuffer: 8 * 1024 * 1024 }),
+      );
+    }
   }, 120_000);
 
   afterAll(() => {
