@@ -13,3 +13,5 @@
 更新前的关键公告包括 Next.js [图像优化 SVG RCE](https://github.com/advisories/GHSA-2464-fhr4-w9xw)、[use cache typed array RCE](https://github.com/advisories/GHSA-673q-mjm6-r5xr)，以及 DOMPurify [SAFE_FOR_TEMPLATES 绕过](https://github.com/advisories/GHSA-cg2g-xh64-v4q7)。风险以锁定版本匹配的公告为准；是否在当前部署配置中可利用尚未逐条确认，因此修复版本优先于风险豁免。
 
 发布前还需在最终合并提交上重跑审计和 Web/客户端构建，并审查 Rust、容器镜像及第三方许可证。
+
+GitHub 独立复验：[Scholar production dependency audit run 40298006556](https://github.com/gkwfhv/readest-scholar/actions/runs/40298006556) 在提交 `c06bcbc2a4df93329377fbc9468807a3342ae5d0` 通过，日志输出 `No known vulnerabilities found`。
