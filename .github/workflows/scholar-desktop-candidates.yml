@@ -103,6 +103,17 @@ jobs:
           } > candidate/BUILD.txt
           cat candidate/SHA256SUMS
 
+      - name: Verify installer against checksum manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd candidate
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum --check SHA256SUMS
+          else
+            shasum -a 256 --check SHA256SUMS
+          fi
+
       - name: Install and launch macOS candidate
         if: runner.os == 'macOS'
         shell: bash

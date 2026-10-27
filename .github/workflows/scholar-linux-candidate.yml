@@ -96,6 +96,9 @@ jobs:
           } > candidate/BUILD.txt
           cat candidate/SHA256SUMS
 
+      - name: Verify DEB against checksum manifest
+        run: (cd candidate && sha256sum --check SHA256SUMS)
+
       - name: Install and launch candidate under Xvfb
         run: |
           set -euo pipefail
@@ -120,6 +123,16 @@ jobs:
               exit 1
             fi
           '
+
+      - name: Uninstall Linux candidate
+        run: |
+          set -euo pipefail
+          package=$(dpkg-deb --field candidate/*.deb Package)
+          sudo dpkg --remove "$package"
+          if test -e /usr/bin/readest-scholar; then
+            echo "::error::Scholar executable remained after DEB removal"
+            exit 1
+          fi
 
       - name: Upload candidate DEB
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
