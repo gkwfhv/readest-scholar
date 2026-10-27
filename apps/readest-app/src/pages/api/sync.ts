@@ -29,6 +29,23 @@ import {
 const ms = (s?: string | number | null) => (s ? new Date(s).getTime() : 0);
 
 /**
+ * A pre-geometry client omits pdf_anchor during a note edit. PostgREST upsert
+ * treats that omitted field as NULL, so carry the current anchor forward only
+ * while the source location is identical. An explicit NULL is a new client's
+ * request to clear stale geometry and must pass through.
+ */
+export function preserveLegacyPdfAnchor(incoming: DBBookNote, current?: DBBookNote): DBBookNote {
+  if (incoming.pdf_anchor !== undefined) return incoming;
+  return {
+    ...incoming,
+    pdf_anchor:
+      current && incoming.cfi === current.cfi && incoming.page === current.page
+        ? (current.pdf_anchor ?? null)
+        : null,
+  };
+}
+
+/**
  * Field-level last-writer-wins for a books row's reading_status: return the
  * status fields with the newer reading_status_updated_at (ties → client). NULL
  * timestamp = epoch 0. Lets reading_status survive even when the whole row is
@@ -738,12 +755,14 @@ export async function POST(req: NextRequest) {
         // The database trigger compares under the upsert row lock and archives
         // both losing and replaced versions. Pre-filtering here would lose
         // concurrent changes and never record a stale incoming version.
-        const existing = new Set((serverRecords || []).map((row) => `${row.book_hash}|${row.id}`));
+        const existing = new Map(
+          (serverRecords || []).map((row) => [`${row.book_hash}|${row.id}`, row as DBBookNote]),
+        );
         const noteRows = dbRecords.map(({ db }) => {
-          if (!existing.has(`${db.book_hash}|${(db as DBBookNote).id}`)) {
-            db.updated_at = new Date().toISOString();
-          }
-          return db;
+          const note = db as DBBookNote;
+          const current = existing.get(`${note.book_hash}|${note.id}`);
+          if (!current) note.updated_at = new Date().toISOString();
+          return preserveLegacyPdfAnchor(note, current);
         });
         const { error: writeError } = await supabase.from('book_notes').upsert(noteRows, {
           onConflict: 'user_id,book_hash,id',

@@ -59,6 +59,35 @@ describe('transformBookNoteToDB with handwriting', () => {
   });
 });
 
+describe('transformBookNoteToDB with PDF geometry', () => {
+  it('round-trips the anchor and leaves old rows without one merge-safe', () => {
+    const note: BookNote = {
+      bookHash: 'pdf-hash',
+      id: 'highlight-1',
+      type: 'annotation',
+      cfi: 'epubcfi(/6/4!/4/2)',
+      note: '',
+      page: 2,
+      pdfAnchor: {
+        version: 1,
+        pageIndex: 1,
+        cfi: 'epubcfi(/6/4!/4/2)',
+        rects: [[0.1, 0.2, 0.4, 0.3]],
+      },
+      createdAt: 1700000000000,
+      updatedAt: 1700000001000,
+    };
+    const row = transformBookNoteToDB(note, 'user-1');
+    expect(row.pdf_anchor).toEqual(note.pdfAnchor);
+    expect(transformBookNoteFromDB(row).pdfAnchor).toEqual(note.pdfAnchor);
+    const { pdf_anchor: _anchor, ...oldRow } = row;
+    expect('pdfAnchor' in transformBookNoteFromDB(oldRow)).toBe(false);
+    const clearedRow = transformBookNoteToDB({ ...note, pdfAnchor: null }, 'user-1');
+    expect(clearedRow.pdf_anchor).toBeNull();
+    expect(transformBookNoteFromDB(clearedRow).pdfAnchor).toBeNull();
+  });
+});
+
 describe('transformBookNoteToDB with xpointer fields', () => {
   it('round-trips the reserved Notebook type and Markdown content', () => {
     const note: BookNote = {

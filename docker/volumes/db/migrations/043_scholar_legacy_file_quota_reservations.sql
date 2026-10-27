@@ -51,7 +51,7 @@ GRANT EXECUTE ON FUNCTION public.reserve_storage_file_v1(uuid,text,bigint,bigint
   TO service_role;
 -- Read the same live objects used by both reservation functions. The endpoint
 -- also uses this to show retained immutable version bytes to the account.
-CREATE FUNCTION public.get_storage_usage_v1(p_user_id uuid)
+CREATE OR REPLACE FUNCTION public.get_storage_usage_v1(p_user_id uuid)
 RETURNS TABLE(file_count bigint,file_bytes bigint,version_count bigint,
               version_bytes bigint,usage_bytes bigint)
 LANGUAGE sql SECURITY DEFINER SET search_path=public,pg_temp STABLE AS $$

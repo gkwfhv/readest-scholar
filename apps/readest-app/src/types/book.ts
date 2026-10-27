@@ -201,6 +201,13 @@ export interface TimeInfo {
   total: number;
 }
 
+export interface PdfAnnotationAnchor {
+  version: 1;
+  pageIndex: number;
+  cfi: string;
+  rects: [number, number, number, number][];
+}
+
 export interface BookNote {
   bookHash?: string;
   metaHash?: string;
@@ -228,6 +235,8 @@ export interface BookNote {
    * services/handwriting.
    */
   ink?: InkStroke[];
+  /** Visual page coordinates for standard PDF annotation export. */
+  pdfAnchor?: PdfAnnotationAnchor | null;
 
   createdAt: number;
   updatedAt: number;

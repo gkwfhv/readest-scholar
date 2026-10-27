@@ -21,6 +21,7 @@ export default defineConfig({
   resolve: {
     conditions: ['development'],
     alias: {
+      'pdf-lib': resolve(import.meta.dirname, 'node_modules/pdf-lib/dist/pdf-lib.esm.js'),
       // The @pdfjs alias from tsconfig only resolves within the app's own
       // source files.  foliate-js/pdf.js lives outside that scope, so Vite
       // needs an explicit alias to reach pdfjs-dist. It points at the real
@@ -85,6 +86,9 @@ export default defineConfig({
       headless: true,
       screenshotFailures: false,
       provider: playwright({
+        ...(process.env.SCHOLAR_BROWSER_EXECUTABLE_PATH
+          ? { launchOptions: { executablePath: process.env.SCHOLAR_BROWSER_EXECUTABLE_PATH } }
+          : {}),
         contextOptions: {
           viewport: { width: 1920, height: 1080 },
           deviceScaleFactor: 2,

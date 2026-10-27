@@ -2587,5 +2587,14 @@
   "Download a book when you open it.": "開啟書籍時下載。",
   "Full mirror": "完整鏡像",
   "Download every cloud book for offline reading in the background.": "在背景下載所有雲端書籍，以便離線閱讀。",
-  "On mobile, background mirroring runs only when Wi-Fi is detected; if network type is unavailable, open books to download them on demand.": "在行動裝置上，只有偵測到 Wi-Fi 時才會在背景鏡像；無法辨識網路類型時，請開啟書籍按需下載。"
+  "On mobile, background mirroring runs only when Wi-Fi is detected; if network type is unavailable, open books to download them on demand.": "在行動裝置上，只有偵測到 Wi-Fi 時才會在背景鏡像；無法辨識網路類型時，請開啟書籍按需下載。",
+  "Export annotated PDF": "匯出含註解的 PDF",
+  "No PDF annotations with a page anchor to export": "沒有可匯出的已定位 PDF 註解",
+  "Exported {{count}} PDF annotations; skipped {{skipped}}": "已匯出 {{count}} 則 PDF 註解，略過 {{skipped}} 則",
+  "This note type has no PDF text markup equivalent": "此筆記類型沒有對應的 PDF 文字註解",
+  "This highlight style has no PDF text markup equivalent": "此標示樣式沒有對應的 PDF 文字註解",
+  "Page geometry is unavailable for this note": "此筆記缺少頁面位置資料",
+  "The note moved after its geometry was captured": "筆記位置已變更，原座標失效",
+  "The source PDF no longer has this page": "原始 PDF 已不包含此頁面",
+  "The PDF page has invalid crop or rotation": "PDF 頁面的裁切或旋轉資料無效"
 }

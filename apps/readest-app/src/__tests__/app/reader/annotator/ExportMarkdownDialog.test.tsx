@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { BooknoteGroup } from '@/types/book';
+import type { BookNote, BooknoteGroup } from '@/types/book';
 
 const h = vi.hoisted(() => ({
   appService: {} as Record<string, unknown>,
@@ -218,5 +218,42 @@ describe('ExportMarkdownDialog preview', () => {
 
     expect(container.querySelector('img')).not.toBeNull();
     expect(container.querySelector('[onerror], [onload], script, iframe')).toBeNull();
+  });
+});
+
+describe('ExportMarkdownDialog annotated PDF', () => {
+  afterEach(cleanup);
+
+  it('exports the selected notes and reports omissions without closing the dialog', async () => {
+    h.appService = {};
+    h.bookData = { bookDoc: {} };
+    const onExportPdf = vi.fn(async (_notes: BookNote[]) => ({
+      exported: 1,
+      skipped: 1,
+      omissions: [
+        { id: 'legacy', page: 2, text: 'old highlight', reason: 'missing-anchor' as const },
+      ],
+    }));
+    render(
+      <ExportMarkdownDialog
+        bookKey='book-1'
+        isOpen
+        bookHash='hash'
+        bookTitle='Title'
+        bookAuthor='Author'
+        bookFormat='PDF'
+        booknoteGroups={booknoteGroups}
+        onCancel={vi.fn()}
+        onExport={vi.fn()}
+        onExportPdf={onExportPdf}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export annotated PDF' }));
+    await waitFor(() => expect(onExportPdf).toHaveBeenCalledTimes(1));
+    expect(onExportPdf.mock.calls[0]?.[0]).toEqual(booknoteGroups['chapter.xhtml']!.booknotes);
+    expect(await screen.findByText(/old highlight/)).not.toBeNull();
+    expect(screen.getByText(/Page geometry is unavailable for this note/)).not.toBeNull();
+    expect(screen.getByRole('dialog')).not.toBeNull();
   });
 });

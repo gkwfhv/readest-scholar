@@ -77,11 +77,14 @@ import { transformContent } from '@/services/transformService';
 import {
   buildTTSSentenceHighlight,
   drawAnnotationOverlay,
+  getHighlightColorHex,
   mergeRestyledAnnotation,
   removeBookNoteOverlays,
   removeEmptyAnnotationPlaceholder,
 } from '../../utils/annotatorUtil';
 import { buildAnnotationIndex, selectLocationAnnotations } from '../../utils/annotationIndex';
+import { exportPdfAnnotations } from '../../utils/pdfAnnotationExport';
+import { capturePdfAnnotationAnchor } from '../../utils/pdfAnnotationAnchor';
 import { findContentAtPoint } from '../../utils/crossDocSelection';
 import {
   expandAllRenderedSections,
@@ -1680,7 +1683,10 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets; gridInsets?:
         color,
         text: part.text,
         note: '',
-        page: progress.page,
+        page: bookData.isFixedLayout ? part.index + 1 : progress.page,
+        ...(bookData.book?.format === 'PDF'
+          ? { pdfAnchor: capturePdfAnnotationAnchor(part.index, part.range, cfi) }
+          : {}),
         createdAt: Date.now(),
         updatedAt: Date.now(),
       };
@@ -2385,7 +2391,9 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets; gridInsets?:
     try {
       let conversion;
       try {
-        conversion = await convertAnnotationExportToBookNotes(payload, bookDoc);
+        conversion = await convertAnnotationExportToBookNotes(payload, bookDoc, {
+          expectedBookHash: book.hash,
+        });
       } catch (e) {
         console.warn('Failed to convert Readest annotations:', e);
         eventDispatcher.dispatch('toast', {
@@ -2539,6 +2547,59 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets; gridInsets?:
           : _('Copied to clipboard'),
       timeout: 2000,
     });
+  };
+
+  const handleExportPdf = async (notes: BookNote[]) => {
+    const { book } = bookData;
+    if (!book || book.format !== 'PDF' || !appService) return;
+    let file: File | undefined;
+    try {
+      ({ file } = await appService.loadBookContent(book));
+      const result = await exportPdfAnnotations(
+        await file.arrayBuffer(),
+        notes.map((note) => ({ note, colorHex: getHighlightColorHex(settings, note.color) })),
+      );
+      if (result.exported === 0) {
+        eventDispatcher.dispatch('toast', {
+          type: 'warning',
+          message: _('No PDF annotations with a page anchor to export'),
+          timeout: 3500,
+        });
+        return { exported: result.exported, skipped: result.skipped, omissions: result.omissions };
+      }
+      const saved = await appService.saveFile(
+        `${makeSafeFilename(book.title)}-annotated.pdf`,
+        result.bytes,
+        { mimeType: 'application/pdf' },
+      );
+      eventDispatcher.dispatch('toast', {
+        type: saved ? (result.skipped ? 'warning' : 'info') : 'warning',
+        message: saved
+          ? _('Exported {{count}} PDF annotations; skipped {{skipped}}', {
+              count: result.exported,
+              skipped: result.skipped,
+            })
+          : _('Failed to export annotations.'),
+        timeout: 4000,
+      });
+      return saved
+        ? { exported: result.exported, skipped: result.skipped, omissions: result.omissions }
+        : undefined;
+    } catch (error) {
+      console.error('Failed to export PDF annotations', error);
+      eventDispatcher.dispatch('toast', {
+        type: 'warning',
+        message: _('Failed to export annotations.'),
+        timeout: 3500,
+      });
+      return undefined;
+    } finally {
+      try {
+        await (file as (File & { close?: () => Promise<void> }) | undefined)?.close?.();
+      } catch (error) {
+        console.warn('Failed to close PDF export source', error);
+      }
+    }
   };
 
   const handleCancelExport = () => {
@@ -2890,6 +2951,7 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets; gridInsets?:
           booknoteGroups={exportData.booknoteGroups}
           onCancel={handleCancelExport}
           onExport={handleConfirmExport}
+          onExportPdf={handleExportPdf}
         />
       )}
       {showImportDialog && (
