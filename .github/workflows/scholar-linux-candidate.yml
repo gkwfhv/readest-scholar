@@ -99,6 +99,9 @@ jobs:
       - name: Verify DEB against checksum manifest
         run: (cd candidate && sha256sum --check SHA256SUMS)
 
+      - name: Inventory Linux candidate payload files
+        run: python3 infra/release/inventory-scholar-deb.py candidate/*.deb candidate/PAYLOAD-FILES.cdx.json
+
       - name: Install and launch candidate under Xvfb
         run: |
           set -euo pipefail
