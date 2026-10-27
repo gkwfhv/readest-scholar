@@ -333,7 +333,10 @@ fn zip_entry_sizes<R: Read + Seek>(zip: &mut ZipArchive<R>) -> HashMap<String, u
         if entry.is_dir() {
             continue;
         }
-        sizes.insert(entry.name().to_string(), entry.size());
+        let Ok(name) = entry.name() else {
+            continue;
+        };
+        sizes.insert(name.into_owned(), entry.size());
     }
     sizes
 }
@@ -794,10 +797,15 @@ fn is_undeclared_cover_name(name: &str) -> bool {
 /// manifest-driven lookup empty even though the image is in the zip.
 /// Entries are walked in central-directory order, so the first match wins.
 fn find_undeclared_cover_entry<R: Read + Seek>(zip: &ZipArchive<R>) -> Option<String> {
-    (0..zip.len())
-        .filter_map(|i| zip.name_for_index(i))
-        .find(|name| is_undeclared_cover_name(name))
-        .map(str::to_string)
+    for i in 0..zip.len() {
+        let Some(Ok(name)) = zip.name_for_index(i) else {
+            continue;
+        };
+        if is_undeclared_cover_name(&name) {
+            return Some(name.into_owned());
+        }
+    }
+    None
 }
 
 fn resolve_relative(opf_path: &str, href: &str) -> String {
