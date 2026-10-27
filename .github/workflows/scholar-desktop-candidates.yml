@@ -155,6 +155,7 @@ jobs:
             *) echo "::error::Unexpected macOS target"; exit 1 ;;
           esac
           test "$(lipo -archs "$binary")" = "$expected_arch"
+          node infra/release/inventory-scholar-installed.mjs candidate/*.dmg "$app_copy" macos-app-files "${{ matrix.target }}" candidate/PAYLOAD-FILES.cdx.json
           "$binary" > "$RUNNER_TEMP/scholar-macos-startup.log" 2>&1 &
           app_pid=$!
           trap 'kill "$app_pid" 2>/dev/null || true; hdiutil detach -quiet "$mount" >/dev/null 2>&1 || true' EXIT
@@ -193,6 +194,8 @@ jobs:
           Write-Output "Scholar install directory: $installDir"
           $binary = Get-ChildItem $installDir -Recurse -File -Filter 'readest-scholar.exe' | Select-Object -First 1
           if (-not $binary) { throw 'Scholar executable missing after install' }
+          node infra/release/inventory-scholar-installed.mjs "$($installer.FullName)" "$installDir" windows-install-dir-files "${{ matrix.target }}" candidate/PAYLOAD-FILES.cdx.json
+          if ($LASTEXITCODE -ne 0) { throw 'Scholar installed file inventory failed' }
           $app = Start-Process -FilePath $binary.FullName -PassThru
           Start-Sleep -Seconds 8
           $app.Refresh()
