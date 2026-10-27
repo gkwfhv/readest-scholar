@@ -12,6 +12,7 @@
 - [生产 npm 依赖审计](../evidence/phase8/production-dependency-audit-2026-10-26.md)在服务器容器更新依赖后为 0 条公告，并增加 PR/主线只读 CI；Rust、容器镜像与第三方许可证仍待审查。
 - [PR #61](https://github.com/gkwfhv/readest-scholar/pull/61) 已合并，其依赖更新将生产 npm 审计降至 0 条，RustSec 命中从 14 条降至 5 条；剩余条目与调用路径见 [Rust 依赖审计](../evidence/phase8/rust-dependency-audit-2026-10-26.md)。尚未作正式风险接受。
 - [桌面候选包工件检查](../evidence/phase8/desktop-candidates-2026-10-26.md)完成 macOS arm64 DMG、Windows x64 NSIS、Linux amd64 DEB 的无签名调试构建与哈希/品牌元数据检查；[Linux 最终 CI](https://github.com/gkwfhv/readest-scholar/actions/runs/40356196886) 还完成 DEB 安装、Xvfb 启动与 Scholar D-Bus 身份检查。macOS/Windows 的无签名候选安装启动已在 [PR #62 的最终 CI](https://github.com/gkwfhv/readest-scholar/actions/runs/40455618697) 通过，Windows 静默卸载也通过；PR #62 已合并。见 [桌面安装冒烟证据](../evidence/phase8/desktop-install-smoke-2026-10-27.md)。
+- [PR #64 候选包完整性证据](../evidence/phase8/candidate-integrity-2026-10-27.md)：macOS、Windows、Linux 三端安装前的 SHA-256 清单校验通过，Linux 卸载及可执行文件移除通过；最终平台 CI 均成功，PR #64 已合并。
 
 ## 发布前待完成
 
