@@ -12,14 +12,18 @@ if (!Array.isArray(findings) || report.vulnerabilities.count !== findings.length
   throw new Error("Expected a complete cargo-audit JSON vulnerability report");
 }
 
-// These five findings remain release blockers. This baseline only prevents
-// unnoticed drift while the updater and LocalSend paths are reviewed.
+// These findings remain release blockers. This baseline only prevents
+// unnoticed drift while the updater, LocalSend, and Turso/Tantivy paths are reviewed.
 const known = new Set([
   "RUSTSEC-2021-0119|nix|0.19.1",
   "RUSTSEC-2023-0071|rsa|0.9.10",
   "RUSTSEC-2026-0367|zip|4.6.1",
   "RUSTSEC-2026-0368|zip|4.6.1",
   "RUSTSEC-2026-0369|zip|4.6.1",
+  "RUSTSEC-2026-0391|zstd|0.13.3",
+  "RUSTSEC-2026-0398|zstd-safe|7.3.0",
+  "RUSTSEC-2026-0403|zstd-safe|7.3.0",
+  "RUSTSEC-2026-0410|zstd-sys|2.1.0+zstd.1.5.7",
 ]);
 const observed = new Set();
 const unexpected = [];
