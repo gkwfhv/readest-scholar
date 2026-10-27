@@ -245,10 +245,6 @@
       <caption>Reading with TTS speak out</caption>
       <image type="source">https://raw.githubusercontent.com/readest/readest/refs/heads/main/data/screenshots/tts_speak_aloud.png</image>
     </screenshot>
-    <screenshot>
-      <caption>Reading tools with Wikipedia integration</caption>
-      <image type="source">https://raw.githubusercontent.com/readest/readest/refs/heads/main/data/screenshots/wikipedia_vertical.png</image>
-    </screenshot>
   </screenshots>
 
   <content_rating type="oars-1.1">

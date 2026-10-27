@@ -92,8 +92,6 @@ Stay tuned for continuous improvements and updates! Contributions and suggestion
 
 ![Footnote](./data/screenshots/footnote_popover.png)
 
-![Wikipedia](./data/screenshots/wikipedia_vertical.png)
-
 ![Theming Dark Mode](./data/screenshots/theming_dark_mode.png)
 
 ---
