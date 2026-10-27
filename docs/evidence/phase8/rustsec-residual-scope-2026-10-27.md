@@ -1,6 +1,6 @@
 # Phase 8 剩余 RustSec 命中的可达范围（2026-10-27）
 
-范围：以 PR #74 的锁文件和 Readest Scholar 支持的 Linux、macOS、Windows、Android、iOS 目标为准。服务器缓存公告库报告两条命中；正式结论还需以该 PR 的实时 RustSec CI 和各平台候选包为准。本记录是源码与目标配置复核，不是发布风险接受。
+范围：以 PR #74 的锁文件和 Readest Scholar 支持的 Linux、macOS、Windows、Android、iOS 目标为准。[实时 RustSec CI](https://github.com/gkwfhv/readest-scholar/actions/runs/40510688864) 报告两条已跟踪命中，Linux、Windows、macOS Arm/Intel 候选包检查已通过。本记录是源码与目标配置复核，不是发布风险接受。
 
 | 命中 | 依赖来源 | 已核对的调用范围 | 待决定事项 |
 |---|---|---|---|
