@@ -16,6 +16,7 @@
 - [PR #66](https://github.com/gkwfhv/readest-scholar/pull/66) 已合并；[Linux run 40473099477](https://github.com/gkwfhv/readest-scholar/actions/runs/40473099477) 对同一应用负载重打包的较低版本完成安装、升级到候选版、回滚和卸载。它仅验证包管理流程，不验证真实跨版本应用数据迁移。
 - [不同构建包的 Linux 数据保留与回滚演练](../evidence/phase8/linux-cross-build-data-2026-10-27.md)使用两份可执行文件不同、包版本同为 0.12.16 的 DEB：旧包导入合成 EPUB，新包及回滚旧包都能打开；书库 JSON 与 EPUB 哈希保持不变。这仍不满足实际不同版本号的数据迁移门槛。
 - [PR #67](https://github.com/gkwfhv/readest-scholar/pull/67) 已合并；[桌面 run 40474228517](https://github.com/gkwfhv/readest-scholar/actions/runs/40474228517) 完成 macOS Intel/arm64 DMG 与 Windows x64 NSIS 的身份、校验值和安装启动检查，Intel 安装后可执行文件的 Mach-O 架构断言也通过。
+- [PR #77 的 Linux 真实版本演练](../evidence/phase8/linux-versioned-upgrade-2026-10-27.md)：不同构建的 `0.12.16 → 0.12.17 → 0.12.16` DEB 在同一合成书库数据上安装、启动并打开 EPUB；书签与三个数据文件哈希保持一致。其他平台和正式签名更新仍待验收。
 
 ## 发布前待完成
 
