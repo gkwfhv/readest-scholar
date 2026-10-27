@@ -99,6 +99,29 @@ jobs:
       - name: Verify DEB against checksum manifest
         run: (cd candidate && sha256sum --check SHA256SUMS)
 
+      - name: Install pinned Syft
+        id: syft
+        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0
+
+      - name: Inventory Linux candidate payload
+        env:
+          SYFT: ${{ steps.syft.outputs.cmd }}
+        run: |
+          set -euo pipefail
+          payload="$RUNNER_TEMP/scholar-deb-payload"
+          mkdir -p "$payload"
+          dpkg-deb --raw-extract candidate/*.deb "$payload"
+          "$SYFT" scan "dir:$payload" -o cyclonedx-json=candidate/PAYLOAD-SBOM.cdx.json
+          python3 - <<'CHECK'
+          import json
+          from pathlib import Path
+          bom = json.loads(Path("candidate/PAYLOAD-SBOM.cdx.json").read_text())
+          assert bom.get("bomFormat") == "CycloneDX"
+          components = bom.get("components")
+          assert isinstance(components, list) and components, "No payload components cataloged"
+          print(f"Cataloged {len(components)} candidate payload components")
+          CHECK
+
       - name: Install and launch candidate under Xvfb
         run: |
           set -euo pipefail
