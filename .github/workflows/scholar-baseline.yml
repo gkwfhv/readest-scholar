@@ -85,6 +85,9 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: List declared production npm licenses
         run: pnpm --filter @readest/readest-app licenses list --json --prod > scholar-licenses.json
+      - name: Reject unreviewed Unknown production npm licenses
+        run: node infra/release/check-scholar-npm-licenses.mjs scholar-licenses.json
+
       - name: Upload npm license report
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
