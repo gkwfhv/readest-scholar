@@ -20,10 +20,6 @@ const known = new Set([
   "RUSTSEC-2026-0367|zip|4.6.1",
   "RUSTSEC-2026-0368|zip|4.6.1",
   "RUSTSEC-2026-0369|zip|4.6.1",
-  "RUSTSEC-2026-0391|zstd|0.13.3",
-  "RUSTSEC-2026-0398|zstd-safe|7.3.0",
-  "RUSTSEC-2026-0403|zstd-safe|7.3.0",
-  "RUSTSEC-2026-0410|zstd-sys|2.1.0+zstd.1.5.7",
 ]);
 const observed = new Set();
 const unexpected = [];
