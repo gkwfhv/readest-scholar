@@ -103,6 +103,74 @@ jobs:
           } > candidate/BUILD.txt
           cat candidate/SHA256SUMS
 
+      - name: Install and launch macOS candidate
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mount="$RUNNER_TEMP/scholar-dmg"
+          app_copy="$RUNNER_TEMP/Readest Scholar.app"
+          mkdir -p "$mount"
+          hdiutil attach -quiet -readonly -nobrowse -mountpoint "$mount" candidate/*.dmg
+          trap 'hdiutil detach -quiet "$mount" >/dev/null 2>&1 || true' EXIT
+          app=$(find "$mount" -maxdepth 1 -type d -name '*.app' -print -quit)
+          test -n "$app"
+          bundle_id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")
+          test "$bundle_id" = io.github.gkwfhv.readestscholar
+          binary_name=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")
+          cp -R "$app" "$app_copy"
+          binary="$app_copy/Contents/MacOS/$binary_name"
+          test -x "$binary"
+          "$binary" > "$RUNNER_TEMP/scholar-macos-startup.log" 2>&1 &
+          app_pid=$!
+          trap 'kill "$app_pid" 2>/dev/null || true; hdiutil detach -quiet "$mount" >/dev/null 2>&1 || true' EXIT
+          sleep 8
+          if ! kill -0 "$app_pid" 2>/dev/null; then
+            cat "$RUNNER_TEMP/scholar-macos-startup.log"
+            exit 1
+          fi
+          echo "Scholar macOS app stayed alive for 8 seconds"
+
+      - name: Install, launch, and uninstall Windows candidate
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = Get-ChildItem candidate -Filter *.exe | Select-Object -First 1
+          if (-not $installer) { throw 'NSIS installer missing' }
+          # Tauri NSIS installMode=both ignores /D in silent mode; inspect the actual install.
+          $install = Start-Process -FilePath $installer.FullName -ArgumentList '/S' -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "NSIS install failed: $($install.ExitCode)" }
+          $uninstallRoots = @(
+            'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*',
+            'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*',
+            'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+          )
+          $entry = Get-ItemProperty -Path $uninstallRoots -ErrorAction SilentlyContinue |
+            Where-Object { $_.DisplayName -like 'Readest Scholar*' } | Select-Object -First 1
+          if (-not $entry) { throw 'Scholar uninstall registration missing' }
+          $installDir = [string]$entry.InstallLocation
+          if (-not $installDir -or -not (Test-Path $installDir)) {
+            $uninstallPath = [string]$entry.UninstallString
+            if ($uninstallPath -match '^"([^"]+)"') { $uninstallPath = $Matches[1] }
+            $installDir = Split-Path $uninstallPath -Parent
+          }
+          if (-not (Test-Path $installDir)) { throw "Scholar install directory missing: $installDir" }
+          Write-Output "Scholar install directory: $installDir"
+          $binary = Get-ChildItem $installDir -Recurse -File -Filter 'readest-scholar.exe' | Select-Object -First 1
+          if (-not $binary) { throw 'Scholar executable missing after install' }
+          $app = Start-Process -FilePath $binary.FullName -PassThru
+          Start-Sleep -Seconds 8
+          $app.Refresh()
+          if ($app.HasExited) { throw "Scholar exited during startup: $($app.ExitCode)" }
+          Stop-Process -Id $app.Id -Force
+          $uninstaller = Get-ChildItem $installDir -Recurse -File -Filter 'uninstall.exe' | Select-Object -First 1
+          if (-not $uninstaller) { throw 'NSIS uninstaller missing' }
+          $uninstall = Start-Process -FilePath $uninstaller.FullName -ArgumentList '/S' -Wait -PassThru
+          if ($uninstall.ExitCode -ne 0) { throw "NSIS uninstall failed: $($uninstall.ExitCode)" }
+          if (Test-Path $binary.FullName) { throw 'Scholar executable remained after uninstall' }
+          Write-Output 'Scholar Windows install, startup, and uninstall passed'
+
       - name: Upload candidate installer
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
