@@ -138,9 +138,25 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $installer = Get-ChildItem candidate -Filter *.exe | Select-Object -First 1
           if (-not $installer) { throw 'NSIS installer missing' }
-          $installDir = Join-Path $env:RUNNER_TEMP 'scholar-smoke'
-          $install = Start-Process -FilePath $installer.FullName -ArgumentList @('/S', "/D=$installDir") -Wait -PassThru
+          # Tauri NSIS installMode=both ignores /D in silent mode; inspect the actual install.
+          $install = Start-Process -FilePath $installer.FullName -ArgumentList '/S' -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw "NSIS install failed: $($install.ExitCode)" }
+          $uninstallRoots = @(
+            'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*',
+            'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*',
+            'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+          )
+          $entry = Get-ItemProperty -Path $uninstallRoots -ErrorAction SilentlyContinue |
+            Where-Object { $_.DisplayName -like 'Readest Scholar*' } | Select-Object -First 1
+          if (-not $entry) { throw 'Scholar uninstall registration missing' }
+          $installDir = [string]$entry.InstallLocation
+          if (-not $installDir -or -not (Test-Path $installDir)) {
+            $uninstallPath = [string]$entry.UninstallString
+            if ($uninstallPath -match '^"([^"]+)"') { $uninstallPath = $Matches[1] }
+            $installDir = Split-Path $uninstallPath -Parent
+          }
+          if (-not (Test-Path $installDir)) { throw "Scholar install directory missing: $installDir" }
+          Write-Output "Scholar install directory: $installDir"
           $binary = Get-ChildItem $installDir -Recurse -File -Filter 'readest-scholar.exe' | Select-Object -First 1
           if (-not $binary) { throw 'Scholar executable missing after install' }
           $app = Start-Process -FilePath $binary.FullName -PassThru
