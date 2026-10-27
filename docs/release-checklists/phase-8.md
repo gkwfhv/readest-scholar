@@ -13,6 +13,8 @@
 - [PR #61](https://github.com/gkwfhv/readest-scholar/pull/61) 已合并，其依赖更新将生产 npm 审计降至 0 条，RustSec 命中从 14 条降至 5 条；剩余条目与调用路径见 [Rust 依赖审计](../evidence/phase8/rust-dependency-audit-2026-10-26.md)。尚未作正式风险接受。
 - [桌面候选包工件检查](../evidence/phase8/desktop-candidates-2026-10-26.md)完成 macOS arm64 DMG、Windows x64 NSIS、Linux amd64 DEB 的无签名调试构建与哈希/品牌元数据检查；[Linux 最终 CI](https://github.com/gkwfhv/readest-scholar/actions/runs/40356196886) 还完成 DEB 安装、Xvfb 启动与 Scholar D-Bus 身份检查。macOS/Windows 的无签名候选安装启动已在 [PR #62 的最终 CI](https://github.com/gkwfhv/readest-scholar/actions/runs/40455618697) 通过，Windows 静默卸载也通过；PR #62 已合并。见 [桌面安装冒烟证据](../evidence/phase8/desktop-install-smoke-2026-10-27.md)。
 - [PR #64 候选包完整性证据](../evidence/phase8/candidate-integrity-2026-10-27.md)：macOS、Windows、Linux 三端安装前的 SHA-256 清单校验通过，Linux 卸载及可执行文件移除通过；最终平台 CI 均成功，PR #64 已合并。
+- [PR #66](https://github.com/gkwfhv/readest-scholar/pull/66) 已合并；[Linux run 40473099477](https://github.com/gkwfhv/readest-scholar/actions/runs/40473099477) 对同一应用负载重打包的较低版本完成安装、升级到候选版、回滚和卸载。它仅验证包管理流程，不验证真实跨版本应用数据迁移。
+- [PR #67](https://github.com/gkwfhv/readest-scholar/pull/67) 已合并；[桌面 run 40474228517](https://github.com/gkwfhv/readest-scholar/actions/runs/40474228517) 完成 macOS Intel/arm64 DMG 与 Windows x64 NSIS 的身份、校验值和安装启动检查，Intel 安装后可执行文件的 Mach-O 架构断言也通过。
 
 ## 发布前待完成
 
@@ -20,6 +22,7 @@
 - [ ] 清点正式品牌、应用图标、Bundle ID、URL scheme、更新源、分享扩展、小组件及容器镜像名称；复核 Readest 商标、AGPL 和第三方许可证。
 - [ ] 在最终源码与每个平台候选产物上归档 SBOM、许可证和漏洞扫描结果；处理或经人工审批接受剩余 RustSec 项。
 - [ ] 为 Scholar 建立受保护的正式发布工作流，不复用上游签名、Discord、R2 或自动更新目标；独立的短期候选包 CI 已建立，尚非正式 Release。
+- [ ] 使用实际不同版本的应用二进制与合成用户数据，验证升级、数据迁移和回滚；PR #66 的同负载包演练不满足此项。
 - [ ] 用正式签名证书构建和验证 macOS、Windows、Linux、Android、iOS 产物；各平台完成安装、启动、升级、卸载和回滚。无真机证据的平台只能列为 experimental。
 - [ ] 每个候选产物记录提交 SHA、构建运行、SHA-256、签名校验及下载地址；完成用户验收后再申请发布审批。
 - [ ] 预发布页提供源码、许可证、校验值、部署/升级/回滚指南；发布后监测下载、启动和服务健康。
