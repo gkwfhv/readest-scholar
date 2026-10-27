@@ -1,6 +1,6 @@
 # Phase 7 Android 模拟器验收记录（2026-10-26）
 
-状态：Android API 34 x86_64 模拟器的上游身份阅读交互子集已限定范围验收；最新夹具提交的首次 CI 与同 job 重跑均为 5 套件、18/18 通过。历史失败及修复过程保留如下。Scholar 身份包和视觉证据另行验收。此范围不代表跨端同步或真机验收。
+状态：Android API 34 x86_64 模拟器的上游与 Scholar 身份阅读交互子集已限定范围验收；连续复验和 Scholar 阅读器截图见下。历史失败及修复过程保留如下。此范围不代表跨端同步或真机验收。
 
 | 项目 | 环境与结果 |
 |---|---|
@@ -25,3 +25,25 @@
 [提交 `445a034`](https://github.com/gkwfhv/readest-scholar/commit/445a0342ec37b9a6a8abf25201296892b052e1b3) 在 `am force-stop` 后等待旧 PID 消失，并留出 3 秒释放 WebView/图形资源，然后再启动下一份 EPUB。它针对连续套件间进程退出的时序风险；历史失败未稳定复现，故不能宣称已证明唯一根因。
 
 [run 40299624507](https://github.com/gkwfhv/readest-scholar/actions/runs/40299624507) 首次 job `121494023265` 和同 job 重跑 `121499803625` 均为 5 套件、18/18 通过，0 跳过、0 测试重试；先前易失败的第二套件分别用时 34.6 秒与 30.5 秒。两次使用同一代码提交和同一 GitHub runner 类型。由此接受 **API 34 x86_64 模拟器 EPUB 阅读交互** 的限定范围自验收；这两次成功不能证明长时稳定或真实设备行为。
+
+## Readest Scholar 身份包（模拟器）
+
+[Scholar Android E2E run 40290855604](https://github.com/gkwfhv/readest-scholar/actions/runs/40290855604) 在同一 API 34 x86_64 模拟器中构建并安装 Scholar 调试 APK。ADB 列包明确返回 `package:io.github.gkwfhv.readestscholar`。5 个套件、18/18 项最终通过，0 跳过，运行 133.98 秒；第二个 `top-band-selection` 用例曾重试一次后通过，说明这一触控用例仍可能受模拟器时序影响，需继续观察。随后 [run 40293065661](https://github.com/gkwfhv/readest-scholar/actions/runs/40293065661) 在第二个阅读套件失败，App 进程消失；故此结果仅证明曾成功构建、安装和运行，不能据此验收稳定性，也不扩展为真机、跨端同步或发行签名结论。
+
+## Scholar 阅读器视觉复验
+
+[run 40301256972](https://github.com/gkwfhv/readest-scholar/actions/runs/40301256972) 的首次 job `121499423040` 与同 job 重跑 `121507155304` 在 Scholar 包 ID `io.github.gkwfhv.readestscholar` 上均为 5 套件、18/18 通过，0 跳过、0 测试重试。[run 40311571914](https://github.com/gkwfhv/readest-scholar/actions/runs/40311571914) 增加从已渲染阅读器内采样的屏幕截图后再次 18/18 通过。首次截图运行 [40308748159](https://github.com/gkwfhv/readest-scholar/actions/runs/40308748159) 拍到了测试结束后的 Android 主屏，故没有用于界面验收。
+
+![Scholar Android 模拟器 EPUB 阅读器](android-scholar-reader-2026-10-26.png)
+
+截图为 320×640 API 34 模拟器、英文 EPUB 第四章页面；页眉、章节标题、正文及底部页码均可见，未见裁剪或重叠。PNG SHA-256：`af2d96bf09b1cdc2b1cfd4b396cf31aeb47076bc14437fe8931b5e484c193b4e`；[原始 CI 工件](https://github.com/gkwfhv/readest-scholar/actions/runs/40311571914/artifacts/12646440737) 摘要 `sha256:6f6e51c6265a24bc15a713941309cce1227b75a9e623de5e68acfef42e565bd9`。Android 书库页、PDF、同步、后台限制和真实设备仍未验收。
+
+## Scholar 冷启动书库验收
+
+此前品牌包的阅读器截图正常，但冷启动书库页在 CI 截图中为空。CDP 诊断证实 WebView 已加载根路由 `/`，而书库初始化队列仅允许 `/library`，导致根路由没有执行 `initLibrary()`。[修复提交 `6a87294`](https://github.com/gkwfhv/readest-scholar/commit/6a872948a81520f84dc4f2dbc91507d9449bd7dc) 允许根路由初始化书库。另将模拟器从偶发 Google Play 服务崩溃的 Google APIs 镜像切换到 API 34 AOSP x86_64；此前一次退出信息为 `DEPENDENCY DIED`，该系统故障与书库路由错误分开处理。
+
+修复后，基线 [run 40325146120](https://github.com/gkwfhv/readest-scholar/actions/runs/40325146120) 和品牌包 [run 40325199271](https://github.com/gkwfhv/readest-scholar/actions/runs/40325199271) 均完成 5 套件、18/18 项 Android 阅读交互测试。品牌包随后冷启动到 `http://tauri.localhost/`，CDP 读取到书库布局宽 320px 与非空文本，ADB 截图显示搜索栏、书架卡片、书名和导入入口。
+
+![Readest Scholar Android 模拟器冷启动书库](android-scholar-library-2026-10-26.png)
+
+截图来自 [原始 CI 工件](https://github.com/gkwfhv/readest-scholar/actions/runs/40325199271/artifacts/12651606930)，PNG SHA-256：`7e19ea51324f1f01aaaf2b46e2bb828f28ea5a8994936ba73a04c4a2eb1266c0`。这是 API 34 模拟器的 320×640 调试包画面；书籍封面在此截图中为占位白卡，标题与控制栏可见。Android 真机、系统后台行为、PDF 与跨端同步仍需独立验收，不能由本截图推出。

@@ -11,6 +11,7 @@
   },
   "plugins": {
     "deep-link": {
+      "mobile": [{ "scheme": ["readest-scholar"], "appLink": false }],
       "desktop": {
         "schemes": ["readest-scholar"]
       }
