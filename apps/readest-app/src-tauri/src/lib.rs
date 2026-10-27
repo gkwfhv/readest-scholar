@@ -529,15 +529,16 @@ type AppRuntime = tauri_runtime_cef::CefRuntime;
 #[cfg(not(all(feature = "cef", target_os = "linux")))]
 type AppRuntime = tauri::Wry;
 
-#[cfg(desktop)]
-const SINGLE_INSTANCE_DBUS_ID: &str = "com.bilingify.readest";
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 #[cfg_attr(
     all(feature = "cef", target_os = "linux"),
     tauri_runtime_cef::cef_entry_point
 )]
 pub fn run() {
+    let context = tauri::generate_context!();
+    #[cfg(desktop)]
+    let single_instance_dbus_id = context.config().identifier.clone();
+
     // The CEF runtime forces X11, even on Wayland. Check before initializing
     // Tauri, which otherwise hides the missing display behind CreateWindow.
     // cef_entry_point routes helper processes away before reaching this code.
@@ -548,7 +549,7 @@ pub fn run() {
     }
 
     #[cfg(all(feature = "cef", target_os = "linux"))]
-    linux_single_instance::forward_to_running_instance(SINGLE_INSTANCE_DBUS_ID);
+    linux_single_instance::forward_to_running_instance(&single_instance_dbus_id);
 
     // Initialize Sentry as early as possible so panics during startup are
     // captured. `None` DSN (unset SENTRY_DSN) => disabled, so local and fork
@@ -759,7 +760,7 @@ pub fn run() {
                 app.emit("single-instance", SingleInstancePayload { args: argv, cwd })
                     .unwrap();
             })
-            .dbus_id(SINGLE_INSTANCE_DBUS_ID.to_owned())
+            .dbus_id(single_instance_dbus_id.clone())
             .build(),
     );
 
@@ -1123,7 +1124,7 @@ pub fn run() {
 
             Ok(())
         })
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("error while running tauri application")
         .run(
             #[allow(unused_variables)]
