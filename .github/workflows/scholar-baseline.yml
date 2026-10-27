@@ -31,7 +31,7 @@ jobs:
           node-version: 24
       - name: Check shell and Node syntax
         run: |
-          bash -n infra/backup/backup-compose.sh infra/backup/test-backup-compose.sh infra/staging/export-images.sh infra/staging/import-dockerhub-from-mirror.sh infra/staging/rehearse-web-rollback.sh
+          bash -n infra/backup/backup-compose.sh infra/backup/test-backup-compose.sh infra/staging/export-images.sh infra/staging/import-dockerhub-from-mirror.sh infra/staging/rehearse-web-rollback.sh infra/release/verify-scholar-deb-transitions.sh
           node --check infra/compose/prepare-local-env.mjs
           node --check infra/compose/build-local-tauri.mjs
           node --check infra/compose/assert-loopback-ports.mjs
