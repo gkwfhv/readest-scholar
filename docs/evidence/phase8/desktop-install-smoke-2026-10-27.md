@@ -1,6 +1,6 @@
 # Phase 8 桌面候选包安装启动冒烟（2026-10-27）
 
-状态：PR #62 的最终提交 `0499f84db8d36e6f16c7acd26f8c49f15e446869` 已在 [GitHub Actions run 40455618697](https://github.com/gkwfhv/readest-scholar/actions/runs/40455618697) 通过；PR 尚待合并。工作流只构建无签名调试候选包，不创建 Release。
+状态：PR #62 的最终提交 `0499f84db8d36e6f16c7acd26f8c49f15e446869` 已在 [GitHub Actions run 40455618697](https://github.com/gkwfhv/readest-scholar/actions/runs/40455618697) 通过；PR #62 已 squash 合并为 `8a0d88fc972eaafff29263aa093cbe8e78acba84`。工作流只构建无签名调试候选包，不创建 Release。
 
 | 平台 | 产物与检查 | 结论 |
 |---|---|---|
