@@ -151,3 +151,26 @@ Paper 145 双客户端二进制并发：C 离线入队，B 上传不同 PDF 形�
 ## Phase 3 自验收（2026-10-23）
 
 按工程计划的双设备并发、断网恢复、重复请求、服务崩溃与自动故障测试判据，Phase 3 自验收通过，详见 [验收矩阵](docs/evidence/phase3/acceptance-2026-10-23.md)。含认证修复的最终 Web 候选镜像 `sha256:8737592e0ddd1f77c0ff23b9bbda40d9166e56040c04ea10472e83db9544b05c` 在独立回环和 staging 短暂切换均通过，只重建 Web 后恢复原镜像，其余五容器不变。移动真机、长时完整镜像和一小时自然令牌刷新列为后续平台矩阵/稳定性回归，不作已通过证据。开始 Phase 4 PDF 专业阅读与笔记。
+
+## Phase 4 / Phase 5 进展（2026-10-23）
+
+Phase 4 的 PDF 批注、视觉锚点、科研笔记与导出实现已在服务器自验收，提交位于开放的 PR #52；Phase 3 的实现位于开放的 PR #51。两项均未合并到受保护的 main。
+
+Phase 5 当前在草稿 PR #53：PDF 实际页码引用与无证据拒答、账户隔离的检索和会话、选中文字的 AI 操作、索引删除清理已实现，详见 [PDF 引用基础](docs/evidence/phase5/grounded-pdf-citations-2026-10-23.md)。桌面 AI 密钥改用按账户分槽的系统钥匙串，旧明文设置及备份会清除并提示重新输入；14 项目标测试及服务器完整单测 14,095 项通过，详见 [原生密钥证据](docs/evidence/phase5/native-ai-credentials-2026-10-23.md)。Web 端加密密钥保管、真实论文引文逐条评估、真实系统钥匙串和端到端界面验收尚未完成，Phase 5 不签收，也不进入稳定发布。
+EOF'
+
+## Phase 5 Web 密钥保管（2026-10-23）
+
+服务器草稿分支实现按账户的 Web AI 密钥加密存储：迁移 047、AES-256-GCM 保管箱、认证 API、设置与备份明文清理、登录切换隔离和失败提示。服务器完整单测 1,241 文件 / 14,116 项通过（原有 16 项跳过），最终 TypeScript/Biome、31 项定向测试与独立 Web 生产构建通过。合成 staging 的两账户真实 HTTP 隔离、数据库密文、无缓存和无跨域许可通过；390 px 浏览器实际登录后从 AI 设置保存/重载/清除测试密钥通过，localStorage 无明文，桌面和手机宽度无横向溢出。原 staging Web 未切换，临时候选仅绑定回环。详见 [Web 保管箱证据](docs/evidence/phase5/web-ai-credential-vault-2026-10-23.md)。Phase 5 仍需真实论文引文质量、删除/索引竞态、桌面系统钥匙串往返和跨主题/跨端验收，尚未签收。
+
+## Phase 5 删除并发与真实论文抽取（2026-10-23）
+
+服务器草稿 PR #53 追加删除前持久标记、索引任务取消与世代校验、崩溃重试和 PDF.js 展示片段间的词界修复。删除/索引切片完整单测 1,241 文件、14,119 项通过（原有 16 项跳过）；最后改动后定向 99 项、Chromium IndexedDB 3 项、TypeScript/Biome 和 Web 生产构建通过。三篇公开 arXiv 论文经工程 PDF 加载器检查实际页数，9 个预设短语的预期物理页均在 BM25 前三条结果内。临时 PDF 未入库。详见 [并发证据](docs/evidence/phase5/book-ai-deletion-race-2026-10-23.md)和[论文证据](docs/evidence/phase5/real-paper-pdf-retrieval-2026-10-23.md)。跨进程 SQLite 原子栅栏、真实模型声明支持与拒答、原生钥匙串往返仍是 Phase 5 验收门槛，尚未签收。
+
+Phase 5 的 OpenAI 兼容接口另用服务器回环 HTTP 端点实测：模型列表/健康检查、聊天、向量请求、分别配置的模型 ID 和 Bearer 头均通过；TypeScript/Biome 通过。此项仅证明协议兼容，不证明模型回答质量。见 [HTTP 证据](docs/evidence/phase5/openai-compatible-http-2026-10-23.md)。
+
+Phase 5 新增 [SQLite 删除栅栏](docs/evidence/phase5/sqlite-deletion-fence-2026-10-23.md)：两条真实 Turso 连接的延迟写入故障测试先失败后通过；删除和重新导入后旧索引写入仍被拒，正常新索引可写。ReedyDB、Indexer、app-service 共 78 项定向测试、TypeScript/Biome 通过。Reedy 书籍/会话记忆现也在助手建立时捕获 SQLite 世代，两连接延迟记忆写入回归通过；旧版进程兼容与真实模型等仍待验收，Phase 5 不签收。
+
+## Phase 5 final regression and native credential UI (2026-10-23)
+
+The server one-shot run on the SQLite fence revision initially failed 61 import tests because seven old fixtures mocked the native database as `{}`. After those fixtures supplied an `execute` stub, the affected 71 tests and final full suite passed: 1,243 files / 14,124 tests, 16 existing skips, 0 failures. TypeScript/Biome, Web production build, Tauri static build and Linux CEF debug build passed on the server. In an isolated Linux QA container, the current Phase 5 settings UI saved a synthetic OpenAI-compatible key to GNOME Keyring, restored it after app and D-Bus restart, and cleared it; settings files contained no plaintext. The AI tab and brain icon remained within the dialog at 1152×720, without horizontal overflow. See [SQLite replay](docs/evidence/phase5/sqlite-deletion-fence-2026-10-23.md) and [native credential evidence](docs/evidence/phase5/native-ai-credentials-2026-10-23.md). PR #51 Phase 3 was squash-merged to `main` as `9a5d4ffdc` with explicit approval. Phase 5 still needs real-model claim support and citation/refusal evaluation before self-acceptance.

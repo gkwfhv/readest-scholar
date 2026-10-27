@@ -1,7 +1,12 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BaseDir, FileSystem, ResolvedPath } from '@/types/system';
 import { DatabaseOpts, DatabaseService } from '@/types/database';
-import { SchemaType } from '@/services/database/migrate';
+import { SchemaType, migrate } from '@/services/database/migrate';
+import { getMigrations } from '@/services/database/migrations';
+import { NodeDatabaseService } from '@/services/database/nodeDatabaseService';
+import { ReedyDb } from '@/services/reedy/db/ReedyDb';
+import { aiAccountScope } from '@/services/ai/accountScope';
+import type { Book } from '@/types/book';
 
 // Mock all service dependencies
 vi.mock('@/services/settingsService', () => ({
@@ -43,6 +48,11 @@ vi.mock('@/services/cloudService', () => ({
   downloadBookCovers: vi.fn().mockResolvedValue(undefined),
   downloadBook: vi.fn().mockResolvedValue(undefined),
   downloadReplicaFileFromCloud: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('@/services/ai/deleteBookAiData', () => ({
+  queueBookAiDataDeletion: vi.fn(),
+  deleteBookAiData: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@/services/tts/ttsDownloadManager', () => ({
@@ -121,6 +131,7 @@ import type { ImportedDictionary } from '@/services/dictionaries/types';
 import { evictProvider } from '@/services/dictionaries/registry';
 import { getDictionaryPluginControlStore } from '@/services/dictionaries/plugins/controlService';
 import { ttsDownloadManager } from '@/services/tts/ttsDownloadManager';
+import { queueBookAiDataDeletion, deleteBookAiData } from '@/services/ai/deleteBookAiData';
 import { clearBookTTSDownloads } from '@/services/tts/providers/bookCacheStore';
 import { ttsSessionManager } from '@/services/tts/TTSSessionManager';
 import { requestStoragePermission } from '@/utils/permission';
@@ -608,6 +619,35 @@ describe('BaseAppService', () => {
     });
   });
 
+  describe('importBook AI deletion fence', () => {
+    test('a completed native reimport reopens only its account-scoped SQLite index', async () => {
+      const db = await NodeDatabaseService.open(':memory:', { experimental: ['index_method'] });
+      try {
+        await migrate(db, getMigrations('reedy'));
+        const scope = aiAccountScope('reimported-book', 'test-account');
+        await new ReedyDb(db).purgeBookData(scope);
+        localStorage.setItem('user', JSON.stringify({ id: 'test-account' }));
+        vi.spyOn(service, 'openDatabase').mockResolvedValue(db);
+        vi.mocked(BookSvc.importBook).mockResolvedValueOnce({
+          hash: 'reimported-book',
+        } as Book);
+
+        await service.importBook('file.pdf', []);
+
+        const rows = await db.select<{ generation: string; deleted: number }>(
+          'SELECT generation, deleted FROM reedy_book_fence WHERE book_hash = ?',
+          [scope],
+        );
+        expect(rows).toHaveLength(1);
+        expect(rows[0]!.deleted).toBe(0);
+        expect(rows[0]!.generation).toBeTruthy();
+      } finally {
+        localStorage.removeItem('user');
+        await db.close();
+      }
+    });
+  });
+
   describe('deleteBook TTS queue lifecycle', () => {
     const book = { hash: 'book-hash', title: 'Book' } as Parameters<
       TestAppService['deleteBook']
@@ -615,21 +655,30 @@ describe('BaseAppService', () => {
 
     test('clears queued downloads only when the local copy is deleted', async () => {
       await service.deleteBook(book, 'cloud');
+      expect(queueBookAiDataDeletion).not.toHaveBeenCalled();
+      expect(deleteBookAiData).not.toHaveBeenCalled();
       expect(ttsDownloadManager.removeBook).not.toHaveBeenCalled();
       expect(clearBookTTSDownloads).not.toHaveBeenCalled();
 
       await service.deleteBook(book, 'local');
+      expect(queueBookAiDataDeletion).toHaveBeenCalledWith('book-hash', null);
+      expect(deleteBookAiData).toHaveBeenCalledWith('book-hash', null, service);
       expect(ttsDownloadManager.removeBook).toHaveBeenCalledTimes(1);
       expect(ttsDownloadManager.removeBook).toHaveBeenCalledWith('book-hash');
       expect(clearBookTTSDownloads).toHaveBeenCalledWith(service, 'book-hash');
     });
 
-    test('does not clear queued downloads when local deletion fails', async () => {
+    test('purges regenerable AI data if local deletion fails after possible partial removal', async () => {
       vi.mocked(CloudSvc.deleteBook).mockRejectedValueOnce(new Error('disk failure'));
 
       await expect(service.deleteBook(book, 'local')).rejects.toThrow('disk failure');
       expect(ttsDownloadManager.removeBook).not.toHaveBeenCalled();
       expect(clearBookTTSDownloads).not.toHaveBeenCalled();
+      expect(queueBookAiDataDeletion).toHaveBeenCalledWith('book-hash', null);
+      expect(deleteBookAiData).toHaveBeenCalledWith('book-hash', null, service);
+      expect(vi.mocked(queueBookAiDataDeletion).mock.invocationCallOrder[0]).toBeLessThan(
+        vi.mocked(CloudSvc.deleteBook).mock.invocationCallOrder[0]!,
+      );
     });
 
     test('quiesces downloads and the live session before purging the cache directory', async () => {

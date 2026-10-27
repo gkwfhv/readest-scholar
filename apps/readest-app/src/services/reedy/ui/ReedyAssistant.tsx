@@ -38,6 +38,7 @@ import { sliceSinceLastId } from '../memory/consolidatorCursor';
 import { SkillRegistry } from '../skills/SkillRegistry';
 import type { Skill } from '../skills/types';
 import { useReedyStore } from '../store/reedyStore';
+import { useNotebookStore } from '@/store/notebookStore';
 import { useReedyTurn } from './useReedyTurn';
 import { AgentThread } from './AgentThread';
 import { Composer } from './Composer';
@@ -75,6 +76,14 @@ export function ReedyAssistant({
   onNavigateToCfi,
 }: ReedyAssistantProps) {
   const models = useMemo(() => createReedyModels(aiSettings), [aiSettings]);
+  const pendingPrompt = useNotebookStore((state) => state.aiSelectionPrompt);
+  const setAiSelectionPrompt = useNotebookStore((state) => state.setAiSelectionPrompt);
+  const [selectionDraft, setSelectionDraft] = useState<{ id: string; text: string } | null>(null);
+  useEffect(() => {
+    if (!pendingPrompt || pendingPrompt.scope !== bookHash) return;
+    setSelectionDraft({ id: pendingPrompt.id, text: pendingPrompt.text });
+    setAiSelectionPrompt(null);
+  }, [bookHash, pendingPrompt, setAiSelectionPrompt]);
 
   // Lazily open reedy.db on first mount. The promise resolves once and
   // we share the same ReedyDb + Indexer + Retriever + MemoryService +
@@ -98,7 +107,8 @@ export function ReedyAssistant({
         const db = new ReedyDb(svc);
         const skills = new SkillRegistry(svc);
         await skills.init();
-        const memory = new MemoryService(db, models.embedding);
+        const generation = await db.captureBookGeneration(bookHash);
+        const memory = new MemoryService(db, models.embedding, bookHash, generation);
         const enabledSkills = await skills.listEnabled();
         if (!alive) return;
         setReedy({
@@ -116,7 +126,7 @@ export function ReedyAssistant({
     return () => {
       alive = false;
     };
-  }, [appService, models.embedding]);
+  }, [appService, models.embedding, bookHash]);
 
   // Active skill selection — null means no skill (the model gets the
   // default Policy + Reading + ToolCatalog system prompt).
@@ -378,6 +388,7 @@ export function ReedyAssistant({
         />
       </div>
       <Composer
+        draft={selectionDraft}
         isRunning={isRunning}
         onSend={handleSend}
         onAbort={abort}

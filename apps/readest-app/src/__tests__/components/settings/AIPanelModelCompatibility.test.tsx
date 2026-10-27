@@ -1,0 +1,158 @@
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { DEFAULT_AI_SETTINGS } from '@/services/ai/constants';
+
+const mocks = vi.hoisted(() => ({
+  fetchModels: vi.fn(async () => [{ id: 'embedding-first' }, { id: 'chat-second' }]),
+  saveSettings: vi.fn(async () => {}),
+  setSettings: vi.fn(),
+  saveNativeCredential: vi.fn(async () => {}),
+  saveWebCredential: vi.fn(async () => {}),
+  native: false,
+}));
+
+vi.mock('@/hooks/useTranslation', () => ({ useTranslation: () => (text: string) => text }));
+vi.mock('@/context/AuthContext', () => ({
+  useAuth: () => ({ user: { id: 'alice' }, token: 'alice-token' }),
+}));
+vi.mock('@/context/EnvContext', () => ({
+  useEnv: () => ({ envConfig: {}, appService: {} }),
+}));
+vi.mock('@/store/settingsStore', () => ({
+  useSettingsStore: () => ({
+    settings: {
+      aiSettings: {
+        ...DEFAULT_AI_SETTINGS,
+        enabled: true,
+        provider: 'openrouter',
+        openrouterApiKey: 'synthetic-key',
+        openrouterBaseUrl: 'https://example.test/v1',
+        openrouterModel: 'private-chat-model',
+        openrouterEmbeddingModel: 'private-embedding-model',
+      },
+    },
+    saveSettings: mocks.saveSettings,
+    setSettings: mocks.setSettings,
+  }),
+}));
+vi.mock('@/services/ai/providers/OpenRouterProvider', () => ({
+  fetchOpenRouterModels: mocks.fetchModels,
+}));
+vi.mock('@/services/ai/providers', () => ({ getAIProvider: vi.fn() }));
+vi.mock('@/services/environment', () => ({ isTauriAppPlatform: () => mocks.native }));
+vi.mock('@/services/ai/webCredentials', () => ({ saveWebAiCredential: mocks.saveWebCredential }));
+vi.mock('@/services/ai/nativeCredentials', () => ({
+  LEGACY_AI_CREDENTIAL_NOTICE_KEY: 'scholar-ai-legacy-key-reentry:v1',
+  saveNativeAiCredential: mocks.saveNativeCredential,
+}));
+
+import AIPanel from '@/components/settings/AIPanel';
+
+describe('OpenAI-compatible model settings', () => {
+  afterEach(cleanup);
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.native = false;
+    localStorage.setItem('user', JSON.stringify({ id: 'alice' }));
+    mocks.fetchModels.mockResolvedValue([{ id: 'embedding-first' }, { id: 'chat-second' }]);
+  });
+
+  it('keeps custom chat and embedding IDs after model discovery', async () => {
+    render(<AIPanel />);
+    await waitFor(() => expect(mocks.fetchModels).toHaveBeenCalled());
+    await screen.findByDisplayValue('private-chat-model');
+    expect(screen.getByDisplayValue('private-embedding-model')).toBeTruthy();
+    expect(mocks.setSettings).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        aiSettings: expect.objectContaining({ openrouterModel: 'embedding-first' }),
+      }),
+    );
+  });
+
+  it('explains why older plaintext keys must be entered again', () => {
+    mocks.native = true;
+    localStorage.setItem('scholar-ai-legacy-key-reentry:v1', '1');
+    render(<AIPanel />);
+    expect(screen.getByText(/Older AI API keys were removed/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(localStorage.getItem('scholar-ai-legacy-key-reentry:v1')).toBeNull();
+  });
+
+  it('saves a native API key to the account keychain only after editing ends', async () => {
+    mocks.native = true;
+    render(<AIPanel />);
+    const input = screen.getByDisplayValue('synthetic-key');
+    fireEvent.change(input, { target: { value: 'new-key' } });
+    expect(mocks.saveNativeCredential).not.toHaveBeenCalled();
+    fireEvent.blur(input);
+    await waitFor(() =>
+      expect(mocks.saveNativeCredential).toHaveBeenCalledWith(
+        'alice',
+        'openrouterApiKey',
+        'new-key',
+      ),
+    );
+    await waitFor(() =>
+      expect(mocks.setSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          aiSettings: expect.objectContaining({ openrouterApiKey: 'new-key' }),
+        }),
+      ),
+    );
+  });
+
+  it('saves a Web API key to the authenticated vault only after editing ends', async () => {
+    render(<AIPanel />);
+    const input = screen.getByDisplayValue('synthetic-key');
+    fireEvent.change(input, { target: { value: 'new-web-key' } });
+    expect(mocks.saveWebCredential).not.toHaveBeenCalled();
+    fireEvent.blur(input);
+    await waitFor(() =>
+      expect(mocks.saveWebCredential).toHaveBeenCalledWith(
+        'alice-token',
+        'openrouterApiKey',
+        'new-web-key',
+      ),
+    );
+  });
+
+  it('does not publish a Web key when the vault rejects it', async () => {
+    mocks.saveWebCredential.mockRejectedValueOnce(new Error('unavailable'));
+    render(<AIPanel />);
+    const input = screen.getByDisplayValue('synthetic-key');
+    fireEvent.change(input, { target: { value: 'rejected-web-key' } });
+    fireEvent.blur(input);
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/could not save/i));
+    expect(mocks.setSettings).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        aiSettings: expect.objectContaining({ openrouterApiKey: 'rejected-web-key' }),
+      }),
+    );
+  });
+
+  it('ignores a stale model list after the endpoint changes', async () => {
+    let resolveOld!: (models: { id: string }[]) => void;
+    mocks.fetchModels.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveOld = resolve;
+        }),
+    );
+    mocks.fetchModels.mockResolvedValueOnce([{ id: 'new-endpoint-model' }]);
+
+    render(<AIPanel />);
+    await waitFor(() => expect(mocks.fetchModels).toHaveBeenCalledTimes(1));
+    fireEvent.change(screen.getByDisplayValue('https://example.test/v1'), {
+      target: { value: 'https://new.example.test/v1' },
+    });
+    await waitFor(() => expect(mocks.fetchModels).toHaveBeenCalledTimes(2));
+    await act(async () => resolveOld([{ id: 'old-endpoint-model' }]));
+    await waitFor(() => {
+      const values = Array.from(
+        document.querySelectorAll<HTMLOptionElement>('#openrouter-chat-model-options option'),
+      ).map((option) => option.value);
+      expect(values).toEqual(['new-endpoint-model']);
+    });
+    expect(screen.getByDisplayValue('private-chat-model')).toBeTruthy();
+  });
+});

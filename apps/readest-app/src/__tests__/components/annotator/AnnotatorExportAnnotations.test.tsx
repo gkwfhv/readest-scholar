@@ -49,6 +49,10 @@ const settings = {
 
 vi.mock('@/hooks/useShortcuts', () => ({ default: () => {} }));
 
+vi.mock('@/context/AuthContext', () => ({
+  useAuth: () => ({ user: null }),
+}));
+
 vi.mock('@/context/EnvContext', () => ({
   useEnv: () => ({ envConfig: {}, appService: h.appService }),
 }));

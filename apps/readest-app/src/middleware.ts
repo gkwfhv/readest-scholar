@@ -18,6 +18,13 @@ export function middleware(request: NextRequest) {
   const isApi = request.nextUrl.pathname.startsWith('/api/');
 
   if (isApi) {
+    // The vault returns a user's decrypted provider key. Keep this endpoint
+    // same-origin even when the rest of the API permits trusted app origins.
+    if (request.nextUrl.pathname === '/api/scholar/ai/credentials') {
+      return request.method === 'OPTIONS'
+        ? new NextResponse(null, { status: 405 })
+        : NextResponse.next();
+    }
     const origin = request.headers.get('origin') ?? '';
     const isAllowedOrigin = allowedOrigins.includes(origin);
 

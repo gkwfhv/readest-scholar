@@ -5,12 +5,19 @@ import { PiCheckCircle, PiWarningCircle, PiArrowsClockwise, PiSpinner } from 're
 import { useTranslation } from '@/hooks/useTranslation';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useEnv } from '@/context/EnvContext';
+import { useAuth } from '@/context/AuthContext';
 import { getAIProvider } from '@/services/ai/providers';
 import {
   fetchOpenRouterModels,
   type OpenRouterModelInfo,
 } from '@/services/ai/providers/OpenRouterProvider';
 import { DEFAULT_AI_SETTINGS, GATEWAY_MODELS, MODEL_PRICING } from '@/services/ai/constants';
+import { aiUserScope } from '@/services/ai/accountScope';
+import { saveWebAiCredential } from '@/services/ai/webCredentials';
+import {
+  LEGACY_AI_CREDENTIAL_NOTICE_KEY,
+  saveNativeAiCredential,
+} from '@/services/ai/nativeCredentials';
 import type { AISettings, AIProviderName } from '@/services/ai/types';
 import { exportReedyMetricsBundle } from '@/services/reedy/instrumentation';
 import { isTauriAppPlatform } from '@/services/environment';
@@ -70,6 +77,7 @@ const getModelOptions = (): ModelOption[] => [
 const AIPanel: React.FC = () => {
   const _ = useTranslation();
   const { envConfig, appService } = useEnv();
+  const { user, token } = useAuth();
   const { settings, setSettings, saveSettings } = useSettingsStore();
 
   const aiSettings: AISettings = settings?.aiSettings ?? DEFAULT_AI_SETTINGS;
@@ -96,9 +104,15 @@ const AIPanel: React.FC = () => {
   const [openrouterEmbeddingModel, setOpenrouterEmbeddingModel] = useState(
     aiSettings.openrouterEmbeddingModel ?? '',
   );
+  useEffect(() => {
+    setGatewayKey(aiSettings.aiGatewayApiKey ?? '');
+    setOpenrouterKey(aiSettings.openrouterApiKey ?? '');
+  }, [aiSettings.aiGatewayApiKey, aiSettings.openrouterApiKey, user?.id]);
+
   const [openrouterModels, setOpenrouterModels] = useState<OpenRouterModelInfo[]>([]);
   const [openrouterFetchingModels, setOpenrouterFetchingModels] = useState(false);
   const [openrouterModelsError, setOpenrouterModelsError] = useState('');
+  const openrouterModelRequestId = useRef(0);
 
   const savedCustomModel = aiSettings.aiGatewayCustomModel ?? '';
   const savedModel = aiSettings.aiGatewayModel ?? DEFAULT_AI_SETTINGS.aiGatewayModel ?? '';
@@ -119,6 +133,12 @@ const AIPanel: React.FC = () => {
 
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('idle');
   const [errorMessage, setErrorMessage] = useState('');
+  const [credentialError, setCredentialError] = useState('');
+  const [legacyCredentialNotice, setLegacyCredentialNotice] = useState(
+    () =>
+      typeof window !== 'undefined' &&
+      localStorage.getItem(LEGACY_AI_CREDENTIAL_NOTICE_KEY) === '1',
+  );
 
   const isMounted = useRef(false);
   const modelOptions = getModelOptions();
@@ -130,16 +150,42 @@ const AIPanel: React.FC = () => {
 
   const saveAiSetting = useCallback(
     async (key: keyof AISettings, value: AISettings[keyof AISettings]) => {
+      if (key === 'aiGatewayApiKey' || key === 'openrouterApiKey') {
+        try {
+          const owner = user?.id ?? null;
+          if (isTauriAppPlatform()) {
+            await saveNativeAiCredential(owner, key, String(value ?? ''));
+          } else {
+            if (!owner || !token) throw new Error('Sign in to store AI API keys on Web.');
+            await saveWebAiCredential(token, key, String(value ?? ''));
+          }
+          const activeUser = JSON.parse(localStorage.getItem('user') || 'null') as {
+            id?: string;
+          } | null;
+          if ((activeUser?.id ?? null) !== owner) return;
+          setCredentialError('');
+        } catch {
+          setCredentialError(
+            isTauriAppPlatform()
+              ? _('The OS keychain could not save this API key. Try again.')
+              : _('The secure server could not save this API key. Try again.'),
+          );
+          return;
+        }
+      }
       const currentSettings = settingsRef.current;
       if (!currentSettings) return;
       const currentAiSettings: AISettings = currentSettings.aiSettings ?? DEFAULT_AI_SETTINGS;
       const newAiSettings: AISettings = { ...currentAiSettings, [key]: value };
+      if (key === 'aiGatewayApiKey' || key === 'openrouterApiKey') {
+        newAiSettings.credentialScope = aiUserScope(user?.id ?? null);
+      }
       const newSettings = { ...currentSettings, aiSettings: newAiSettings };
 
       setSettings(newSettings);
       await saveSettings(envConfig, newSettings);
     },
-    [envConfig, setSettings, saveSettings],
+    [envConfig, setSettings, saveSettings, user?.id, token, _],
   );
 
   const fetchOllamaModels = useCallback(async () => {
@@ -172,6 +218,7 @@ const AIPanel: React.FC = () => {
 
   // ---- OpenRouter: fetch /models list ----
   const fetchOpenrouterModelList = useCallback(async () => {
+    const requestId = ++openrouterModelRequestId.current;
     if (!enabled || !openrouterUrl || !openrouterKey) {
       setOpenrouterModels([]);
       return;
@@ -180,26 +227,28 @@ const AIPanel: React.FC = () => {
     setOpenrouterModelsError('');
     try {
       const models = await fetchOpenRouterModels(openrouterUrl, openrouterKey);
+      if (requestId !== openrouterModelRequestId.current) return;
       // Sort by id for a stable picker. Keep raw entries — UI uses
       // `name || id` so OpenRouter's friendly labels still show up.
       models.sort((a, b) => a.id.localeCompare(b.id));
       setOpenrouterModels(models);
-      if (models.length > 0 && !models.some((m) => m.id === openrouterModel)) {
-        setOpenrouterModel(models[0]!.id);
-      }
     } catch (e) {
+      if (requestId !== openrouterModelRequestId.current) return;
       setOpenrouterModels([]);
       setOpenrouterModelsError((e as Error).message || _('Failed to fetch models'));
     } finally {
-      setOpenrouterFetchingModels(false);
+      if (requestId === openrouterModelRequestId.current) setOpenrouterFetchingModels(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, openrouterUrl, openrouterKey, openrouterModel]);
+  }, [enabled, openrouterUrl, openrouterKey]);
 
   useEffect(() => {
     if (provider === 'openrouter' && enabled && openrouterKey && openrouterUrl) {
-      fetchOpenrouterModelList();
+      void fetchOpenrouterModelList();
     }
+    return () => {
+      openrouterModelRequestId.current += 1;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [provider, enabled, openrouterKey, openrouterUrl]);
 
@@ -246,23 +295,6 @@ const AIPanel: React.FC = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ollamaEmbeddingModel]);
-
-  useEffect(() => {
-    if (!isMounted.current) return;
-    if (gatewayKey !== (aiSettings.aiGatewayApiKey ?? '')) {
-      saveAiSetting('aiGatewayApiKey', gatewayKey);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gatewayKey]);
-
-  // ---- OpenRouter save effects ----
-  useEffect(() => {
-    if (!isMounted.current) return;
-    if (openrouterKey !== (aiSettings.openrouterApiKey ?? '')) {
-      saveAiSetting('openrouterApiKey', openrouterKey);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openrouterKey]);
 
   useEffect(() => {
     if (!isMounted.current) return;
@@ -446,6 +478,35 @@ const AIPanel: React.FC = () => {
         </SettingsRow>
       </BoxedList>
 
+      {credentialError && (
+        <p role='alert' className='text-error px-4 text-sm'>
+          {credentialError}
+        </p>
+      )}
+      {!isTauriAppPlatform() && !user && (
+        <p className='px-4 text-sm'>{_('Sign in to store AI API keys on Web.')}</p>
+      )}
+      {legacyCredentialNotice && (
+        <div role='alert' className='text-warning flex flex-wrap items-center gap-2 px-4 text-sm'>
+          <PiWarningCircle aria-hidden='true' className='size-4 shrink-0' />
+          <span>
+            {_(
+              'Older AI API keys were removed from local settings for security. Re-enter them to use cloud models.',
+            )}
+          </span>
+          <button
+            type='button'
+            className='btn btn-ghost btn-xs'
+            onClick={() => {
+              localStorage.removeItem(LEGACY_AI_CREDENTIAL_NOTICE_KEY);
+              setLegacyCredentialNotice(false);
+            }}
+          >
+            {_('Dismiss')}
+          </button>
+        </div>
+      )}
+
       {provider === 'ollama' && (
         <BoxedList title={_('Ollama Configuration')} className={disabledSection}>
           {/* Stacked-content rows: label-on-top, input below — used when the
@@ -540,8 +601,13 @@ const AIPanel: React.FC = () => {
               className='input input-sm w-full'
               value={gatewayKey}
               onChange={(e) => setGatewayKey(e.target.value)}
+              onBlur={() => {
+                if (gatewayKey !== (aiSettings.aiGatewayApiKey ?? '')) {
+                  void saveAiSetting('aiGatewayApiKey', gatewayKey);
+                }
+              }}
               placeholder='vck_...'
-              disabled={!enabled}
+              disabled={!enabled || (!isTauriAppPlatform() && !user)}
             />
           </div>
           <div className='flex flex-col gap-2 pe-4 py-3'>
@@ -630,8 +696,13 @@ const AIPanel: React.FC = () => {
               className='input input-sm w-full'
               value={openrouterKey}
               onChange={(e) => setOpenrouterKey(e.target.value)}
+              onBlur={() => {
+                if (openrouterKey !== (aiSettings.openrouterApiKey ?? '')) {
+                  void saveAiSetting('openrouterApiKey', openrouterKey);
+                }
+              }}
               placeholder='sk-or-...'
-              disabled={!enabled}
+              disabled={!enabled || (!isTauriAppPlatform() && !user)}
               autoComplete='off'
             />
           </div>
@@ -664,34 +735,23 @@ const AIPanel: React.FC = () => {
             />
           </div>
 
-          {/* Model picker — populated from the endpoint's /models */}
+          {/* Discovery suggestions must never replace a configured model ID. */}
           <div className='flex flex-col gap-2 pe-4 py-3'>
             <SettingLabel>{_('LLM Model')}</SettingLabel>
-            {openrouterModels.length > 0 ? (
-              <select
-                className='select select-sm bg-base-100 text-base-content w-full'
-                value={openrouterModel}
-                onChange={(e) => setOpenrouterModel(e.target.value)}
-                disabled={!enabled}
-              >
-                {openrouterModels.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name ? `${m.name} (${m.id})` : m.id}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              // Fallback: free-text input when /models isn't reachable yet,
-              // so the user isn't locked out before refreshing succeeds.
-              <input
-                type='text'
-                className='input input-sm w-full'
-                value={openrouterModel}
-                onChange={(e) => setOpenrouterModel(e.target.value)}
-                placeholder='openai/gpt-4o-mini'
-                disabled={!enabled}
-              />
-            )}
+            <input
+              type='text'
+              list='openrouter-chat-model-options'
+              className='input input-sm w-full'
+              value={openrouterModel}
+              onChange={(e) => setOpenrouterModel(e.target.value)}
+              placeholder='openai/gpt-4o-mini'
+              disabled={!enabled}
+            />
+            <datalist id='openrouter-chat-model-options'>
+              {openrouterModels.map((m) => (
+                <option key={m.id} value={m.id} label={m.name || m.id} />
+              ))}
+            </datalist>
             {openrouterModelsError && (
               <span className='text-error text-xs'>{openrouterModelsError}</span>
             )}
@@ -702,40 +762,26 @@ const AIPanel: React.FC = () => {
             )}
           </div>
 
-          {/* Embedding model — same /models listing as the LLM picker.
-              OpenAI's /v1/models doesn't tag chat vs embedding, so the two
-              selects share one list and the user picks the right one.
-              Falls back to free text when the list isn't loaded yet, so
-              the user can still type a known ID before refreshing. */}
+          {/* Chat and embedding IDs may be absent from /models on a compatible proxy. */}
           <div className='flex flex-col gap-2 pe-4 py-3'>
             <SettingLabel>{_('Embedding Model')}</SettingLabel>
-            {openrouterModels.length > 0 ? (
-              <select
-                className='select select-sm bg-base-100 text-base-content w-full'
-                value={openrouterEmbeddingModel}
-                onChange={(e) => setOpenrouterEmbeddingModel(e.target.value)}
-                disabled={!enabled}
-              >
-                <option value=''>{_('None (disable RAG)')}</option>
-                {openrouterModels.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name ? `${m.name} (${m.id})` : m.id}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                type='text'
-                className='input input-sm w-full'
-                value={openrouterEmbeddingModel}
-                onChange={(e) => setOpenrouterEmbeddingModel(e.target.value)}
-                placeholder='openai/text-embedding-3-small'
-                disabled={!enabled}
-              />
-            )}
+            <input
+              type='text'
+              list='openrouter-embedding-model-options'
+              className='input input-sm w-full'
+              value={openrouterEmbeddingModel}
+              onChange={(e) => setOpenrouterEmbeddingModel(e.target.value)}
+              placeholder='openai/text-embedding-3-small'
+              disabled={!enabled}
+            />
+            <datalist id='openrouter-embedding-model-options'>
+              {openrouterModels.map((m) => (
+                <option key={m.id} value={m.id} label={m.name || m.id} />
+              ))}
+            </datalist>
             <span className='text-base-content/60 text-xs'>
               {_(
-                'Optional. Leave blank if your endpoint does not support embeddings — chat will still work but RAG features will be unavailable.',
+                'Leave blank to use the default embedding model. For a compatible endpoint, enter a supported embedding model ID.',
               )}
             </span>
           </div>

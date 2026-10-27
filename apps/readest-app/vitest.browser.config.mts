@@ -51,6 +51,7 @@ export default defineConfig({
       'iso-639-3',
       'js-md5',
       'jwt-decode',
+      'lunr',
       'uuid',
     ],
     exclude: [

@@ -26,6 +26,53 @@ describe('ReedyDb · memory', () => {
     await svc.close();
   });
 
+  it('purges one book index and book/session memories without touching another account', async () => {
+    const a = 'scholar-ai:v1:user:a:paper';
+    const b = 'scholar-ai:v1:user:b:paper';
+    await reedy.ensureMemoryEmbeddingsTable(DIM);
+    for (const bookHash of [a, b]) {
+      await reedy.upsertBookMeta({
+        bookHash,
+        indexingStatus: 'indexed',
+        chunkCount: 0,
+        embeddingModel: 'test',
+        embeddingDim: DIM,
+        indexedAt: 1,
+        error: null,
+      });
+      await reedy.upsertMemory({
+        scope: 'book',
+        scopeKey: bookHash,
+        key: 'fact',
+        summary: bookHash,
+        embedding: unit([1, 0, 0, 0]),
+      });
+      await reedy.upsertMemory({
+        scope: 'session',
+        scopeKey: bookHash,
+        key: 'turn',
+        summary: bookHash,
+      });
+    }
+    await reedy.upsertMemory({
+      scope: 'user',
+      scopeKey: 'user:a',
+      key: 'preference',
+      summary: 'keep',
+    });
+    await reedy.purgeBookData(a);
+    expect(await reedy.getBookMeta(a)).toBeNull();
+    expect(await reedy.getBookMeta(b)).not.toBeNull();
+    expect(await reedy.listMemories('book', a, 10)).toEqual([]);
+    expect(await reedy.listMemories('session', a, 10)).toEqual([]);
+    expect(await reedy.listMemories('book', b, 10)).toHaveLength(1);
+    expect(await reedy.listMemories('user', 'user:a', 10)).toHaveLength(1);
+    const survivingVectors = await svc.select<{ scope_key: string }>(
+      'SELECT m.scope_key FROM reedy_memory_embeddings e JOIN reedy_memory m ON m.id = e.memory_id',
+    );
+    expect(survivingVectors.map((row) => row.scope_key)).toEqual([b]);
+  });
+
   describe('migration', () => {
     it('creates reedy_memory + idx_memory_scope', async () => {
       const tables = await svc.select<{ name: string }>(

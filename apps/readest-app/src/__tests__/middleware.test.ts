@@ -31,6 +31,18 @@ describe('middleware CORS preflight', () => {
     expect(res.headers.get('Access-Control-Max-Age')).toBe('86400');
   });
 
+  it('does not grant cross-origin access to the AI credential vault', () => {
+    for (const method of ['OPTIONS', 'GET']) {
+      const res = middleware(
+        new NextRequest('https://web.readest.com/api/scholar/ai/credentials', {
+          method,
+          headers: { origin: 'http://tauri.localhost' },
+        }),
+      );
+      expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull();
+    }
+  });
+
   it('allows Authorization and Content-Type when the preflight requests no headers', () => {
     const res = preflight();
     expect(res.headers.get('Access-Control-Allow-Headers')).toBe('Authorization, Content-Type');

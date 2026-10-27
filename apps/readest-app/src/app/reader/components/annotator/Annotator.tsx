@@ -3,6 +3,9 @@ import { RiDeleteBinLine } from 'react-icons/ri';
 
 import * as CFI from 'foliate-js/epubcfi.js';
 import { useEnv } from '@/context/EnvContext';
+import { useAuth } from '@/context/AuthContext';
+import { aiAccountScope } from '@/services/ai/accountScope';
+import { buildSelectedTextPrompt, type SelectedTextAction } from '@/services/ai/selectedTextPrompt';
 import {
   BookNote,
   BooknoteGroup,
@@ -148,6 +151,7 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets; gridInsets?:
 }) => {
   const _ = useTranslation();
   const { envConfig, appService } = useEnv();
+  const { user } = useAuth();
   const { settings, setSettingsDialogBookKey, setSettingsDialogOpen, setActiveSettingsItemId } =
     useSettingsStore();
   const { isDarkMode, isIPhoneDuo, themeCode } = useThemeStore();
@@ -161,7 +165,7 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets; gridInsets?:
   const getView = useReaderStore((s) => s.getView);
   const getViewsById = useReaderStore((s) => s.getViewsById);
   const getViewSettings = useReaderStore((s) => s.getViewSettings);
-  const { setNotebookVisible, setNotebookActiveTab } = useNotebookStore();
+  const { setNotebookVisible, setNotebookActiveTab, setAiSelectionPrompt } = useNotebookStore();
   const { clearBooknotesNav, isSideBarVisible } = useSidebarStore();
   const { listenToNativeTouchEvents } = useDeviceControlStore();
   const { loadCustomDictionaries } = useCustomDictionaryStore();
@@ -1958,6 +1962,22 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets; gridInsets?:
     setShowDeepLPopup(true);
   };
 
+  const handleAiSelection = (action: SelectedTextAction) => {
+    if (!selection?.text || !settings.aiSettings?.enabled) return;
+    setAiSelectionPrompt({
+      id: uniqueId(),
+      scope: aiAccountScope(bookKey.split('-')[0] || '', user?.id),
+      text: buildSelectedTextPrompt(
+        action,
+        selection.text,
+        viewSettings.translateTargetLang || getLocale(),
+      ),
+    });
+    setShowAnnotPopup(false);
+    setNotebookVisible(true);
+    setNotebookActiveTab('ai');
+  };
+
   // `oneTime` is required rather than defaulted: it decides whether this reads
   // the selection and stops or starts an open-ended session from it, and every
   // entry point here means the former. Defaulting it silently turned Ctrl/Cmd+R
@@ -2696,6 +2716,27 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets; gridInsets?:
         return { tooltipText: _(label), Icon, onClick: handleDictionary };
       case 'translate':
         return { tooltipText: _(label), Icon, onClick: handleTranslation };
+      case 'ai-explain':
+        return {
+          tooltipText: _(label),
+          Icon,
+          onClick: () => handleAiSelection('explain'),
+          disabled: !settings.aiSettings?.enabled,
+        };
+      case 'ai-summarize':
+        return {
+          tooltipText: _(label),
+          Icon,
+          onClick: () => handleAiSelection('summarize'),
+          disabled: !settings.aiSettings?.enabled,
+        };
+      case 'ai-translate':
+        return {
+          tooltipText: _(label),
+          Icon,
+          onClick: () => handleAiSelection('translate'),
+          disabled: !settings.aiSettings?.enabled,
+        };
       case 'tts':
         return {
           tooltipText: _(label),

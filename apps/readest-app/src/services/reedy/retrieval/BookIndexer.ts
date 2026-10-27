@@ -1,10 +1,17 @@
 import type { BookDoc } from '@/libs/document';
+import { assertBookAiScopeActive, runBookAiWork } from '@/services/ai/bookAiWork';
 import { ReedyDb } from '../db/ReedyDb';
 import type { ChunkRow, EmbeddingRow } from '../db/types';
 import type { EmbeddingModel } from '../models/EmbeddingModel';
 import { chunkSection, type ChunkOptions } from './CfiChunker';
 
 const DEFAULT_BATCH_SIZE = 16;
+
+function throwIfStopped(bookHash: string, signal?: AbortSignal, assertActive?: () => void): void {
+  if (signal?.aborted) throw new Error('indexing aborted');
+  assertActive?.();
+  assertBookAiScopeActive(bookHash);
+}
 
 export interface IndexBookOptions {
   /** Override CfiChunker tuning. Falls back to chunker defaults. */
@@ -15,6 +22,8 @@ export interface IndexBookOptions {
   getChapterTitle?: (sectionIndex: number) => string | null;
   /** AbortSignal honoured by the embedding model. */
   signal?: AbortSignal;
+  /** Internal: rejects work started before a local deletion, even after its marker clears. */
+  assertActive?: () => void;
 }
 
 /**
@@ -40,6 +49,31 @@ export class BookIndexer {
     bookHash: string,
     model: EmbeddingModel,
     options: IndexBookOptions = {},
+  ): Promise<void> {
+    return runBookAiWork(bookHash, async (deletionSignal, assertCurrent) => {
+      const controller = new AbortController();
+      const abort = () => controller.abort();
+      options.signal?.addEventListener('abort', abort);
+      deletionSignal.addEventListener('abort', abort);
+      if (options.signal?.aborted || deletionSignal.aborted) abort();
+      try {
+        await this.indexBookTracked(bookDoc, bookHash, model, {
+          ...options,
+          signal: controller.signal,
+          assertActive: assertCurrent,
+        });
+      } finally {
+        options.signal?.removeEventListener('abort', abort);
+        deletionSignal.removeEventListener('abort', abort);
+      }
+    });
+  }
+
+  private async indexBookTracked(
+    bookDoc: BookDoc,
+    bookHash: string,
+    model: EmbeddingModel,
+    options: IndexBookOptions,
   ): Promise<void> {
     // Chain on whatever's already in flight for this book so concurrent
     // callers serialize. We register the chained promise synchronously
@@ -69,46 +103,66 @@ export class BookIndexer {
     model: EmbeddingModel,
     options: IndexBookOptions,
   ): Promise<void> {
-    await this.reedy.upsertBookMeta({
-      bookHash,
-      indexingStatus: 'indexing',
-      chunkCount: 0,
-      embeddingModel: model.id,
-      embeddingDim: model.dim,
-      indexedAt: null,
-      error: null,
-    });
+    throwIfStopped(bookHash, options.signal, options.assertActive);
+    const generation = await this.reedy.beginBookIndex(bookHash);
+    throwIfStopped(bookHash, options.signal, options.assertActive);
+    await this.reedy.upsertBookMeta(
+      {
+        bookHash,
+        indexingStatus: 'indexing',
+        chunkCount: 0,
+        embeddingModel: model.id,
+        embeddingDim: model.dim,
+        indexedAt: null,
+        error: null,
+      },
+      generation,
+    );
     // Re-indexing must replace, not duplicate — drop any prior chunks +
     // embeddings for this book before writing the new ones. The meta row
     // upserted above is preserved (clearBookChunks only touches the chunk
     // and embedding tables).
-    await this.reedy.clearBookChunks(bookHash);
+    await this.reedy.clearBookChunks(bookHash, generation);
 
     try {
+      throwIfStopped(bookHash, options.signal, options.assertActive);
       const chunks = await this.collectChunks(bookDoc, bookHash, options);
+      throwIfStopped(bookHash, options.signal, options.assertActive);
 
       if (chunks.length === 0) {
-        await this.reedy.setIndexingStatus(bookHash, 'empty_index', {
-          chunkCount: 0,
-          indexedAt: Date.now(),
-          error: null,
-        });
+        await this.reedy.setIndexingStatus(
+          bookHash,
+          'empty_index',
+          {
+            chunkCount: 0,
+            indexedAt: Date.now(),
+            error: null,
+          },
+          generation,
+        );
         return;
       }
 
       await this.reedy.ensureEmbeddingsTable(model.dim);
-      await this.reedy.insertChunks(chunks);
+      throwIfStopped(bookHash, options.signal, options.assertActive);
+      await this.reedy.insertChunks(chunks, generation);
 
-      await this.embedAndStore(chunks, model, options);
+      await this.embedAndStore(chunks, model, options, generation);
+      throwIfStopped(bookHash, options.signal, options.assertActive);
 
-      await this.reedy.setIndexingStatus(bookHash, 'indexed', {
-        chunkCount: chunks.length,
-        indexedAt: Date.now(),
-        error: null,
-      });
+      await this.reedy.setIndexingStatus(
+        bookHash,
+        'indexed',
+        {
+          chunkCount: chunks.length,
+          indexedAt: Date.now(),
+          error: null,
+        },
+        generation,
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      await this.reedy.setIndexingStatus(bookHash, 'failed', { error: message });
+      await this.reedy.setIndexingStatus(bookHash, 'failed', { error: message }, generation);
       throw err;
     }
   }
@@ -121,6 +175,7 @@ export class BookIndexer {
     const all: ChunkRow[] = [];
     const sections = bookDoc.sections;
     for (let i = 0; i < sections.length; i++) {
+      throwIfStopped(bookHash, options.signal, options.assertActive);
       options.onProgress?.({ phase: 'chunking', current: i, total: sections.length });
       const section = sections[i]!;
       let doc: Document;
@@ -130,6 +185,7 @@ export class BookIndexer {
         console.warn('[Reedy] section createDocument failed', { sectionIndex: i, err });
         continue;
       }
+      throwIfStopped(bookHash, options.signal, options.assertActive);
       const title = options.getChapterTitle?.(i) ?? `Section ${i + 1}`;
       const sectionChunks = chunkSection(doc, i, title, bookHash, options.chunkOptions);
       // Rewrite the position index to be monotonic across the whole book —
@@ -146,19 +202,19 @@ export class BookIndexer {
     chunks: ChunkRow[],
     model: EmbeddingModel,
     options: IndexBookOptions,
+    generation: string,
   ): Promise<void> {
     const batchSize = Math.max(1, model.batchSize ?? DEFAULT_BATCH_SIZE);
     const total = chunks.length;
     let done = 0;
     for (let i = 0; i < total; i += batchSize) {
-      if (options.signal?.aborted) {
-        throw new Error('indexing aborted');
-      }
+      throwIfStopped(chunks[0]!.bookHash, options.signal, options.assertActive);
       const batch = chunks.slice(i, i + batchSize);
       const vectors = await model.embed(
         batch.map((c) => c.text),
         { signal: options.signal },
       );
+      throwIfStopped(chunks[0]!.bookHash, options.signal, options.assertActive);
       if (vectors.length !== batch.length) {
         throw new Error(
           `embedding model returned ${vectors.length} vectors for ${batch.length} inputs`,
@@ -173,7 +229,7 @@ export class BookIndexer {
         }
         return { chunkId: c.id, bookHash: c.bookHash, embedding: v };
       });
-      await this.reedy.insertEmbeddings(rows);
+      await this.reedy.insertEmbeddings(rows, generation);
       done += batch.length;
       options.onProgress?.({ phase: 'embedding', current: done, total });
     }

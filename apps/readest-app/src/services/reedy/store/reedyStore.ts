@@ -59,6 +59,7 @@ export type ReedyMessage = ReedyUserMessage | ReedyAssistantMessage;
 
 export interface ReedyStoreState {
   messages: ReedyMessage[];
+  scope: string | null;
   /** True while a turn is being processed by the runtime. */
   isRunning: boolean;
   /** The active turn's assistantMessageId so we know which message to mutate on each event. */
@@ -72,10 +73,12 @@ export interface ReedyStoreState {
   applyEvent: (event: ReedyEvent) => void;
   finishTurn: () => void;
   reset: () => void;
+  activateScope: (scope: string) => void;
 }
 
 export const useReedyStore = create<ReedyStoreState>((set, get) => ({
   messages: [],
+  scope: null,
   isRunning: false,
   activeAssistantMessageId: null,
   abortController: null,
@@ -114,7 +117,20 @@ export const useReedyStore = create<ReedyStoreState>((set, get) => ({
     set({ isRunning: false, activeAssistantMessageId: null, abortController: null });
   },
 
+  activateScope(scope) {
+    if (get().scope === scope) return;
+    get().abortController?.abort();
+    set({
+      scope,
+      messages: [],
+      isRunning: false,
+      activeAssistantMessageId: null,
+      abortController: null,
+    });
+  },
+
   reset() {
+    get().abortController?.abort();
     set({
       messages: [],
       isRunning: false,
