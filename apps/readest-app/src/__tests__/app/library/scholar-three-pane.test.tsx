@@ -16,6 +16,10 @@ vi.mock('@/utils/book', () => ({
   formatDate: (date: string) => date,
 }));
 
+vi.mock('@/app/library/components/ScholarTranslationPanel', () => ({
+  default: () => <div data-testid='translation-panel' />,
+}));
+
 vi.mock('@/components/metadata/BookDetailView', () => ({
   default: ({ book }: { book: Book }) => <div data-testid='book-details'>{book.title}</div>,
 }));
@@ -60,6 +64,7 @@ describe('Scholar three-pane library', () => {
     expect(within(list).getByText('Paper B')).toBeTruthy();
     fireEvent.click(within(list).getByRole('button', { name: /Paper C/ }));
     expect(screen.getByTestId('book-details').textContent).toBe('Paper C');
+    expect(screen.getByTestId('translation-panel')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Book' }));
     fireEvent.click(screen.getByRole('button', { name: 'Edit Metadata' }));

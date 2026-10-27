@@ -1,6 +1,8 @@
 # Agent 状态
 
-更新时间：2026-10-23。
+更新时间：2026-10-26。
+
+最新进展：Phase 5 已以服务器本地 4B 模型、真实论文摘录和来源门禁完成非生产自验收（PR #53）；Phase 6 的翻译 Worker、真实双栏/公式表格样本、取消重试、服务器全量单测与 GitHub baseline/PR checks/CodeQL/Nix checks 通过（草稿 PR #54）。Phase 7 的 Android x86_64 APK 构建通过，但模拟器 E2E 两轮均在首个套件等待阅读页时超时（其余 16 项通过、2 项跳过）；正在修复。没有真机，移动端保持 experimental。开发、编译和 Git 推送在 Linux 服务器执行。
 
 ## 已完成
 
@@ -174,3 +176,7 @@ Phase 5 新增 [SQLite 删除栅栏](docs/evidence/phase5/sqlite-deletion-fence-
 ## Phase 5 final regression and native credential UI (2026-10-23)
 
 The server one-shot run on the SQLite fence revision initially failed 61 import tests because seven old fixtures mocked the native database as `{}`. After those fixtures supplied an `execute` stub, the affected 71 tests and final full suite passed: 1,243 files / 14,124 tests, 16 existing skips, 0 failures. TypeScript/Biome, Web production build, Tauri static build and Linux CEF debug build passed on the server. In an isolated Linux QA container, the current Phase 5 settings UI saved a synthetic OpenAI-compatible key to GNOME Keyring, restored it after app and D-Bus restart, and cleared it; settings files contained no plaintext. The AI tab and brain icon remained within the dialog at 1152×720, without horizontal overflow. See [SQLite replay](docs/evidence/phase5/sqlite-deletion-fence-2026-10-23.md) and [native credential evidence](docs/evidence/phase5/native-ai-credentials-2026-10-23.md). PR #51 Phase 3 was squash-merged to `main` as `9a5d4ffdc` with explicit approval. Phase 5 still needs real-model claim support and citation/refusal evaluation before self-acceptance.
+
+## Phase 6 服务器验证（2026-10-26）
+
+在服务器构建并运行独立 pdf2zh-next Worker 与 Web 候选；两页 BERT 双栏及 Attention 第 2 页公式/表格使用本地 4B 模型完成真实输出和视觉核对，源文哈希保持不变，译文独立关联，队列取消/重试通过。Worker 18/18、Web 定向 API/UI 和完整 Vitest 14,154/14,154、Lint 均通过，Web 生产候选镜像构建及回环健康通过。详细见 [Phase 6 验收记录](docs/evidence/phase6/acceptance-2026-10-26.md)。GitHub CI 尚待验收，Phase 5 语义质量与 Phase 7/8 尚未完成。
