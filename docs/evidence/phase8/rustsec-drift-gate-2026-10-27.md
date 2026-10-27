@@ -12,6 +12,6 @@ Scholar production dependency audit 新增独立 RustSec job：每次 PR 和主�
 
 为清除这四条，补丁将原版 `tantivy-sstable` 0.7.0 以保留 MIT 许可的方式放入 `packages/tantivy-sstable`，仅将其压缩依赖提高至 zstd 0.14.3。根锁文件现在选择 zstd-safe 8.2.0、zstd-sys 2.1.2。服务器容器中完成了根应用 `cargo check --locked`、该 crate 的 38 个单元测试、2 个原有集成测试和 1 个文档测试。另有迁移测试使用原版 zstd 0.13.3 生成的压缩索引文件，由新版 reader 读取全部抽样键；反向探针也验证旧 reader 能读取新版 writer 的文件。GitHub CI 新增同一迁移测试，并将用实时公告库重新扫描根锁文件。
 
-Windows 更新器依赖的 zip 4.6.1 包含三条公告。补丁保留 Tauri updater 2.11.0 的上游代码与双许可证，仅将 Windows zip 依赖升为 9；根锁文件移除 zip 4.6.1，并在服务器容器中通过 `cargo check -p Readest --locked`。Windows 候选包编译和安装启动仍需在 GitHub Windows runner 验证。
+Windows 更新器依赖的 zip 4.6.1 命中 [RUSTSEC-2026-0367](https://rustsec.org/advisories/RUSTSEC-2026-0367.html)、[0368](https://rustsec.org/advisories/RUSTSEC-2026-0368.html) 和 [0369](https://rustsec.org/advisories/RUSTSEC-2026-0369.html)，三条公告均在 zip 9.0.0 修复。补丁保留 Tauri updater 2.11.0 的上游代码与双许可证，仅将 Windows zip 依赖升为 9；根锁文件移除 zip 4.6.1，并在服务器容器中通过 `cargo check -p Readest --locked`。Windows 候选包编译和安装启动仍需在 GitHub Windows runner 验证。
 
 这两条仍是**未解决的发布阻断项**。绿色的漂移检查仅说明没有超出精确基线的新命中，不能代替风险处置。完整的先前调用范围分析见[原始审计](rust-dependency-audit-2026-10-26.md)。
