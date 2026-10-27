@@ -8,5 +8,7 @@ Its Apache-2.0 OR MIT license is retained in `LICENSE_APACHE-2.0`,
 
 Local change: require `zip` 9 instead of 4 for the Windows update archive
 extractor. The root lockfile resolves 9.1.1 and removes vulnerable zip 4.6.1.
-This retains updater support while applying the upstream zip security fixes.
+The fork rejects options that disable TLS certificate or hostname validation
+and always uses the normal request validation path. This retains updater
+support while applying the upstream zip security fixes.
 Remove this fork when a compatible upstream updater release uses zip 9.
