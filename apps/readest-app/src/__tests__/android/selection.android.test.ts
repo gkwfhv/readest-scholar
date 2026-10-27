@@ -42,12 +42,16 @@ describe.runIf(env)('Android text selection over CDP (#1553)', () => {
   let targets: SelectionTargets;
 
   beforeAll(async () => {
+    console.info('[android selection] opening fixture');
     page = await openFixtureBook(FIXTURE);
+    console.info('[android selection] fixture opened; finding chapter');
     // Start the search in the book's main text — front matter rarely has
     // full hyphenated paragraphs. Hyphenation itself is forced by the
     // harness (ensureHyphenation), so app settings don't matter.
     await gotoChapter(page, 'chapter\\s*4');
+    console.info('[android selection] finding hyphenation targets');
     targets = await findSelectionTargets(page);
+    console.info('[android selection] targets ready');
   }, 120_000);
 
   afterAll(() => {

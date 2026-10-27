@@ -145,6 +145,10 @@ const IMPORT_CHECKPOINT_INTERVAL_MS = 15 * 1000;
 // index over the same live library array, so overlapping runs re-import the
 // same files as duplicate rows (#5601).
 const enqueueImportRun = createSerialRunner();
+// URL changes during a cold-start VIEW intent can trigger a second library
+// initialization while the first one is importing. Both paths migrate the same
+// database and mutate the same library. Run them one at a time.
+const enqueueLibraryInit = createSerialRunner();
 const LIBRARY_SEARCH_MODES: LibrarySearchConfig['mode'][] = [
   'contains',
   'whole-words',
@@ -631,7 +635,9 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
         }
       }
       setLibrary(libraryBooks);
-      appService.saveLibraryBooks(libraryBooks);
+      // The next queued initialization must not read the library before this
+      // import is durable.
+      await appService.saveLibraryBooks(libraryBooks);
 
       console.log('Opening books:', bookIds);
       if (bookIds.length > 0) {
@@ -731,6 +737,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
   useEffect(() => {
     if (isInitiating.current) return;
     isInitiating.current = true;
+    let disposed = false;
 
     const initLogin = async () => {
       const appService = await envConfig.getAppService();
@@ -775,7 +782,10 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
       // Reuse the library from the store when we return from the reader
       const library = hasCachedLibrary ? libraryBooks : await appService.loadLibraryBooks();
       let opened = false;
-      if (checkOpenWithBooks) {
+      // A VIEW intent can arrive while the first library initialization is
+      // finishing. Its cleanup clears checkOpenWithBooks, but the unique
+      // reload URL still records that an incoming file needs to be consumed.
+      if (checkOpenWithBooks || new URLSearchParams(libraryInitKey).has('reload')) {
         opened = await handleOpenWithBooks(appService, library);
       }
       setCheckOpenWithBooks(opened);
@@ -837,8 +847,16 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     };
 
     initLogin().catch((error) => console.error('Failed to initialize login:', error));
-    initLibrary().catch(recoverFromInitFailure);
+    void enqueueLibraryInit(async () => {
+      // A queued run may belong to a route that has already navigated away.
+      // The root route also renders LibraryPage on mobile cold start.
+      if (disposed || !['/', '/library'].includes(window.location.pathname)) return;
+      await initLibrary();
+    }).catch((error) => {
+      if (!disposed) recoverFromInitFailure(error);
+    });
     return () => {
+      disposed = true;
       setCheckOpenWithBooks(false);
       setCheckLastOpenBooks(false);
       isInitiating.current = false;
