@@ -1,0 +1,451 @@
+name: Publish unsigned Readest Scholar release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: publish-unsigned-scholar-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    if: github.repository == 'gkwfhv/readest-scholar'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            target: aarch64-apple-darwin
+            bundle: dmg
+            extension: dmg
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+            bundle: dmg
+            extension: dmg
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+            bundle: nsis
+            extension: exe
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    env:
+      CI: 'true'
+      NEXT_PUBLIC_APP_PLATFORM: tauri
+      NEXT_PUBLIC_SCHOLAR_RELEASE: 'true'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+
+      # pnpm 11 has no standalone darwin-x64 binary; use its Node package on Intel.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+        if: matrix.os == 'macos-15-intel'
+        with:
+          node-version: 24
+
+      - name: Install pinned pnpm on macOS Intel
+        if: matrix.os == 'macos-15-intel'
+        run: |
+          npm install --global pnpm@11.1.1
+          test "$(pnpm --version)" = 11.1.1
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        if: matrix.os != 'macos-15-intel'
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@f0d9c3887740aee45f6153b24b3a6b815192ec16 # v2
+        with:
+          workspaces: apps/readest-app/src-tauri
+          key: scholar-desktop-${{ matrix.target }}
+
+      - name: Install locked dependencies
+        shell: bash
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Stage reader vendors
+        shell: bash
+        run: pnpm --filter @readest/readest-app setup-vendors
+
+      - name: Build Scholar web assets
+        shell: bash
+        run: |
+          cp apps/readest-app/.env.tauri apps/readest-app/.env.local
+          pnpm --filter @readest/readest-app build-tauri
+
+      - name: Build unsigned release installer
+        shell: bash
+        working-directory: apps/readest-app
+        run: pnpm tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundle }} --config src-tauri/scholar.release.json
+
+      - name: Verify candidate identity and checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p candidate
+          found=0
+          while IFS= read -r bundle; do
+            found=1
+            case "$(basename "$bundle")" in
+              *Scholar*) ;;
+              *) echo "::error::Candidate has an unexpected product name: $bundle"; exit 1 ;;
+            esac
+            cp "$bundle" candidate/
+          done < <(find target -type f -path "*/bundle/${{ matrix.bundle }}/*" -name "*.${{ matrix.extension }}" -print)
+          test "$found" -gt 0
+          if command -v sha256sum >/dev/null 2>&1; then
+            (cd candidate && sha256sum *.${{ matrix.extension }} > SHA256SUMS)
+          else
+            (cd candidate && shasum -a 256 *.${{ matrix.extension }} > SHA256SUMS)
+          fi
+          {
+            echo "Readest Scholar unsigned release candidate"
+            echo "commit=$(git rev-parse HEAD)"
+            echo "runner=${{ matrix.os }}"
+            echo "target=${{ matrix.target }}"
+            echo "bundle=${{ matrix.bundle }}"
+            echo "scope=unsigned public release; no platform code signature"
+          } > candidate/BUILD.txt
+          cat candidate/SHA256SUMS
+
+      - name: Verify installer against checksum manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd candidate
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum --check SHA256SUMS
+          else
+            shasum -a 256 --check SHA256SUMS
+          fi
+
+      - name: Install and launch macOS candidate
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mount="$RUNNER_TEMP/scholar-dmg"
+          app_copy="$RUNNER_TEMP/Readest Scholar.app"
+          mkdir -p "$mount"
+          hdiutil attach -quiet -readonly -nobrowse -mountpoint "$mount" candidate/*.dmg
+          trap 'hdiutil detach -quiet "$mount" >/dev/null 2>&1 || true' EXIT
+          app=$(find "$mount" -maxdepth 1 -type d -name '*.app' -print -quit)
+          test -n "$app"
+          bundle_id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")
+          test "$bundle_id" = io.github.gkwfhv.readestscholar
+          binary_name=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")
+          cp -R "$app" "$app_copy"
+          binary="$app_copy/Contents/MacOS/$binary_name"
+          test -x "$binary"
+          case "${{ matrix.target }}" in
+            aarch64-apple-darwin) expected_arch=arm64 ;;
+            x86_64-apple-darwin) expected_arch=x86_64 ;;
+            *) echo "::error::Unexpected macOS target"; exit 1 ;;
+          esac
+          test "$(lipo -archs "$binary")" = "$expected_arch"
+          node infra/release/inventory-scholar-installed.mjs candidate/*.dmg "$app_copy" macos-app-files "${{ matrix.target }}" candidate/PAYLOAD-FILES.cdx.json
+          "$binary" > "$RUNNER_TEMP/scholar-macos-startup.log" 2>&1 &
+          app_pid=$!
+          trap 'kill "$app_pid" 2>/dev/null || true; hdiutil detach -quiet "$mount" >/dev/null 2>&1 || true' EXIT
+          sleep 8
+          if ! kill -0 "$app_pid" 2>/dev/null; then
+            cat "$RUNNER_TEMP/scholar-macos-startup.log"
+            exit 1
+          fi
+          echo "Scholar macOS app stayed alive for 8 seconds"
+
+      - name: Install, launch, and uninstall Windows candidate
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = Get-ChildItem candidate -Filter *.exe | Select-Object -First 1
+          if (-not $installer) { throw 'NSIS installer missing' }
+          # Tauri NSIS installMode=both ignores /D in silent mode; inspect the actual install.
+          $install = Start-Process -FilePath $installer.FullName -ArgumentList '/S' -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "NSIS install failed: $($install.ExitCode)" }
+          $uninstallRoots = @(
+            'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*',
+            'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*',
+            'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+          )
+          $entry = Get-ItemProperty -Path $uninstallRoots -ErrorAction SilentlyContinue |
+            Where-Object { $_.DisplayName -like 'Readest Scholar*' } | Select-Object -First 1
+          if (-not $entry) { throw 'Scholar uninstall registration missing' }
+          $installDir = [string]$entry.InstallLocation
+          if (-not $installDir -or -not (Test-Path $installDir)) {
+            $uninstallPath = [string]$entry.UninstallString
+            if ($uninstallPath -match '^"([^"]+)"') { $uninstallPath = $Matches[1] }
+            $installDir = Split-Path $uninstallPath -Parent
+          }
+          if (-not (Test-Path $installDir)) { throw "Scholar install directory missing: $installDir" }
+          Write-Output "Scholar install directory: $installDir"
+          $binary = Get-ChildItem $installDir -Recurse -File -Filter 'readest-scholar.exe' | Select-Object -First 1
+          if (-not $binary) { throw 'Scholar executable missing after install' }
+          node infra/release/inventory-scholar-installed.mjs "$($installer.FullName)" "$installDir" windows-install-dir-files "${{ matrix.target }}" candidate/PAYLOAD-FILES.cdx.json
+          if ($LASTEXITCODE -ne 0) { throw 'Scholar installed file inventory failed' }
+          $app = Start-Process -FilePath $binary.FullName -PassThru
+          Start-Sleep -Seconds 8
+          $app.Refresh()
+          if ($app.HasExited) { throw "Scholar exited during startup: $($app.ExitCode)" }
+          Stop-Process -Id $app.Id -Force
+          $uninstaller = Get-ChildItem $installDir -Recurse -File -Filter 'uninstall.exe' | Select-Object -First 1
+          if (-not $uninstaller) { throw 'NSIS uninstaller missing' }
+          $uninstall = Start-Process -FilePath $uninstaller.FullName -ArgumentList '/S' -Wait -PassThru
+          if ($uninstall.ExitCode -ne 0) { throw "NSIS uninstall failed: $($uninstall.ExitCode)" }
+          if (Test-Path $binary.FullName) { throw 'Scholar executable remained after uninstall' }
+          Write-Output 'Scholar Windows install, startup, and uninstall passed'
+
+      - name: Attach production npm license report
+        shell: bash
+        run: |
+          pnpm --filter @readest/readest-app licenses list --json --prod > candidate/npm-licenses.json
+          node infra/release/check-scholar-npm-licenses.mjs candidate/npm-licenses.json
+
+      - name: Verify candidate provenance
+        shell: bash
+        run: |
+          node infra/release/verify-scholar-candidate.mjs candidate "$(git rev-parse HEAD)" \
+            "${{ matrix.target }}" "${{ github.run_id }}" candidate/PROVENANCE.json
+
+      - name: Upload candidate installer
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: scholar-desktop-${{ matrix.target }}-unsigned
+          path: candidate/
+          if-no-files-found: error
+          retention-days: 7
+
+  linux:
+    if: github.repository == 'gkwfhv/readest-scholar'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    env:
+      CI: 'true'
+      NEXT_PUBLIC_APP_PLATFORM: tauri
+      NEXT_PUBLIC_SCHOLAR_RELEASE: 'true'
+      TAURI_CEF_CARGO: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+
+      - uses: Swatinem/rust-cache@f0d9c3887740aee45f6153b24b3a6b815192ec16 # v2
+        with:
+          workspaces: apps/readest-app/src-tauri
+          key: scholar-linux-cef-candidate
+
+      - name: Install native build dependencies
+        run: |
+          sudo timeout 300s apt-get update -o Acquire::Retries=2 \
+            -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30
+          sudo env DEBIAN_FRONTEND=noninteractive timeout 1800s \
+            apt-get install -y -o Acquire::Retries=3 \
+            -o Acquire::http::Timeout=60 -o Acquire::https::Timeout=60 \
+            --no-install-recommends pkg-config libfontconfig-dev libgtk-3-dev \
+            libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev \
+            libappindicator3-dev librsvg2-dev patchelf xdg-utils xvfb dbus-x11 \
+            libxkbcommon-x11-0
+
+      - name: Install pinned CEF Tauri CLI
+        run: |
+          set -euo pipefail
+          cargo install tauri-cli --git https://github.com/readest/tauri \
+            --rev 6beeb209b5514f597a26f48b7a5b9fe4c59b5f12 --locked
+
+      - name: Install locked dependencies and vendors
+        run: |
+          pnpm install --frozen-lockfile --prefer-offline
+          pnpm --filter @readest/readest-app setup-vendors
+
+      - name: Build Scholar web assets
+        run: |
+          cp apps/readest-app/.env.tauri apps/readest-app/.env.local
+          pnpm --filter @readest/readest-app build-tauri
+
+      - name: Build unsigned release DEB
+        working-directory: apps/readest-app
+        run: pnpm tauri build --bundles deb --config src-tauri/scholar.release.json
+
+      - name: Verify package identity and checksum
+        run: |
+          set -euo pipefail
+          mkdir -p candidate
+          mapfile -t bundles < <(find target -type f -path '*/bundle/deb/*' -name '*.deb' -print)
+          test "${#bundles[@]}" -gt 0
+          for bundle in "${bundles[@]}"; do
+            package=$(dpkg-deb --field "$bundle" Package)
+            case "$package" in
+              *scholar*) ;;
+              *) echo "::error::Unexpected package identity: $package"; exit 1 ;;
+            esac
+            cp "$bundle" candidate/
+            dpkg-deb --field "$bundle" Package Version Architecture
+          done
+          (cd candidate && sha256sum *.deb > SHA256SUMS)
+          {
+            echo "Readest Scholar unsigned release Linux candidate"
+            echo "commit=$(git rev-parse HEAD)"
+            echo "runner=ubuntu-22.04"
+            echo "bundle=deb"
+            echo "scope=packaging smoke only; not signed or desktop accepted"
+          } > candidate/BUILD.txt
+          cat candidate/SHA256SUMS
+
+      - name: Verify DEB against checksum manifest
+        run: (cd candidate && sha256sum --check SHA256SUMS)
+
+      - name: Inventory Linux candidate payload files
+        run: python3 infra/release/inventory-scholar-deb.py candidate/*.deb candidate/PAYLOAD-FILES.cdx.json
+
+      - name: Install and launch candidate under Xvfb
+        run: |
+          set -euo pipefail
+          sudo dpkg -i candidate/*.deb
+          Xvfb :99 -screen 0 1280x800x24 >/tmp/scholar-xvfb.log 2>&1 &
+          xvfb_pid=$!
+          trap 'kill "$xvfb_pid" 2>/dev/null || true' EXIT
+          sleep 2
+          DISPLAY=:99 dbus-run-session -- bash -euo pipefail -c '
+            /usr/bin/readest-scholar >/tmp/scholar-app.log 2>&1 &
+            app_pid=$!
+            trap "kill $app_pid 2>/dev/null || true" EXIT
+            sleep 8
+            kill -0 "$app_pid"
+            dbus-send --session --dest=org.freedesktop.DBus \
+              --type=method_call --print-reply /org/freedesktop/DBus \
+              org.freedesktop.DBus.ListNames > /tmp/scholar-dbus-names.log
+            cat /tmp/scholar-dbus-names.log | grep -F 'SingleInstance'
+            grep -Fq 'io.github.gkwfhv.readestscholar.SingleInstance' /tmp/scholar-dbus-names.log
+            if grep -Fq 'com.bilingify.readest.SingleInstance' /tmp/scholar-dbus-names.log; then
+              echo "::error::Upstream Readest D-Bus identity leaked into Scholar candidate"
+              exit 1
+            fi
+          '
+
+      - name: Uninstall Linux candidate
+        run: |
+          set -euo pipefail
+          package=$(dpkg-deb --field candidate/*.deb Package)
+          sudo dpkg --remove "$package"
+          if test -e /usr/bin/readest-scholar; then
+            echo "::error::Scholar executable remained after DEB removal"
+            exit 1
+          fi
+
+      - name: Rehearse Linux package version transitions
+        run: sudo bash infra/release/verify-scholar-deb-transitions.sh candidate/*.deb
+
+      - name: Attach production npm license report
+        run: |
+          pnpm --filter @readest/readest-app licenses list --json --prod > candidate/npm-licenses.json
+          node infra/release/check-scholar-npm-licenses.mjs candidate/npm-licenses.json
+
+      - name: Verify candidate provenance
+        run: |
+          node infra/release/verify-scholar-candidate.mjs candidate "$(git rev-parse HEAD)" \
+            x86_64-unknown-linux-gnu "${{ github.run_id }}" candidate/PROVENANCE.json
+
+      - name: Upload candidate DEB
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: scholar-linux-x86_64-unsigned
+          path: candidate/
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    if: github.repository == 'gkwfhv/readest-scholar'
+    needs: [desktop, linux]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+        with:
+          node-version: 24
+
+      - name: Verify version tag and protected source
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version=$(node -p 'require("./apps/readest-app/src-tauri/scholar.release.json").version')
+          test "$RELEASE_TAG" = "v$version"
+          git fetch origin main --force
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+
+      - name: Download verified unsigned installers
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v7.0.0
+        with:
+          pattern: scholar-*-unsigned
+          path: artifacts
+
+      - name: Assemble release assets and evidence
+        run: |
+          set -euo pipefail
+          mkdir -p distribution evidence
+          find artifacts -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.deb' \) -print0 |
+            while IFS= read -r -d '' file; do cp "$file" distribution/; done
+          test "$(find distribution -maxdepth 1 -type f -name '*.dmg' | wc -l)" = 2
+          test "$(find distribution -maxdepth 1 -type f -name '*.exe' | wc -l)" = 1
+          test "$(find distribution -maxdepth 1 -type f -name '*.deb' | wc -l)" = 1
+          cp -R artifacts/. evidence/
+          (cd distribution && sha256sum *.dmg *.exe *.deb > SHA256SUMS)
+          tar -C evidence -czf distribution/readest-scholar-${{ github.ref_name }}-release-evidence.tar.gz .
+          version=$(node -p 'require("./apps/readest-app/src-tauri/scholar.release.json").version')
+          cat > distribution/RELEASE-NOTES.md <<EOF
+          ## Readest Scholar ${version}
+
+          此版本提供 macOS（Apple Silicon、Intel）、Windows x64 和 Linux x64 的无签名桌面安装包。
+
+          - 安装包由 GitHub Actions 从提交 ${{ github.sha }} 构建。
+          - 请在安装前用 SHA256SUMS 验证下载文件。
+          - macOS 与 Windows 会提示未签名或未知发布者；这是此版本的已知发布状态。
+          - 未启用应用内自动更新器；请从此 GitHub Release 获取后续版本。
+          - Android 与 iOS 尚无真机发布证据，保持 experimental，未在本 Release 中提供移动安装包。
+          - readest-scholar-${{ github.ref_name }}-release-evidence.tar.gz 包含每个平台的来源、载荷清单和生产 npm 许可证报告。
+          EOF
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test -z "$(gh release view "$RELEASE_TAG" --json id --jq .id 2>/dev/null || true)"
+          version=$(node -p 'require("./apps/readest-app/src-tauri/scholar.release.json").version')
+          gh release create "$RELEASE_TAG" \
+            --target "$RELEASE_SHA" \
+            --title "Readest Scholar $version" \
+            --notes-file distribution/RELEASE-NOTES.md \
+            distribution/*.dmg distribution/*.exe distribution/*.deb \
+            distribution/SHA256SUMS distribution/*-release-evidence.tar.gz
