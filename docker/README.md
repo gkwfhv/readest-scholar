@@ -1,121 +1,121 @@
-# Self-Hosting with Docker/Podman with Compose
+# 使用 Docker/Podman Compose 自托管
 
-## Stack
+## 服务组成
 
-| service         | Image                       | Description                                       |
-| --------------- | --------------------------- | ------------------------------------------------- |
-| **client**      | `ghcr.io/gkwfhv/readest`    | Readest Scholar web client                        |
-| **db**          | `supabase/postgres`         | psql db with supabase extensions                  |
-| **kong**        | `kong:2.8.1`                | api gateway routing requests to supabase services |
-| **auth**        | `supabase/gotrue:v2.185.0`  | auth service (email, JWT)                         |
-| **rest**        | `postgrest/postgrest:v14.3` | psql rest api                                     |
-| **minio**       | `pgsty/silo` (pinned)       | S3-compatible storage                             |
-| **minio-setup** | `pgsty/mc` (pinned)         | helper container to create S3 buckets             |
+| 服务 | 镜像 | 说明 |
+| --- | --- | --- |
+| **client** | `ghcr.io/gkwfhv/readest-scholar` | Readest Scholar Web 客户端 |
+| **db** | `supabase/postgres` | 带 Supabase 扩展的 PostgreSQL 数据库 |
+| **kong** | `kong:2.8.1` | 将请求路由到 Supabase 服务的 API 网关 |
+| **auth** | `supabase/gotrue:v2.185.0` | 认证服务（邮箱、JWT） |
+| **rest** | `postgrest/postgrest:v14.3` | PostgreSQL REST API |
+| **minio** | 固定版本的 `pgsty/silo` | 兼容 S3 的对象存储 |
+| **minio-setup** | 固定版本的 `pgsty/mc` | 创建 S3 存储桶的辅助容器 |
 
-### Exposed ports
+### 对外端口
 
-| Port   | Service          |
-| ------ | ---------------- |
-| `3000` | readest          |
-| `8000` | kong API gateway |
-| `9000` | MinIO S3 API     |
-| `9001` | MinIO console UI |
+| 端口 | 服务 |
+| --- | --- |
+| `3000` | Readest Scholar |
+| `8000` | Kong API 网关 |
+| `9000` | MinIO S3 API |
+| `9001` | MinIO 控制台 |
 
 ---
 
-## Running with Docker/Podman Compose
+## 使用 Docker/Podman Compose 运行
 
-### 1. setup .env
+### 1. 创建 `.env`
 
 ```bash
 cp docker/.env.example docker/.env
 ```
 
-update `docker/.env`:
+编辑 `docker/.env`：
 
-- update `POSTGRES_PASSWORD` to a strong password (32+ chars)
-- update `JWT_SECRET` to a random secret (32+ chars)
-- regenerate `ANON_KEY` and `SERVICE_ROLE_KEY` as HS256 JWTs signed with your `JWT_SECRET` (use [jwt.io](https://jwt.io/) or a similar tool):
-  - `ANON_KEY` payload: `{"role": "anon"}`
-  - `SERVICE_ROLE_KEY` payload: `{"role": "service_role"}`
-- set `MINIO_ROOT_PASSWORD` to a strong password
+- 将 `POSTGRES_PASSWORD` 和 `MINIO_ROOT_PASSWORD` 替换为高强度密码（至少 32 个字符）。
+- 将 `JWT_SECRET` 替换为随机密钥（至少 32 个字符）。
+- 使用 `JWT_SECRET` 生成 HS256 签名的 `ANON_KEY` 和 `SERVICE_ROLE_KEY` JWT（可使用 [jwt.io](https://jwt.io/) 或同类工具）：
+  - `ANON_KEY` 载荷：`{"role": "anon"}`
+  - `SERVICE_ROLE_KEY` 载荷：`{"role": "service_role"}`
 
-Scholar selects the maintained [Silo](https://github.com/pgsty/silo) release because
-the previous `quay.io/minio/*` community images no longer pull. The Silo and
-client images are pinned to multiarchitecture manifest digests in `compose.yaml`.
-Silo is AGPL-3.0; read its [compliance notes](https://github.com/pgsty/silo/blob/main/COMPLIANCE.md)
-before redistributing an image or offering a modified server over a network.
+Scholar 采用持续维护的 [Silo](https://github.com/pgsty/silo) 发行版，因为旧的
+`quay.io/minio/*` 社区镜像已无法拉取。Silo 和客户端镜像均以多架构清单摘要固定在
+`compose.yaml` 中。Silo 使用 AGPL-3.0 许可证；重新分发镜像或通过网络提供修改后的服务前，
+请阅读其[合规说明](https://github.com/pgsty/silo/blob/main/COMPLIANCE.md)。
 
-### 2. Start the Stack (pull prebuilt client image)
+### 2. 启动服务栈（拉取预构建客户端镜像）
 
-run from the `docker/` directory:
+在 `docker/` 目录执行：
 
 ```bash
 cd docker
 docker compose up -d
 ```
 
-this pulls `${READEST_IMAGE}` (default: a verified `ghcr.io/gkwfhv/readest` multiarchitecture digest) instead of building the client locally. The default digest is also recorded in `docker/.env.example`; update both when promoting a new Scholar image. `ghcr.io/gkwfhv/readest:main` is a moving tag for trying the newest web build, while the digest keeps a Compose deployment reproducible.
-the web client now reads `SUPABASE_PUBLIC_URL`, `SUPABASE_ANON_KEY`, `API_BASE_URL`, `OBJECT_STORAGE_TYPE`, `SELF_HOSTED`, `STORAGE_FIXED_QUOTA`, and `TRANSLATION_FIXED_QUOTA` from runtime
-container env, so custom self-hosted values work with pulled images.
+此命令会拉取 `${READEST_IMAGE}`，默认值是已验证的
+`ghcr.io/gkwfhv/readest-scholar` 多架构摘要，而不会在本地构建客户端。默认摘要同时记录在
+`docker/.env.example`；发布新的 Scholar 镜像时，请同时更新两处。
+`ghcr.io/gkwfhv/readest-scholar:main` 是用于尝试最新 Web 构建的浮动标签；固定摘要可让
+Compose 部署保持可复现。
 
-`SELF_HOSTED` unlocks every premium feature — third-party cloud sync (WebDAV,
-Google Drive, S3, OneDrive), offline Read Aloud downloads, Send to Readest —
-with or without a signed-in user. the image defaults it to `true`, so a pulled
-image is unlocked even if your `compose.yaml` predates the variable. set
-`SELF_HOSTED=false` in `docker/.env` only if you run a hosted service that sells
-the plans.
+Web 客户端从运行时容器环境读取 `SUPABASE_PUBLIC_URL`、`SUPABASE_ANON_KEY`、
+`API_BASE_URL`、`OBJECT_STORAGE_TYPE`、`SELF_HOSTED`、`STORAGE_FIXED_QUOTA` 和
+`TRANSLATION_FIXED_QUOTA`，因此拉取的镜像可以使用自托管环境中的自定义值。
 
-if you prefer Docker Hub, set `READEST_IMAGE` in `docker/.env`, for example:
+`SELF_HOSTED` 会为已登录和未登录用户启用全部高级功能，包括第三方云同步
+（WebDAV、Google Drive、S3、OneDrive）、离线朗读下载和 Send to Readest。镜像默认将它设为
+`true`，即使旧版 `compose.yaml` 没有该变量，拉取的镜像也会解锁。只有在运营销售套餐的
+托管服务时，才应在 `docker/.env` 中设置 `SELF_HOSTED=false`。
+
+如需使用 Docker Hub 镜像，请在 `docker/.env` 中设置 `READEST_IMAGE`，例如：
 
 ```env
-READEST_IMAGE=docker.io/your-dockerhub-username/readest:latest
+READEST_IMAGE=docker.io/your-dockerhub-username/readest-scholar:latest
 ```
 
-replace `your-dockerhub-username` with the Docker Hub namespace that publishes your `readest` image.
-for official images, use the namespace configured for this repository's Docker Hub publishing secrets.
+请将 `your-dockerhub-username` 替换为发布兼容镜像的 Docker Hub 命名空间。官方镜像应使用
+本仓库 Docker Hub 发布密钥所配置的命名空间。
 
-Scholar tags currently published by `.github/workflows/docker-image.yml`:
-- `main`: moving image from the default branch
-- `sha-<commit>`: image built from that commit
+`.github/workflows/docker-image.yml` 当前发布的 Scholar 标签：
 
-Use a verified `@sha256:<manifest digest>` for a stable deployment. The `main` tag may advance without changing an existing `docker/.env`.
+- `main`：默认分支的浮动镜像。
+- `sha-<commit>`：由对应提交构建的镜像。
 
-### Build locally instead of pulling
+生产环境请使用已验证的 `@sha256:<manifest digest>` 固定版本。即使 `docker/.env` 不变，
+`main` 标签仍可能向前移动。
 
-> **Prerequisites for local builds**: the `packages/foliate-js` and `packages/simplecc-wasm` git submodules must be initialized before building:
+### 在本地构建，而非拉取镜像
+
+> **本地构建前提**：构建前必须初始化 `packages/foliate-js` 和
+> `packages/simplecc-wasm` Git 子模块：
+>
 > ```bash
 > git submodule update --init packages/foliate-js packages/simplecc-wasm
 > ```
-> In GitHub Codespaces this is done automatically via `.devcontainer/devcontainer.json`.
+>
+> GitHub Codespaces 会通过 `.devcontainer/devcontainer.json` 自动完成此步骤。
 
 ```bash
 cd docker
 docker compose -f compose.yaml -f compose.build.yaml up --build -d
 ```
 
-### 3. Access
+### 3. 访问服务
 
-- Readest app: `http://localhost:3000`
-- MinIO console: `http://localhost:9001` (login with `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD`)
+- Readest Scholar：`http://localhost:3000`
+- MinIO 控制台：`http://localhost:9001`（使用 `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` 登录）
 
-### Upgrading an existing deployment
+### 升级已有部署
 
-**Object storage migration:** An existing MinIO or earlier `pgsty/minio` volume
-must be backed up and restored into an isolated stack with the new image before
-changing the running service. Verify account login, object hashes, book download,
-and rollback from the untouched snapshot. Silo's current release does not
-support a rolling downgrade of a shared IAM backend; `docker compose pull &&
-up -d` is not a safe migration procedure for an existing data volume. The
-[Scholar decision record](../docs/adr/0003-silo-object-storage.md) describes
-the tested boundary and rollback procedure.
+**对象存储迁移：** 对于已有 MinIO 或早期 `pgsty/minio` 数据卷，必须先备份数据，再将其恢复到
+隔离的、使用新镜像的服务栈中，之后才能修改正在运行的服务。请验证账户登录、对象哈希、图书下载，
+并能从未改动的快照回滚。Silo 当前版本不支持对共享 IAM 后端进行滚动降级；对于既有数据卷，
+`docker compose pull && up -d` 不是安全的迁移方式。
+[Scholar 决策记录](../docs/adr/0003-silo-object-storage.md)说明了已测试的边界和回滚流程。
 
-For a deployment already using this pinned Silo release, client-only upgrades
-follow the steps below.
-
-pulling a newer client image does not touch the database volume, and the first-boot
-hook only runs when that volume is empty. so after an upgrade, apply any new
-migrations yourself:
+已使用此固定 Silo 版本的部署，可以按以下步骤只升级客户端。拉取较新的客户端镜像不会触及数据库卷，
+且首次启动钩子仅在数据库卷为空时执行。因此升级后请手动应用新增迁移：
 
 ```bash
 cd docker
@@ -124,38 +124,38 @@ docker compose up -d --no-deps client
 docker compose exec db /docker-entrypoint-initdb.d/zz-readest-migrations.sh
 ```
 
-the script records what it applied in `readest_meta.migrations` and skips those
-next time, so it is safe to repeat after every upgrade.
-
-if you had previously patched your database by hand, the script may stop on an
-`already exists` error. record that file as applied and run it again:
+该脚本会将已应用内容记录在 `readest_meta.migrations`，并在下次跳过它们，因此每次升级后
+重复执行也是安全的。如果之前曾手动修改数据库，脚本可能因 `already exists` 错误停止。请先将
+该文件记为已应用，然后再次运行脚本：
 
 ```bash
 docker compose exec db psql -U supabase_admin -c \
   "INSERT INTO readest_meta.migrations (name) VALUES ('002_add_book_shares.sql') ON CONFLICT DO NOTHING"
 ```
 
-### Hot Reload (development)
+### 热重载（开发环境）
 
-> **Prerequisites**: submodules must be initialized (see above).
+> **前提**：必须先初始化子模块（见上文）。
 
-to develop using the compose stack, use `compose.dev.yaml` which sets the build target to `development-stage` (Next.js dev server) and mounts your local repo for hot reload:
+若要使用 Compose 服务栈进行开发，请使用 `compose.dev.yaml`。它会将构建目标设为
+`development-stage`（Next.js 开发服务器），并挂载本地仓库以支持热重载：
 
 ```bash
 cd docker
 docker compose -f compose.yaml -f compose.dev.yaml up --build -d
 ```
 
-the first mount overlays your local repo into the container. the remaining anonymous volumes shadow the directories that were pre-built inside the image, so the container's installed deps and vendor assets are used instead of what's on your host.
+第一个挂载会将本地仓库覆盖到容器中。其余匿名卷会遮蔽镜像中预构建的目录，因此容器会使用已安装的
+依赖和供应商资源，而不是主机上的同名目录。
 
-### Stop the Stack
+### 停止服务栈
 
 ```bash
 cd docker
 docker compose down
 ```
 
-to also remove volumes (database and storage data):
+如需同时删除卷（数据库和对象存储数据）：
 
 ```bash
 cd docker
@@ -164,36 +164,34 @@ docker compose down -v
 
 ---
 
-## Database schema
+## 数据库结构
 
-| path                          | role                                                                       |
-| ----------------------------- | -------------------------------------------------------------------------- |
-| `volumes/db/init/schema.sql`  | base schema (books, book_configs, book_notes, files)                         |
-| `volumes/db/migrations/*.sql` | every schema change since, applied in filename order                         |
-| `volumes/db/apply-migrations.sh` | applies the migrations and records them in `readest_meta.migrations`      |
+| 路径 | 作用 |
+| --- | --- |
+| `volumes/db/init/schema.sql` | 基础结构（图书、`book_configs`、`book_notes`、文件） |
+| `volumes/db/migrations/*.sql` | 此后的每项结构变更，按文件名顺序应用 |
+| `volumes/db/apply-migrations.sh` | 应用迁移并记录到 `readest_meta.migrations` |
 
-on an empty database volume the supabase image runs everything under
-`/docker-entrypoint-initdb.d` in glob order: its own `migrate.sh` (supabase core
-schema plus `init-scripts/100-schema.sql`, which is `schema.sql`), then
-`zz-readest-migrations.sh`, which is `apply-migrations.sh`. it globs the mounted
-migrations directory, so adding a migration file needs no compose change.
+空数据库卷启动时，Supabase 镜像会按 glob 顺序执行 `/docker-entrypoint-initdb.d` 下的内容：
+先运行它的 `migrate.sh`（Supabase 核心结构与 `init-scripts/100-schema.sql`，即
+`schema.sql`），再运行 `zz-readest-migrations.sh`，后者即
+`apply-migrations.sh`。它会匹配挂载的迁移目录，因此新增迁移文件时不需要修改 Compose 配置。
 
 ---
 
-## Serving from a custom domain
+## 使用自定义域名提供服务
 
-the browser talks to three of these services directly, so each needs a URL that
-resolves from outside the docker network:
+浏览器会直接访问下列三个服务，因此每项都需要一个能从 Docker 网络外解析的 URL：
 
-| variable              | what the browser uses it for                                   |
-| --------------------- | -------------------------------------------------------------- |
-| `SITE_URL`            | the readest client itself                                        |
-| `SUPABASE_PUBLIC_URL` | kong, which routes `/auth/v1/…` and `/rest/v1/…`                 |
-| `S3_PUBLIC_ENDPOINT`  | minio, reached through path-style presigned URLs                 |
+| 变量 | 浏览器用途 |
+| --- | --- |
+| `SITE_URL` | Readest 客户端自身 |
+| `SUPABASE_PUBLIC_URL` | Kong，路由 `/auth/v1/…` 与 `/rest/v1/…` |
+| `S3_PUBLIC_ENDPOINT` | MinIO，通过路径风格的预签名 URL 访问 |
 
-`SUPABASE_PUBLIC_URL` and `S3_PUBLIC_ENDPOINT` default to `http://${HOST_IP}:<port>`,
-which suits a plain IP/port deployment; set them in `docker/.env` to override that.
-putting everything on one origin also means no cross-origin requests at all:
+`SUPABASE_PUBLIC_URL` 和 `S3_PUBLIC_ENDPOINT` 默认值为
+`http://${HOST_IP}:<port>`，适用于直接使用 IP 和端口的部署；可在 `docker/.env` 中覆盖。
+将所有服务置于同一来源也意味着不会产生跨来源请求：
 
 ```env
 HOST_IP=your-domain.com
@@ -204,30 +202,26 @@ SUPABASE_PUBLIC_URL=https://your-domain.com
 S3_PUBLIC_ENDPOINT=https://your-domain.com
 ```
 
-`nginx.conf.example` is a working starting point for terminating TLS in front of
-the stack. two things it gets right that are easy to miss: the `Host` header has
-to reach minio unchanged or the presigned signatures will not verify, and the
-request body limit has to be lifted on the bucket location or large book uploads
-are truncated.
+`nginx.conf.example` 提供了在服务栈前终止 TLS 的可用起点。其中有两点容易遗漏：必须让
+`Host` 请求头原样传递给 MinIO，否则预签名校验会失败；同时必须提高存储桶路径的请求体大小
+限制，否则大型图书上传会被截断。
 
-### CJK fonts on a custom domain
+### 自定义域名上的中日韩字体
 
-the reader loads a few CJK webfont bundles from Readest's CDN, which only sends
-`Access-Control-Allow-Origin` for readest.com origins, so the browser blocks them
-on a self-hosted domain. mirror
-`https://storage.readest.com/public/font/dist/<Family>/` (and the `.woff2` files it
-references) onto a path your proxy serves, then point the client at it:
+阅读器会从 Readest CDN 加载少量中日韩 Web 字体包。该 CDN 仅为 readest.com 来源发送
+`Access-Control-Allow-Origin`，因此浏览器会在自托管域名上阻止这些字体。请将
+`https://storage.readest.com/public/font/dist/<Family>/` 及其引用的 `.woff2` 文件镜像到
+代理服务器提供的路径，再让客户端使用该位置：
 
 ```env
 FONT_BASE_URL=https://your-domain.com/fonts
 ```
 
-leaving `FONT_BASE_URL` empty keeps the default CDN. system and Google fonts are
-unaffected either way.
+保留空的 `FONT_BASE_URL` 会继续使用默认 CDN。系统字体和 Google 字体不会受影响。
 
 ---
 
-## Building the Dockerfile standalone
+## 单独构建 Dockerfile
 
 ```bash
 docker build \
@@ -237,7 +231,7 @@ docker build \
   .
 ```
 
-run the built image:
+运行构建好的镜像：
 
 ```bash
 docker run -p 3000:3000 \
@@ -258,6 +252,5 @@ docker run -p 3000:3000 \
   readest-client
 ```
 
-on Linux, some Docker setups do not resolve `host.docker.internal` by default.
-in that case, either replace it with your host IP or run with:
-`--add-host=host.docker.internal:host-gateway`.
+在 Linux 上，部分 Docker 配置默认无法解析 `host.docker.internal`。遇到此情况时，请改用
+主机 IP，或增加：`--add-host=host.docker.internal:host-gateway`。
