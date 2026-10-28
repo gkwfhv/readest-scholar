@@ -37,7 +37,7 @@ overrides:
   postcss: '>=8.5.23 <9'
   basic-ftp: '>=5.3.0'
   ip-address: '>=10.3.1 <11'
-  qs: '>=6.16.0'
+  qs: '>=6.16.1'
   '@xmldom/xmldom': '>=0.8.15 <0.9'
   browserslist: '>=4.28.7 <5'
   baseline-browser-mapping: '>=2.11.0 <3'
@@ -7688,10 +7688,6 @@ packages:
 
   pure-rand@8.4.0:
     resolution: {integrity: sha512-IoM8YF/jY0hiugFo/wOWqfmarlE6J0wc6fDK1PhftMk7MGhVZl88sZimmqBBFomLOCSmcCCpsfj7wXASCpvK9A==}
-
-  qs@6.16.0:
-    resolution: {integrity: sha512-h6fhOIaRrID2CbEY2fqs+7t+UXZo+MLAnU5gRIq85uFtdiUPCdsApMlHhXogKVM4HM2DVbIjGNTTYH2OcmP1vA==}
-    engines: {node: '>=0.6'}
 
   qs@6.16.1:
     resolution: {integrity: sha512-5Px6J7rfHBAGUhNQ3es4YzcOdBBw0SDcVtThJml4RdnKw4tKs2epA0kPZ+K8X+WiHktT93RHVcQ/3ym5aTCgtg==}
@@ -15377,7 +15373,7 @@ snapshots:
       extend: 3.0.2
       gaxios: 7.1.4
       google-auth-library: 10.6.2
-      qs: 6.16.0
+      qs: 6.16.1
       url-template: 2.0.8
     transitivePeerDependencies:
       - supports-color
@@ -17183,11 +17179,6 @@ snapshots:
   punycode@2.3.1: {}
 
   pure-rand@8.4.0: {}
-
-  qs@6.16.0:
-    dependencies:
-      es-define-property: 1.0.1
-      side-channel: 1.1.1
 
   qs@6.16.1:
     dependencies:
