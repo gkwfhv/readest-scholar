@@ -54,6 +54,10 @@ jobs:
           set -euo pipefail
           version=$(node -p 'require("./apps/readest-app/src-tauri/scholar.release.json").version')
           test "$RELEASE_TAG" = "v$version"
+      - name: Record Scholar release identity review
+        run: node infra/release/check-scholar-release-identity.mjs \
+          apps/readest-app/src-tauri/scholar.release.json apps/readest-app/src-tauri/Cargo.toml \
+          LICENSE LICENSES.md RELEASE-IDENTITY.json
       - name: Download only the reviewed candidate artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v7.0.0
         with:
@@ -78,6 +82,8 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: scholar-release-preflight
-          path: candidates/RELEASE-PREFLIGHT.json
+          path: |
+            candidates/RELEASE-PREFLIGHT.json
+            RELEASE-IDENTITY.json
           if-no-files-found: error
           retention-days: 90

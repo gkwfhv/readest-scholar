@@ -23,6 +23,7 @@
 
 - [x] Phase 4–7 代码与证据已按依赖顺序合入受保护主线，最终 PR 提交的必需检查通过。Phase 7 的 Android [最终证据 run 40327652442](https://github.com/gkwfhv/readest-scholar/actions/runs/40327652442) 与 iOS [最终证据 run 40328733437](https://github.com/gkwfhv/readest-scholar/actions/runs/40328733437) 已通过。
 - [ ] 清点正式品牌、应用图标、Bundle ID、URL scheme、更新源、分享扩展、小组件及容器镜像名称；复核 Readest 商标、AGPL 和第三方许可证。
+  - [发布身份与许可证复核记录](../evidence/phase8/release-identity-audit-2026-10-28.md)：静态 Scholar 发布身份检查已覆盖名称、ID、scheme 和禁用更新器；受保护预检会归档 RELEASE-IDENTITY.json。Cargo 元数据、商标和最终产物许可证仍待人工复核。
 - [ ] 在最终源码与每个平台候选产物上归档 SBOM、许可证和漏洞扫描结果；处理或经人工审批接受剩余 RustSec 项。
 - [ ] 为 Scholar 建立受保护的正式发布工作流，不复用上游签名、Discord、R2 或自动更新目标；本 PR 增加仅手动触发的 `Scholar protected release preflight`，它要求从当前 `main` 精确提交、四平台候选 run ID 与审批记录生成 90 天保留的预检报告，不创建 Release 或上传安装包。仓库管理员仍需在 GitHub 创建 `scholar-release` Environment，设置 required reviewers，并限制只有 `main` 可使用；签名和正式发布作业仍待凭据与单独审批。
 - [ ] 使用实际不同版本的应用二进制与合成用户数据，验证升级、数据迁移和回滚；PR #77 已完成 Linux 版本切换与 EPUB/书签保留，未触发模式迁移，其他平台仍待测。
