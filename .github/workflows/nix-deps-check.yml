@@ -44,3 +44,18 @@ jobs:
         cp ../../../Cargo.cef.lock ../../../Cargo.lock
         cp .cargo/cef.toml .cargo/config.toml
         cargo tree --locked --target x86_64-unknown-linux-gnu -p Readest > /dev/null
+
+  full-cef-package:
+    needs: [fod-hashes, cef-lock-graph]
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+    - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24
+    - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866
+      with:
+        name: readest
+    - name: Build Linux CEF package before merge
+      run: nix build -L .#default
