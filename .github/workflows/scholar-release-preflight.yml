@@ -1,0 +1,83 @@
+name: Scholar protected release preflight
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_commit:
+        description: Full 40-character commit at the current protected main tip
+        required: true
+        type: string
+      release_tag:
+        description: Release tag matching Scholar version, for example v0.12.17
+        required: true
+        type: string
+      candidate_run_id:
+        description: Completed four-platform Scholar candidate workflow run ID
+        required: true
+        type: string
+      approval_reference:
+        description: External legal/security/change approval reference
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  preflight:
+    if: github.repository == 'gkwfhv/readest-scholar' && github.ref == 'refs/heads/main'
+    environment:
+      name: scholar-release
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.source_commit }}
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+        with:
+          node-version: 24
+      - name: Require the current protected main source
+        env:
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+        run: |
+          set -euo pipefail
+          test "$SOURCE_COMMIT" = "$(git rev-parse HEAD)"
+          git fetch origin main --force
+          test "$SOURCE_COMMIT" = "$(git rev-parse origin/main)"
+      - name: Require release tag to match the Scholar version
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          version=$(node -p 'require("./apps/readest-app/src-tauri/scholar.release.json").version')
+          test "$RELEASE_TAG" = "v$version"
+      - name: Download only the reviewed candidate artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v7.0.0
+        with:
+          github-token: ${{ github.token }}
+          repository: gkwfhv/readest-scholar
+          run-id: ${{ inputs.candidate_run_id }}
+          pattern: scholar-*-debug
+          path: candidates
+      - name: Verify source-bound candidate provenance
+        env:
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          APPROVAL_REFERENCE: ${{ inputs.approval_reference }}
+        run: |
+          set -euo pipefail
+          version=$(node -p 'require("./apps/readest-app/src-tauri/scholar.release.json").version')
+          node infra/release/verify-scholar-release-preflight.mjs candidates "$SOURCE_COMMIT" \
+            "$version" "$CANDIDATE_RUN_ID" "$RELEASE_TAG" "$APPROVAL_REFERENCE" \
+            candidates/RELEASE-PREFLIGHT.json
+      - name: Upload preflight record
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: scholar-release-preflight
+          path: candidates/RELEASE-PREFLIGHT.json
+          if-no-files-found: error
+          retention-days: 90
