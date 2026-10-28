@@ -11,6 +11,10 @@ const releaseWorkflow = await readFile(".github/workflows/scholar-unsigned-relea
 if (!releaseWorkflow.includes("scope=unsigned public release; not signed; no platform code signature")) {
   throw new Error("Unsigned release workflow does not record its unsigned scope");
 }
+if (!releaseWorkflow.includes("base=${base/Readest Scholar_/Readest.Scholar_}") ||
+    !releaseWorkflow.includes("gh release upload \"$RELEASE_TAG\" --clobber")) {
+  throw new Error("Unsigned release workflow does not hash or replace published asset names");
+}
 const commit = "a".repeat(40);
 const runId = "40666304134";
 const target = "x86_64-unknown-linux-gnu";

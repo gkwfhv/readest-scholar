@@ -413,7 +413,12 @@ jobs:
           set -euo pipefail
           mkdir -p distribution evidence
           find artifacts -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.deb' \) -print0 |
-            while IFS= read -r -d '' file; do cp "$file" distribution/; done
+            while IFS= read -r -d '' file; do
+              base=$(basename "$file")
+              # GitHub release assets normalize spaces to dots; hash the published filename.
+              base=${base/Readest Scholar_/Readest.Scholar_}
+              cp "$file" "distribution/$base"
+            done
           test "$(find distribution -maxdepth 1 -type f -name '*.dmg' | wc -l)" = 2
           test "$(find distribution -maxdepth 1 -type f -name '*.exe' | wc -l)" = 1
           test "$(find distribution -maxdepth 1 -type f -name '*.deb' | wc -l)" = 1
@@ -441,11 +446,15 @@ jobs:
           RELEASE_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          test -z "$(gh release view "$RELEASE_TAG" --json id --jq .id 2>/dev/null || true)"
           version=$(node -p 'require("./apps/readest-app/src-tauri/scholar.release.json").version')
-          gh release create "$RELEASE_TAG" \
-            --target "$RELEASE_SHA" \
-            --title "Readest Scholar $version" \
-            --notes-file distribution/RELEASE-NOTES.md \
-            distribution/*.dmg distribution/*.exe distribution/*.deb \
-            distribution/SHA256SUMS distribution/*-release-evidence.tar.gz
+          assets=(distribution/*.dmg distribution/*.exe distribution/*.deb distribution/SHA256SUMS distribution/*-release-evidence.tar.gz)
+          if gh release view "$RELEASE_TAG" --json id --jq .id >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" --target "$RELEASE_SHA" --title "Readest Scholar $version" --notes-file distribution/RELEASE-NOTES.md
+            gh release upload "$RELEASE_TAG" --clobber "${assets[@]}"
+          else
+            gh release create "$RELEASE_TAG" \
+              --target "$RELEASE_SHA" \
+              --title "Readest Scholar $version" \
+              --notes-file distribution/RELEASE-NOTES.md \
+              "${assets[@]}"
+          fi
