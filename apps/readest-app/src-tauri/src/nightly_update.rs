@@ -110,6 +110,10 @@ pub async fn install_nightly_update<R: tauri::Runtime>(
     use tauri::Url;
     use tauri_plugin_updater::UpdaterExt;
 
+    if app.config().identifier == "io.github.gkwfhv.readestscholar" {
+        return Err("Readest Scholar update channel is not configured".into());
+    }
+
     let url = Url::parse(&endpoint).map_err(|e| e.to_string())?;
     let updater = app
         .updater_builder()
