@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 const reportPath = process.argv[2];
 if (!reportPath) {
-  console.error("Usage: node check-scholar-rustsec.mjs <cargo-audit.json>");
+  console.error("Usage: node check-scholar-rustsec.mjs <cargo-audit.json> [default|cef]");
   process.exit(2);
 }
 
@@ -14,10 +14,24 @@ if (!Array.isArray(findings) || report.vulnerabilities.count !== findings.length
 
 // These findings remain release blockers. This baseline only prevents
 // unnoticed drift while the updater, LocalSend, and Turso/Tantivy paths are reviewed.
-const known = new Set([
-  "RUSTSEC-2021-0119|nix|0.19.1",
-  "RUSTSEC-2023-0071|rsa|0.9.10",
-]);
+const scope = process.argv[3] ?? "default";
+const baselines = {
+  default: [
+    "RUSTSEC-2021-0119|nix|0.19.1",
+    "RUSTSEC-2023-0071|rsa|0.9.10",
+  ],
+  cef: [
+    "RUSTSEC-2021-0119|nix|0.19.1",
+    "RUSTSEC-2023-0071|rsa|0.9.10",
+    "RUSTSEC-2026-0367|zip|4.6.1",
+    "RUSTSEC-2026-0368|zip|4.6.1",
+    "RUSTSEC-2026-0369|zip|4.6.1",
+  ],
+};
+if (!Object.hasOwn(baselines, scope)) {
+  throw new Error("Unknown RustSec scope: " + scope);
+}
+const known = new Set(baselines[scope]);
 const observed = new Set();
 const unexpected = [];
 for (const finding of findings) {
@@ -39,7 +53,7 @@ if (unexpected.length) {
   );
 }
 console.log(
-  "RustSec drift check: " + findings.length +
+  "RustSec drift check (" + scope + "): " + findings.length +
   " known unresolved finding(s); no new findings"
 );
 if (findings.length) {

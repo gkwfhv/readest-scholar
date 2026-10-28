@@ -6,6 +6,10 @@ on:
       - 'pnpm-lock.yaml'
       - 'Cargo.lock'
       - 'Cargo.cef.lock'
+      - 'Cargo.toml'
+      - 'apps/readest-app/src-tauri/Cargo.toml'
+      - 'apps/readest-app/src-tauri/.cargo/cef.toml'
+      - 'apps/readest-app/src-tauri/plugins/**/Cargo.toml'
       - 'nix/**'
       - 'flake.nix'
       - 'flake.lock'
@@ -26,3 +30,17 @@ jobs:
       # "specified:" / "got:" pair, instead of silently reusing an old cached
       # store and failing much later on main with ERR_PNPM_NO_OFFLINE_TARBALL.
       run: nix build -L --keep-going .#default.pnpmDeps .#default.tursoPluginDeps .#default.cargoDeps
+
+  cef-lock-graph:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+    - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+    - name: Verify Linux CEF lock matches the current manifests
+      working-directory: apps/readest-app/src-tauri
+      run: |
+        cp ../../../Cargo.cef.lock ../../../Cargo.lock
+        cp .cargo/cef.toml .cargo/config.toml
+        cargo tree --locked --target x86_64-unknown-linux-gnu -p Readest > /dev/null
