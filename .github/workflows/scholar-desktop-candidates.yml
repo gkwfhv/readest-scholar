@@ -208,6 +208,18 @@ jobs:
           if (Test-Path $binary.FullName) { throw 'Scholar executable remained after uninstall' }
           Write-Output 'Scholar Windows install, startup, and uninstall passed'
 
+      - name: Attach production npm license report
+        shell: bash
+        run: |
+          pnpm --filter @readest/readest-app licenses list --json --prod > candidate/npm-licenses.json
+          node infra/release/check-scholar-npm-licenses.mjs candidate/npm-licenses.json
+
+      - name: Verify candidate provenance
+        shell: bash
+        run: |
+          node infra/release/verify-scholar-candidate.mjs candidate "$(git rev-parse HEAD)" \
+            "${{ matrix.target }}" "${{ github.run_id }}" candidate/PROVENANCE.json
+
       - name: Upload candidate installer
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

@@ -37,6 +37,7 @@ jobs:
           node --check infra/compose/assert-loopback-ports.mjs
           node --check infra/compose/check-readiness.mjs
           node --check infra/staging/check-config.mjs
+          node --check infra/release/verify-scholar-candidate.mjs
           python3 -c 'import ast,pathlib; [ast.parse(pathlib.Path(p).read_text()) for p in ("infra/staging/prepare-env.py", "infra/staging/prepare-restore-env.py", "infra/staging/verify-restore-probe.py", "infra/staging/check-readiness.py", "infra/staging/check-bind-mounts.py")]'
       - name: Exercise backup failure and success paths
         run: bash infra/backup/test-backup-compose.sh
