@@ -449,7 +449,7 @@
   "File Name": "文件名",
   "Device Name": "設備名稱",
   "Connect to your KOReader Sync server.": "連接到您的 KOReader 同步伺服器。",
-  "Server URL": "伺服器 URL",
+  "Server URL": "伺服器網址",
   "Username": "用戶名",
   "Your Username": "您的用戶名",
   "Password": "密碼",
@@ -2621,5 +2621,11 @@
   "Translating": "翻譯中",
   "Canceled": "已取消",
   "Create a translated copy while keeping the original PDF": "建立翻譯副本，保留原始 PDF",
-  "The translated PDF contains invalid formatting. Contact your server administrator.": "譯文 PDF 包含無效格式，請聯絡伺服器管理員。"
+  "The translated PDF contains invalid formatting. Contact your server administrator.": "譯文 PDF 包含無效格式，請聯絡伺服器管理員。",
+  "Connect a self-hosted server": "連線到自託管伺服器",
+  "Self-hosted server": "自託管伺服器",
+  "Enter the URL you use to open your Readest Scholar web page.": "請輸入你用來開啟 Readest Scholar 網頁的網址。",
+  "Connecting...": "正在連線…",
+  "Save and restart": "儲存並重新啟動",
+  "The server configuration could not be saved.": "無法儲存伺服器設定。"
 }

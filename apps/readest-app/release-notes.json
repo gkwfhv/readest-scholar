@@ -1,5 +1,13 @@
 {
   "releases": {
+    "0.12.18": {
+      "date": "2026-10-28",
+      "notes": [
+        "Self-hosting: Desktop apps can now connect to a Readest Scholar server URL and load its runtime configuration.",
+        "Self-hosting: The sign-in screen only shows OAuth providers explicitly enabled by the server; email sign-in remains available.",
+        "Text-to-Speech: A connected self-hosted server enables custom speech services without a paid plan."
+      ]
+    },
     "0.12.16": {
       "date": "2026-10-14",
       "notes": [
