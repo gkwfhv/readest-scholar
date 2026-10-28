@@ -48,7 +48,7 @@ requireValue(Array.isArray(mobileSchemes) && mobileSchemes.length === 1 && mobil
 requireValue(Array.isArray(desktopSchemes) && desktopSchemes.length === 1 && desktopSchemes[0] === "readest-scholar", "Scholar desktop URL scheme mismatch");
 requireValue(license.trimStart().startsWith("GNU AFFERO GENERAL PUBLIC LICENSE"), "Root LICENSE must be AGPL-3.0 text");
 requireValue(licenseRegister.includes("待人工复核，不能用于发布"), "LICENSES.md must retain its manual-review warning");
-requireValue(licenseRegister.includes("readest.com"), "LICENSES.md must retain the upstream trademark review requirement");
+requireValue(licenseRegister.includes("确认没有把上游商标"), "LICENSES.md must retain the upstream trademark review requirement");
 
 const metadataReview = [];
 if (cargo.name !== '"Readest Scholar"') {

@@ -49,7 +49,7 @@ try {
     writeFile(configPath, JSON.stringify(config)),
     writeFile(cargoPath, cargo),
     writeFile(licensePath, "GNU AFFERO GENERAL PUBLIC LICENSE\nVersion 3\n"),
-    writeFile(licensesPath, "# 待人工复核，不能用于发布\n确认没有把 readest.com 当成 Scholar 的品牌。\n"),
+    writeFile(licensesPath, "# 待人工复核，不能用于发布\n确认没有把上游商标当成 Scholar 的品牌。\n"),
   ]);
   const accepted = run();
   if (accepted.status !== 0) throw new Error(accepted.stderr || accepted.stdout);
