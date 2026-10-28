@@ -71,8 +71,9 @@ async function sha256(path) {
   return digest.digest("hex");
 }
 const bundleHash = await sha256(join(directory, bundle));
-const sums = (await readFile(join(directory, "SHA256SUMS"), "utf8")).trimEnd().split("\n");
-if (sums.length !== 1 || sums[0] !== `${bundleHash}  ${bundle}`) {
+const sums = (await readFile(join(directory, "SHA256SUMS"), "utf8"))
+  .replace(/\r\n/g, "\n").trimEnd().split("\n");
+if (sums.length !== 1 || ![`${bundleHash}  ${bundle}`, `${bundleHash} *${bundle}`].includes(sums[0])) {
   throw new Error("SHA256SUMS does not match the only candidate bundle");
 }
 
