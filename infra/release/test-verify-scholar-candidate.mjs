@@ -7,6 +7,10 @@ import { join } from "node:path";
 const root = await mkdtemp(join(tmpdir(), "scholar-candidate-provenance-"));
 const script = new URL("./verify-scholar-candidate.mjs", import.meta.url);
 const version = JSON.parse(await readFile("apps/readest-app/src-tauri/scholar.release.json", "utf8")).version;
+const releaseWorkflow = await readFile(".github/workflows/scholar-unsigned-release.yml", "utf8");
+if (!releaseWorkflow.includes("scope=unsigned public release; not signed; no platform code signature")) {
+  throw new Error("Unsigned release workflow does not record its unsigned scope");
+}
 const commit = "a".repeat(40);
 const runId = "40666304134";
 const target = "x86_64-unknown-linux-gnu";

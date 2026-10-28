@@ -116,7 +116,7 @@ jobs:
             echo "runner=${{ matrix.os }}"
             echo "target=${{ matrix.target }}"
             echo "bundle=${{ matrix.bundle }}"
-            echo "scope=unsigned public release; no platform code signature"
+            echo "scope=unsigned public release; not signed; no platform code signature"
           } > candidate/BUILD.txt
           cat candidate/SHA256SUMS
 
