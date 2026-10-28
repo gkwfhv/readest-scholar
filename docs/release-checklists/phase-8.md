@@ -24,7 +24,7 @@
 - [x] Phase 4–7 代码与证据已按依赖顺序合入受保护主线，最终 PR 提交的必需检查通过。Phase 7 的 Android [最终证据 run 40327652442](https://github.com/gkwfhv/readest-scholar/actions/runs/40327652442) 与 iOS [最终证据 run 40328733437](https://github.com/gkwfhv/readest-scholar/actions/runs/40328733437) 已通过。
 - [ ] 清点正式品牌、应用图标、Bundle ID、URL scheme、更新源、分享扩展、小组件及容器镜像名称；复核 Readest 商标、AGPL 和第三方许可证。
 - [ ] 在最终源码与每个平台候选产物上归档 SBOM、许可证和漏洞扫描结果；处理或经人工审批接受剩余 RustSec 项。
-- [ ] 为 Scholar 建立受保护的正式发布工作流，不复用上游签名、Discord、R2 或自动更新目标；独立的短期候选包 CI 已建立，尚非正式 Release。
+- [ ] 为 Scholar 建立受保护的正式发布工作流，不复用上游签名、Discord、R2 或自动更新目标；本 PR 增加仅手动触发的 `Scholar protected release preflight`，它要求从当前 `main` 精确提交、四平台候选 run ID 与审批记录生成 90 天保留的预检报告，不创建 Release 或上传安装包。仓库管理员仍需在 GitHub 创建 `scholar-release` Environment，设置 required reviewers，并限制只有 `main` 可使用；签名和正式发布作业仍待凭据与单独审批。
 - [ ] 使用实际不同版本的应用二进制与合成用户数据，验证升级、数据迁移和回滚；PR #77 已完成 Linux 版本切换与 EPUB/书签保留，未触发模式迁移，其他平台仍待测。
 - [ ] 用正式签名证书构建和验证 macOS、Windows、Linux、Android、iOS 产物；各平台完成安装、启动、升级、卸载和回滚。无真机证据的平台只能列为 experimental。
 - [ ] 每个候选产物记录提交 SHA、构建运行、SHA-256、签名校验及下载地址；当前 CI 在本 PR 中增加无签名候选的来源清单，正式签名校验和发布下载地址仍待完成。完成用户验收后再申请发布审批。
