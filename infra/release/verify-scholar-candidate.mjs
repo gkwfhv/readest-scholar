@@ -3,37 +3,51 @@ import { createReadStream } from "node:fs";
 import { lstat, readFile, readdir, writeFile } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 
-const [candidateArg, expectedCommit, target, workflowRunId, outputArg] = process.argv.slice(2);
+const [candidateArg, expectedCommit, target, workflowRunId, outputArg, candidateProfile = "debug"] = process.argv.slice(2);
 const targets = {
   "x86_64-unknown-linux-gnu": {
     bundle: "deb", extension: ".deb", runner: "ubuntu-22.04",
-    artifact: "scholar-linux-x86_64-debug",
+    debugArtifact: "scholar-linux-x86_64-debug", releaseArtifact: "scholar-linux-x86_64-unsigned",
     scope: "deb-payload-files", property: ["scholar:architecture", "amd64"],
   },
   "aarch64-apple-darwin": {
     bundle: "dmg", extension: ".dmg", runner: "macos-15",
-    artifact: "scholar-desktop-aarch64-apple-darwin-debug",
+    debugArtifact: "scholar-desktop-aarch64-apple-darwin-debug", releaseArtifact: "scholar-desktop-aarch64-apple-darwin-unsigned",
     scope: "macos-app-files", property: ["scholar:target", "aarch64-apple-darwin"],
   },
   "x86_64-apple-darwin": {
     bundle: "dmg", extension: ".dmg", runner: "macos-15-intel",
-    artifact: "scholar-desktop-x86_64-apple-darwin-debug",
+    debugArtifact: "scholar-desktop-x86_64-apple-darwin-debug", releaseArtifact: "scholar-desktop-x86_64-apple-darwin-unsigned",
     scope: "macos-app-files", property: ["scholar:target", "x86_64-apple-darwin"],
   },
   "x86_64-pc-windows-msvc": {
     bundle: "nsis", extension: ".exe", runner: "windows-2022",
-    artifact: "scholar-desktop-x86_64-pc-windows-msvc-debug",
+    debugArtifact: "scholar-desktop-x86_64-pc-windows-msvc-debug", releaseArtifact: "scholar-desktop-x86_64-pc-windows-msvc-unsigned",
     scope: "windows-install-dir-files",
     property: ["scholar:target", "x86_64-pc-windows-msvc"],
   },
 };
+const profiles = {
+  debug: {
+    status: "unsigned-debug-candidate",
+    buildPrefix: "Readest Scholar unsigned debug",
+    artifact: (targetSpec) => targetSpec.debugArtifact,
+  },
+  release: {
+    status: "unsigned-release-candidate",
+    buildPrefix: "Readest Scholar unsigned release candidate",
+    artifact: (targetSpec) => targetSpec.releaseArtifact,
+  },
+};
 if (!candidateArg || !/^[0-9a-f]{40}$/.test(expectedCommit ?? "") ||
-    !Object.hasOwn(targets, target) || !/^[1-9][0-9]{5,}$/.test(workflowRunId ?? "") || !outputArg) {
-  console.error("Usage: node verify-scholar-candidate.mjs <candidate-dir> <40-char-commit> <target> <workflow-run-id> <output.json>");
+    !Object.hasOwn(targets, target) || !Object.hasOwn(profiles, candidateProfile) ||
+    !/^[1-9][0-9]{5,}$/.test(workflowRunId ?? "") || !outputArg) {
+  console.error("Usage: node verify-scholar-candidate.mjs <candidate-dir> <40-char-commit> <target> <workflow-run-id> <output.json> [debug|release]");
   process.exit(2);
 }
 
 const expected = targets[target];
+const profile = profiles[candidateProfile];
 const directory = resolve(candidateArg);
 const output = resolve(outputArg);
 if (resolve(directory, basename(output)) !== output || basename(output) !== "PROVENANCE.json") {
@@ -78,7 +92,7 @@ if (sums.length !== 1 || ![`${bundleHash}  ${bundle}`, `${bundleHash} *${bundle}
 }
 
 const build = await readFile(join(directory, "BUILD.txt"), "utf8");
-if (!build.startsWith("Readest Scholar unsigned debug")) {
+if (!build.startsWith(profile.buildPrefix)) {
   throw new Error("BUILD.txt does not identify an unsigned Scholar candidate");
 }
 const fields = new Map();
@@ -151,7 +165,7 @@ if (!licenses || typeof licenses !== "object" || Array.isArray(licenses) ||
 }
 const provenance = {
   schemaVersion: 1,
-  status: "unsigned-debug-candidate",
+  status: profile.status,
   product: "Readest Scholar",
   version,
   sourceCommit: expectedCommit,
@@ -160,7 +174,7 @@ const provenance = {
   repository: "gkwfhv/readest-scholar",
   runner: expected.runner,
   target,
-  artifactName: expected.artifact,
+  artifactName: profile.artifact(expected),
   bundle: {
     filename: bundle,
     sha256: bundleHash,

@@ -218,7 +218,7 @@ jobs:
         shell: bash
         run: |
           node infra/release/verify-scholar-candidate.mjs candidate "$(git rev-parse HEAD)" \
-            "${{ matrix.target }}" "${{ github.run_id }}" candidate/PROVENANCE.json
+            "${{ matrix.target }}" "${{ github.run_id }}" candidate/PROVENANCE.json release
 
       - name: Upload candidate installer
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -305,7 +305,7 @@ jobs:
           done
           (cd candidate && sha256sum *.deb > SHA256SUMS)
           {
-            echo "Readest Scholar unsigned release Linux candidate"
+            echo "Readest Scholar unsigned release candidate"
             echo "commit=$(git rev-parse HEAD)"
             echo "runner=ubuntu-22.04"
             echo "bundle=deb"
@@ -365,7 +365,7 @@ jobs:
       - name: Verify candidate provenance
         run: |
           node infra/release/verify-scholar-candidate.mjs candidate "$(git rev-parse HEAD)" \
-            x86_64-unknown-linux-gnu "${{ github.run_id }}" candidate/PROVENANCE.json
+            x86_64-unknown-linux-gnu "${{ github.run_id }}" candidate/PROVENANCE.json release
 
       - name: Upload candidate DEB
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
