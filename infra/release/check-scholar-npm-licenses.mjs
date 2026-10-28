@@ -37,7 +37,7 @@ if (unknown.length > 0) {
   const integrity = "sha512-Ls993zuzfayK269Svk9hzpeGUKob/sIgZzyHYdjQoAdQetRKpOLj+k/QQQ/6Qi0Yz65mlROrfd+Ev+1+7dz9Kw==";
   const lockedEntry = `  khroma@2.1.0:
     resolution: {integrity: ${integrity}}`;
-  if (!readFileSync("pnpm-lock.yaml", "utf8").includes(lockedEntry)) {
+  if (!readFileSync("pnpm-lock.yaml", "utf8").replace(/\r\n/g, "\n").includes(lockedEntry)) {
     throw new Error("The khroma@2.1.0 license exception no longer matches the locked tarball");
   }
 }
