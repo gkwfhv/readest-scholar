@@ -17,9 +17,6 @@ if (!Array.isArray(findings) || report.vulnerabilities.count !== findings.length
 const known = new Set([
   "RUSTSEC-2021-0119|nix|0.19.1",
   "RUSTSEC-2023-0071|rsa|0.9.10",
-  "RUSTSEC-2026-0367|zip|4.6.1",
-  "RUSTSEC-2026-0368|zip|4.6.1",
-  "RUSTSEC-2026-0369|zip|4.6.1",
 ]);
 const observed = new Set();
 const unexpected = [];
