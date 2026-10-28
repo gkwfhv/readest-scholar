@@ -1,309 +1,179 @@
-> **Readest Scholar 工程状态：Phase 0 / Phase 1 已按限定范围验收，Phase 2 开发中。** 本仓库基于 [Readest 上游](https://github.com/readest/readest) 开发，尚无 Scholar 正式安装包或 [GitHub Release](https://github.com/gkwfhv/readest-scholar/releases)。已发布的 Linux amd64/arm64 自托管 Web 镜像为 `ghcr.io/gkwfhv/readest:main`；完整 Docker 栈及固定摘要见 [自托管说明](docker/README.md)。当前验收与下一步见 [ROADMAP.md](ROADMAP.md)；完整设计见 [工程方案](Readest_Scholar_Agent_Engineering_Plan.md)。下文保留上游 Readest 的原始介绍和下载链接，不代表 Scholar 的发行渠道。
+> **Readest Scholar 工程状态：Phase 0–7 已在限定范围内验收，Phase 8 正在进行发布准备。** 本仓库基于 [Readest 上游](https://github.com/readest/readest) 开发，尚无 Scholar 正式安装包或 [GitHub Release](https://github.com/gkwfhv/readest-scholar/releases)。Linux amd64/arm64 自托管 Web 镜像为 [ghcr.io/gkwfhv/readest-scholar:main](https://github.com/gkwfhv/readest-scholar/pkgs/container/readest-scholar)；完整 Docker 栈及固定摘要见[自托管说明](docker/README.md)。当前验收与下一步见 [ROADMAP.md](ROADMAP.md)，完整设计见[工程方案](Readest_Scholar_Agent_Engineering_Plan.md)。
 
 <div align="center">
   <a href="https://readest.com?utm_source=github&utm_medium=referral&utm_campaign=readme" target="_blank">
-    <img src="https://github.com/readest/readest/blob/main/apps/readest-app/src-tauri/icons/icon.png?raw=true" alt="Readest Logo" width="20%" />
+    <img src="https://github.com/readest/readest/blob/main/apps/readest-app/src-tauri/icons/icon.png?raw=true" alt="Readest Scholar 标志" width="20%" />
   </a>
-  <h1>Readest</h1>
-  <br>
+  <h1>Readest Scholar</h1>
 
-[Readest][link-website] is an open-source ebook reader designed for immersive and deep reading experiences. Built as a modern rewrite of [Foliate](https://github.com/johnfactotum/foliate), it leverages [Next.js 16](https://github.com/vercel/next.js) and [Tauri v2](https://github.com/tauri-apps/tauri) to deliver a smooth, cross-platform experience across macOS, Windows, Linux, Android, iOS, and the Web.
+[Readest](https://readest.com?utm_source=github&utm_medium=referral&utm_campaign=readme) 是一款开源电子书阅读器，提供沉浸、专注的深度阅读体验。它是 [Foliate](https://github.com/johnfactotum/foliate) 的现代化重写版本，采用 [Next.js 16](https://github.com/vercel/next.js) 和 [Tauri v2](https://github.com/tauri-apps/tauri)，可在 macOS、Windows、Linux、Android、iOS 和 Web 上运行。
 
-[![Website][badge-website]][link-website]
-[![Web App][badge-web-app]][link-web-readest]
-[![OS][badge-platforms]][link-website]
-<br>
-[![Discord][badge-discord]][link-discord]
-[![Reddit][badge-reddit]][link-reddit]
-[![AGPL Licence][badge-license]](LICENSE)
-[![Language Coverage][badge-language-coverage]][link-locales]
-[![Donate][badge-donate]][link-donate]
-[![Latest release][badge-release]][link-gh-releases]
-[![Last commit][badge-last-commit]][link-gh-commits]
-[![Commits][badge-commit-activity]][link-gh-pulse]
-[![][badge-hellogithub]][link-hellogithub]
-[![Ask DeepWiki][badge-deepwiki]][link-deepwiki]
+[![网站](https://img.shields.io/badge/website-readest.com-orange)](https://readest.com)
+[![Web 应用](https://img.shields.io/badge/read%20online-web.readest.com-orange)](https://web.readest.com)
+[![AGPL 许可证](https://img.shields.io/badge/license-AGPL--3.0-teal)](LICENSE)
+[![最近提交](https://img.shields.io/github/last-commit/readest/readest?color=blue)](https://github.com/readest/readest/commits/main)
 
 </div>
 
 <p align="center">
-  <a href="#features">Features</a> •
-  <a href="#planned-features">Planned Features</a> •
-  <a href="#screenshots">Screenshots</a> •
-  <a href="#downloads">Downloads</a> •
-  <a href="#documentation">Documentation</a> •
-  <a href="#getting-started">Getting Started</a> •
-  <a href="#troubleshooting">Troubleshooting</a> •
-  <a href="#support">Support</a> •
-  <a href="#license">License</a>
+  <a href="#功能">功能</a> •
+  <a href="#规划中的功能">规划中的功能</a> •
+  <a href="#截图">截图</a> •
+  <a href="#下载">下载</a> •
+  <a href="#文档">文档</a> •
+  <a href="#从源码构建">从源码构建</a> •
+  <a href="#故障排除">故障排除</a> •
+  <a href="#支持">支持</a> •
+  <a href="#许可证">许可证</a>
 </p>
 
 <div align="center">
   <a href="https://readest.com" target="_blank">
-    <img src="./data/screenshots/landing_all_platforms.png" alt="Readest Banner" width="100%" />
+    <img src="./data/screenshots/landing_all_platforms.png" alt="Readest 横幅" width="100%" />
   </a>
 </div>
 
-## Features
+## 功能
 
+| 功能 | 说明 |
+| --- | --- |
+| 多格式支持 | 支持 EPUB、PDF、MOBI、KF8（AZW3）、FB2、CBZ、TXT、HTML 和 Markdown。 |
+| 阅读模式 | 在滚动和分页阅读之间切换，并自定义字体、布局、主题与颜色。 |
+| 搜索与批注 | 在书内或书库中全文搜索；添加高亮、书签和笔记。 |
+| 词典查询 | 使用内置词典，或在“设置 → 自定义词典”中导入 Yomitan ZIP/RDICT 等本地词典包。 |
+| [并排阅读](https://readest.com/#parallel-read) | 在分屏中同时阅读两本书或两份文档。 |
+| 书库与 OPDS | 整理电子书库，并通过 OPDS/Calibre 访问在线书库和目录。 |
+| 网页剪藏 | 使用“来自网页浏览器”剪藏页面；“来自网络小说”可复用浏览器会话导入章节和图片。 |
+| 翻译与朗读 | 支持 DeepL、Yandex、TTS、有声书，以及 EPUB 3 Media Overlays 伴读朗读。 |
+| 跨平台同步 | 同步图书、阅读进度、笔记和书签；支持与 [Koreader](https://github.com/koreader/koreader) 同步。 |
+| 无障碍与专注辅助 | 支持键盘导航、VoiceOver、TalkBack、NVDA、Orca、阅读标尺、逐段阅读和速读。 |
 
-| **Feature**                                | **Description**                                                                                                        |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| **Multi-Format Support**                   | Support EPUB, PDF, MOBI, KF8 (AZW3), FB2, CBZ, TXT, HTML, MD (Markdown)                                                                      |
-| **Scroll/Page View Modes**                 | Switch between scrolling or paginated reading modes.                                                                   |
-| **Full-Text Search**                       | Search inside a book or across the current library shelf to find relevant sections.                                    |
-| **Annotations and Highlighting**           | Add highlights, bookmarks, and notes to enhance your reading experience and use instant mode for quicker interactions. |
-| **Dictionary/Wikipedia Lookup**            | Look up words with built-in sources or import local packs, including Yomitan ZIP/RDICT, from Settings → Custom Dictionaries. |
-| **[Parallel Read][link-parallel-read]**    | Read two books or documents simultaneously in a split-screen view.                                                     |
-| **Customize Font and Layout**              | Adjust font, layout, theme mode, and theme colors for a personalized experience.                                       |
-| **Code Syntax Highlighting**               | Read software manuals with rich coloring of code examples.                                                             |
-| **File Association and Open With**         | Quickly open files in Readest in your file browser with one-click.                                                     |
-| **Library Management**                     | Organize, sort, and manage your entire ebook library.                                                                  |
-| **OPDS/Calibre Integration**               | Integrate OPDS/Calibre to access online libraries and catalogs.                                                        |
-| **Web Page Clipping**                      | Open websites, sign in, and clip pages with **From Web Browser**. **From Web Novel** can reuse your browser session to import selected chapters and their images. |
-| **Translate with DeepL and Yandex**        | From a single sentence to the entire book—translate instantly.                                                         |
-| **Audiobook Support**                      | Extend functionality to play and manage audiobooks.                                                        |
-| **Text-to-Speech (TTS) Support**           | Enjoy smooth, multilingual narration—even within a single book.                                                        |
-| [**Read-Along Narration**][link-readalong] | Play embedded EPUB 3 Media Overlays with timed highlighting, or pair a reflowable EPUB locally with DRM-free MP3, M4A, or M4B narration. [Storyteller][link-storyteller] remains an option for generating phrase-aligned EPUBs. |
-| **Sync across Platforms**                  | Synchronize book files, reading progress, notes, and bookmarks across all supported platforms.                         |
-| [**Sync with Koreader**][link-kosync-wiki] | Synchronize reading progress, notes, and bookmarks with [Koreader][link-koreader] devices.                             |
-| **Accessibility**                          | Provides full keyboard navigation and support for screen readers such as VoiceOver, TalkBack, NVDA, and Orca.         |
-| **Visual & Focus Aids**                    | Reading ruler, paragraph-by-paragraph reading mode, and speed reading features.                                        |
+## 规划中的功能
 
-## Planned Features
+<div align="right">🛠 开发中  |  🔄 已规划</div>
 
-<div align="right">🛠 Building  |  🔄 Planned</div>
+| 功能 | 说明 | 状态 |
+| --- | --- | --- |
+| AI 驱动的摘要 | 使用 AI 生成图书或章节摘要。 | 🛠 |
+| 高级阅读统计 | 跟踪阅读时长、已读页数等数据。 | 🛠 |
+| 手写批注 | 为兼容设备的手写笔批注提供支持。 | 🔄 |
 
-| **Feature**                     | **Description**                                                            | |
-| ------------------------------- | -------------------------------------------------------------------------- | ------------ |
-| **AI-Powered Summarization**    | Generate summaries of books or chapters using AI for quick insights.       | 🛠           |
-| **Advanced Reading Stats**      | Track reading time, pages read, and more for detailed insights.            | 🛠           |
-| **Handwriting Annotations**     | Add support for handwriting annotations using a pen on compatible devices. | 🔄           |
+欢迎关注持续改进与更新；贡献和建议都很受欢迎。
 
-Stay tuned for continuous improvements and updates! Contributions and suggestions are always welcome—let's build the ultimate reading experience together. 😊
+## 截图
 
-## Screenshots
+![批注](./data/screenshots/annotations.png)
+![文字转语音](./data/screenshots/tts_speak_aloud.png)
+![DeepL 翻译](./data/screenshots/deepl.png)
+![脚注](./data/screenshots/footnote_popover.png)
+![深色主题](./data/screenshots/theming_dark_mode.png)
 
-![Annotations](./data/screenshots/annotations.png)
+## 下载
 
-![TTS](./data/screenshots/tts_speak_aloud.png)
+本节链接下载的是上游 **Readest**，并非 **Readest Scholar**。Scholar 安装包尚未发布到本仓库的 [Releases](https://github.com/gkwfhv/readest-scholar/releases)。
 
-![DeepL](./data/screenshots/deepl.png)
-
-![Footnote](./data/screenshots/footnote_popover.png)
-
-![Theming Dark Mode](./data/screenshots/theming_dark_mode.png)
-
----
-
-## Downloads
-
-The links in this section download upstream **Readest**, not **Readest Scholar**. Scholar installers have not been published to this repository's [Releases](https://github.com/gkwfhv/readest-scholar/releases).
-
-### Mobile Apps
+### 移动应用
 
 <div align="center">
   <a href="https://apps.apple.com/app/id6738622779">
-    <img alt="Download on the App Store" src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" style="height: 50px;" /></a>&nbsp;&nbsp;&nbsp;&nbsp;
+    <img alt="在 App Store 下载" src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" style="height: 50px;" /></a>
   <a href="https://play.google.com/store/apps/details?id=com.bilingify.readest">
-    <img alt="Get it on Google Play" src="https://upload.wikimedia.org/wikipedia/commons/7/78/Google_Play_Store_badge_EN.svg" style="height: 50px;" /></a>
+    <img alt="在 Google Play 获取" src="https://upload.wikimedia.org/wikipedia/commons/7/78/Google_Play_Store_badge_EN.svg" style="height: 50px;" /></a>
 </div>
 
-### Platform-Specific Downloads
+- macOS / iOS / iPadOS：在 [App Store](https://apps.apple.com/app/apple-store/id6738622779?pt=127463130&ct=github&mt=8) 搜索并安装 **Readest**；也可通过 TestFlight 参加 beta 测试。
+- Windows / Linux / Android：访问 [readest.com](https://readest.com) 或 [GitHub Releases](https://github.com/readest/readest/releases) 下载 **Readest**。
+- Linux 用户也可从 [Flathub](https://flathub.org/en/apps/com.bilingify.readest) 安装。
+- Web：访问 [web.readest.com](https://web.readest.com)。
 
-- macOS / iOS / iPadOS : Search and install **Readest** on the [App Store][link-appstore], _also_ available on TestFlight for beta test (send your Apple ID to <readestapp@gmail.com> to request access).
-- Windows / Linux / Android: Visit and download **Readest** at [https://readest.com][link-website] or the [Releases on GitHub][link-gh-releases].
-- Linux users can also install [Readest on Flathub][link-flathub].
-- Web: Visit and use **Readest for Web** at [https://web.readest.com][link-web-readest].
+### Nix
 
-#### Nix
+> Nix 软件包仅支持 x86_64-linux，不支持 nix-darwin。
 
-> [!NOTE]
-> The Nix package supports `x86_64-linux` only. nix-darwin is not supported.
+无需安装即可试用。accept-flake-config 会启用项目二进制缓存；不使用它时，Nix 会从源码构建完整 Rust/Tauri 栈。
 
-Try it without installing. `--accept-flake-config` opts in to the project's
-binary cache; without it Nix builds the whole Rust/Tauri stack from source.
-
-```sh
+~~~
 nix run --accept-flake-config github:readest/readest
-```
+~~~
 
-To install it, add the input to your `flake.nix`:
+更多 Nix 配置请参阅上游项目文档。
 
-```nix
-# Due to a limitation in how Nix fetches submodules, a regular GitHub input type will fail to evaluate.
-inputs.readest = {
-  url = "https://github.com/readest/readest.git";
-  type = "git";
-  submodules = true;
-};
-```
+## 文档
 
-then in `configuration.nix` add the package and the cache. The cache is needed
-here as well because a flake input's own `nixConfig` does not apply to your
-system build:
+安装和使用 Readest 的指南、教程与常见问题见 [官方文档](https://readest.com/docs)。
 
-```nix
-environment.systemPackages = [
-  inputs.readest.packages.${pkgs.stdenv.hostPlatform.system}.default
-];
+贡献者参考资料位于仓库中：[架构](./apps/readest-app/docs/architecture.md)、[代码布局](./apps/readest-app/docs/code-layout.md)和[测试](./apps/readest-app/docs/testing.md)。
 
-nix.settings = {
-  substituters = [ "https://readest.cachix.org" ];
-  trusted-public-keys = [
-    "readest.cachix.org-1:KvKAePcZZCZB8ytFIAOGdgN3VRdmFHGRMHqMVckbt5c="
-  ];
-};
-```
+## 从源码构建
 
-## Documentation
+要从最新提交构建 Readest，请参阅[入门指南](./CONTRIBUTING.md#getting-started)。
 
-Guides, tutorials, and FAQs for installing and using Readest live in the official documentation:
+## 故障排除
 
-📖 **[https://readest.com/docs][link-docs]**
+### Windows 无法启动（缺少 Edge WebView2 Runtime）
 
-Contributor references live in the repository: [architecture](./apps/readest-app/docs/architecture.md),
-[code layout](./apps/readest-app/docs/code-layout.md), and
-[testing](./apps/readest-app/docs/testing.md).
+**症状：** 双击 readest.exe 后没有任何反应，任务管理器中也没有进程；标准安装包和便携版都可能受影响。
 
-## Building from Source
+**原因：** 系统缺少、使用了过期版本或未正确安装 Microsoft Edge WebView2 Runtime。Readest 依赖它在 Windows 上渲染界面。
 
-To build Readest from the latest commit, see [Getting Started](./CONTRIBUTING.md#getting-started).
+**解决方法：**
 
-## Troubleshooting
+1. 在 Windows 的“添加或删除程序”中查找 “Microsoft Edge WebView2 Runtime”。
+2. 从 Microsoft 下载 [WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2?form=MA13LH)；如需离线安装包，请以管理员身份运行。
+3. 安装或更新后再次启动 readest.exe；如仍无效，请重启电脑后重试。
 
-### 1. Readest Won’t Launch on Windows (Missing Edge WebView2 Runtime)
+更多信息见 [readest/readest#358](https://github.com/readest/readest/issues/358)，也可在 [Discord](https://discord.gg/gntyVNk3BJ) 提供环境、日志和复现步骤寻求支持。
 
-**Symptom**
+### Linux 在 Wayland / Niri 上无法启动
 
-- When you double-click readest.exe, nothing happens. No window appears, and Task Manager does not show the process.
-- This can affect both the standard installer and the portable version.
+当前 Linux 构建（包括 Flatpak）使用带 X11 窗口后端的 CEF，因此 Wayland 会话需要 XWayland。没有 DISPLAY 时，较旧构建会在打开窗口前以 Runtime(CreateWindow) 退出。
 
-**Cause**
+在 Niri 上，请安装 xwayland-satellite 0.7 或更高版本并重启会话。Niri 25.08 及更高版本可按需启动它并为应用设置 DISPLAY。参阅 [Niri 的 XWayland 设置说明](https://niri-wm.github.io/niri/Xwayland.html)。
 
-- Microsoft Edge WebView2 Runtime is either missing, outdated, or improperly installed on your system. Readest depends on WebView2 to render the interface on Windows.
-
-**How to Fix**
-
-1. Check if WebView2 is installed
-   - Open “Add or Remove Programs” (a.k.a. Apps & features) on Windows. Look for “Microsoft Edge WebView2 Runtime.”
-2. Install or Update WebView2
-   - Download the WebView2 Runtime directly from Microsoft: [link](https://developer.microsoft.com/en-us/microsoft-edge/webview2?form=MA13LH).
-   - If you prefer an offline installer, download the offline package and run it as an Administrator.
-3. Re-run Readest
-   - After installing/updating WebView2, launch readest.exe again.
-   - If you still encounter problems, reboot your PC and try again.
-
-**Additional Tips**
-
-- If reinstalling once doesn’t work, uninstall Edge WebView2 completely, then reinstall it with Administrator privileges.
-- Verify your Windows installation has the latest updates from Microsoft.
-
-**Still Stuck?**
-
-- See Issue [readest/readest#358](https://github.com/readest/readest/issues/358) for further details, or head over to our [Discord][link-discord] server and open a support discussion with detailed logs of your environment and the steps you’ve taken.
-
-### Linux Fails to Launch on Wayland / Niri
-
-Current Linux builds, including Flatpak, use CEF with an X11 window backend.
-Wayland sessions therefore need XWayland. Without a `DISPLAY`, older builds exit
-with `Runtime(CreateWindow)` before opening a window.
-
-On Niri, install `xwayland-satellite` 0.7 or later using your distribution's package manager
-and restart your Niri session. Niri 25.08 and later can start it on demand and
-set `DISPLAY` for applications. See [Niri's XWayland setup instructions](https://niri-wm.github.io/niri/Xwayland.html).
-
-From a terminal in that session, check `printenv DISPLAY`, then launch Readest:
-
-```sh
+~~~
+printenv DISPLAY
 flatpak run com.bilingify.readest
-```
+~~~
 
-The Flatpak already requests the X11 socket. If you have customized its sandbox
-permissions, allow that socket as well. Setting `DISPLAY` to an arbitrary value
-does not start XWayland; use the value provided by your session.
-`--ozone-platform=wayland` cannot enable native Wayland support in this runtime,
-and WebKitGTK environment variables do not affect CEF.
+Flatpak 已请求 X11 socket。若修改过沙箱权限，也需要允许该 socket；不要随意设置 DISPLAY，使用会话提供的值。此运行时不能通过 ozone-platform=wayland 启用原生 Wayland 支持，WebKitGTK 环境变量也不会影响 CEF。
 
-## Contributors
+## 贡献者
 
-Readest is open-source, and contributions are welcome! Feel free to open issues, suggest features, or submit pull requests. Please **review our [contributing guidelines](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md) before you start**. We also welcome you to join our [Discord][link-discord] community for either support or contributing guidance.
+Readest 是开源项目，欢迎参与贡献。你可以提交 issue、提出功能建议或发起 pull request；开始前请先阅读[贡献指南](CONTRIBUTING.md)和[行为准则](CODE_OF_CONDUCT.md)。
 
 <a href="https://github.com/readest/readest/graphs/contributors">
   <p align="left">
-    <img width="500" src="https://contrib.rocks/image?repo=readest/readest" alt="A table of avatars from the project's contributors" />
+    <img width="500" src="https://contrib.rocks/image?repo=readest/readest" alt="项目贡献者头像表格" />
   </p>
 </a>
 
-## Support
+## 支持
 
-If Readest has been useful to you, consider supporting its development at [donate.readest.com](https://donate.readest.com), where you'll find all available donation methods, including GitHub Sponsors, PayPal, card payments, and crypto. Your contribution helps us fix bugs faster, improve performance, and keep building great features.
+如果 Readest 对你有所帮助，欢迎在 [donate.readest.com](https://donate.readest.com) 支持其开发。该页面提供 GitHub Sponsors、PayPal、银行卡和加密货币等方式。
 
-### Sponsors
+### 赞助商
 
 <p align="center">
-  <a title="Browser testing via TestMu AI" href="https://www.testmuai.com/?utm_medium=sponsor&utm_source=readest" target="_blank">
+  <a title="由 TestMu AI 提供浏览器测试" href="https://www.testmuai.com/?utm_medium=sponsor&utm_source=readest" target="_blank">
     <img src="https://raw.githubusercontent.com/readest/readest/refs/heads/main/data/sponsors/testmu-ai-logo.png" style="vertical-align: middle;" width="250" />
   </a>
 </p>
 
-## License
+## 许可证
 
-Readest is free software: you can redistribute it and/or modify it under the terms of the [GNU Affero General Public License](https://www.gnu.org/licenses/agpl-3.0.html) as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. See the [LICENSE](LICENSE) file for details.
+Readest 是自由软件：你可以依据 Free Software Foundation 发布的 [GNU Affero General Public License](https://www.gnu.org/licenses/agpl-3.0.html) 第 3 版或任何后续版本重新分发和/或修改它。详见 [LICENSE](LICENSE)。
 
-The following libraries and frameworks are used in this software:
+本软件使用了以下库和框架：
 
-- [foliate-js](https://github.com/johnfactotum/foliate-js), which is MIT licensed.
-- [zip.js](https://github.com/gildas-lormeau/zip.js), which is licensed under the BSD-3-Clause license.
-- [fflate](https://github.com/101arrowz/fflate), which is MIT licensed.
-- [PDF.js](https://github.com/mozilla/pdf.js), which is licensed under Apache License 2.0.
-- [daisyUI](https://github.com/saadeghi/daisyui), which is MIT licensed.
-- [marked](https://github.com/markedjs/marked), which is MIT licensed.
-- [next.js](https://github.com/vercel/next.js), which is MIT licensed.
-- [react-icons](https://github.com/react-icons/react-icons), which has various open-source licenses.
-- [react](https://github.com/facebook/react), which is MIT licensed.
-- [tauri](https://github.com/tauri-apps/tauri), which is MIT licensed.
+- [foliate-js](https://github.com/johnfactotum/foliate-js)，采用 MIT 许可证。
+- [zip.js](https://github.com/gildas-lormeau/zip.js)，采用 BSD-3-Clause 许可证。
+- [fflate](https://github.com/101arrowz/fflate)、[marked](https://github.com/markedjs/marked)、[next.js](https://github.com/vercel/next.js)、[react](https://github.com/facebook/react) 和 [tauri](https://github.com/tauri-apps/tauri)，采用 MIT 许可证。
+- [PDF.js](https://github.com/mozilla/pdf.js)，采用 Apache License 2.0。
+- [daisyUI](https://github.com/saadeghi/daisyui)，采用 MIT 许可证。
+- [react-icons](https://github.com/react-icons/react-icons)，采用多种开源许可证。
 
-The following fonts are utilized in this software, either bundled within the application or provided through web fonts:
-
-[Bitter](https://fonts.google.com/specimen/Bitter), [Fira Code](https://fonts.google.com/specimen/Fira+Code), [Inter](https://fonts.google.com/specimen/Inter), [Literata](https://fonts.google.com/specimen/Literata), [Merriweather](https://fonts.google.com/specimen/Merriweather), [Noto Sans](https://fonts.google.com/specimen/Noto+Sans), [Roboto](https://fonts.google.com/specimen/Roboto), [LXGW WenKai](https://github.com/lxgw/LxgwWenKai), [MiSans](https://hyperos.mi.com/font/en/), [Source Han](https://github.com/adobe-fonts/source-han-sans/), [WenQuanYi Micro Hei](http://wenq.org/wqy2/)
-
-We would also like to thank the [Web Chinese Fonts Plan](https://chinese-font.netlify.app) for offering open-source tools that enable the use of Chinese fonts on the web.
+本软件使用 Bitter、Fira Code、Inter、Literata、Merriweather、Noto Sans、Roboto、LXGW WenKai、MiSans、Source Han 和 WenQuanYi Micro Hei 等字体；感谢 [Web Chinese Fonts Plan](https://chinese-font.netlify.app) 提供让网页能够使用中文字体的开源工具。
 
 ---
 
-<div align="center" style="color: gray;">Happy reading with Readest!</div>
-
-[badge-website]: https://img.shields.io/badge/website-readest.com-orange
-[badge-web-app]: https://img.shields.io/badge/read%20online-web.readest.com-orange
-[badge-license]: https://img.shields.io/badge/license-AGPL--3.0-teal
-[badge-release]: https://img.shields.io/github/v/release/readest/readest?color=green
-[badge-platforms]: https://img.shields.io/badge/platforms-macOS%2C%20Windows%2C%20Linux%2C%20Android%2C%20iOS%2C%20Web%2C%20PWA-green
-[badge-last-commit]: https://img.shields.io/github/last-commit/readest/readest?color=blue
-[badge-commit-activity]: https://img.shields.io/github/commit-activity/m/readest/readest?color=blue
-[badge-discord]: https://img.shields.io/discord/1314226120886976544?color=5865F2&label=discord&labelColor=black&logo=discord&logoColor=white&style=flat-square
-[badge-hellogithub]: https://abroad.hellogithub.com/v1/widgets/recommend.svg?rid=8a5b6ade2aee461a8bd94e59200682a7&claim_uid=eRLUbPOy2qZtDgw&theme=small
-[badge-donate]: https://donate.readest.com/badge.svg
-[badge-deepwiki]: https://img.shields.io/badge/Ask-DeepWiki-blue
-[badge-reddit]: https://img.shields.io/reddit/subreddit-subscribers/readest?style=flat&logo=reddit&color=F37E41
-[badge-language-coverage]: https://img.shields.io/badge/coverage-53%25%20population%20🌍-green
-[link-donate]: https://donate.readest.com/?tickers=btc%2Ceth%2Csol%2Cusdc
-[link-appstore]: https://apps.apple.com/app/apple-store/id6738622779?pt=127463130&ct=github&mt=8
-[link-website]: https://readest.com?utm_source=github&utm_medium=referral&utm_campaign=readme
-[link-flathub]: https://flathub.org/en/apps/com.bilingify.readest
-[link-web-readest]: https://web.readest.com
-[link-docs]: https://readest.com/docs
-[link-gh-releases]: https://github.com/readest/readest/releases
-[link-gh-commits]: https://github.com/readest/readest/commits/main
-[link-gh-pulse]: https://github.com/readest/readest/pulse
-[link-gh-wiki]: https://github.com/readest/readest/wiki
-[link-discord]: https://discord.gg/gntyVNk3BJ
-[link-parallel-read]: https://readest.com/#parallel-read
-[link-koreader]: https://github.com/koreader/koreader
-[link-hellogithub]: https://hellogithub.com/repository/8a5b6ade2aee461a8bd94e59200682a7
-[link-deepwiki]: https://deepwiki.com/readest/readest
-[link-locales]: https://github.com/readest/readest/tree/main/apps/readest-app/public/locales
-[link-kosync-wiki]: https://github.com/readest/readest/wiki/Sync-with-Koreader-devices
-[link-readalong]: https://github.com/readest/readest/blob/main/apps/readest-app/docs/read-along-narration.md
-[link-storyteller]: https://storyteller-platform.dev/
-[link-reddit]: https://reddit.com/r/readest/
+<div align="center" style="color: gray;">愿你在 Readest 中享受阅读！</div>
