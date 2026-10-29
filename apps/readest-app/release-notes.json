@@ -780,7 +780,9 @@
     },
     "0.9.57": {
       "date": "2025-06-14",
-      "notes": ["TTS: Fixed an issue to detect custom TTS engines on some Android devices"]
+      "notes": [
+        "TTS: Fixed an issue to detect custom TTS engines on some Android devices"
+      ]
     },
     "0.9.56": {
       "date": "2025-06-13",
@@ -1154,7 +1156,10 @@
     },
     "0.9.6": {
       "date": "2025-01-18",
-      "notes": ["Various enhancements for mobile platforms", "Fix DeepL translation API"]
+      "notes": [
+        "Various enhancements for mobile platforms",
+        "Fix DeepL translation API"
+      ]
     },
     "0.9.5": {
       "date": "2025-01-15",
@@ -1254,6 +1259,14 @@
       "notes": [
         "Initial release with full functionality for ePub rendering.",
         "Support multi-book reading with Parallel Read."
+      ]
+    },
+    "0.12.21": {
+      "date": "2026-10-29",
+      "notes": [
+        "PDF 翻译：自托管 worker 现在使用当前帐户 AI 助手选中的 AI Gateway 或 OpenAI 兼容聊天模型，不再依赖服务器共享模型密钥。",
+        "安全：模型 API 密钥以加密形式绑定到翻译任务，只由持有活跃租约的 worker 在内网获取；pdf2zh 子进程会降权且无法读取 worker 令牌。",
+        "验证：Web 生产构建、19 项前端测试、19 项 worker 测试、Compose 私密文件权限与数据库迁移回滚验证。"
       ]
     }
   }

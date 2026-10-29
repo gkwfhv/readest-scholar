@@ -16,6 +16,14 @@ vi.mock('@/utils/access', () => ({
 vi.mock('@/utils/supabase', () => ({
   createSupabaseAdminClient: () => ({ rpc: state.rpc, from: state.from }),
 }));
+vi.mock('@/server/scholarAiVault', () => ({
+  readAiVaultKey: () => Buffer.alloc(32, 9),
+  sealTranslationModelConfig: () => ({
+    nonce: Buffer.alloc(12, 1).toString('base64'),
+    ciphertext: Buffer.from('synthetic-envelope').toString('base64'),
+    authTag: Buffer.alloc(16, 2).toString('base64'),
+  }),
+}));
 import handler from '@/pages/api/scholar/translation-jobs';
 
 const fileId = '00000000-0000-4000-8000-000000000002';
@@ -34,7 +42,18 @@ function call(body: Record<string, unknown>) {
   } as unknown as NextApiResponse;
   return handler(req, res).then(() => res);
 }
-const valid = { fileId, versionId, idempotencyKey: requestId, mode: 'dual' };
+const valid = {
+  fileId,
+  versionId,
+  idempotencyKey: requestId,
+  mode: 'dual',
+  translationModel: {
+    provider: 'openrouter',
+    baseUrl: 'https://models.example.test/v1',
+    model: 'test/chat-model',
+    apiKey: 'synthetic-api-key',
+  },
+};
 beforeEach(() => {
   state.userId = '00000000-0000-4000-8000-000000000001';
   state.from.mockReset();
@@ -42,14 +61,17 @@ beforeEach(() => {
     data: { id: jobId, state: 'queued', progress: 0, source_file_id: fileId },
     error: null,
   });
-  process.env['SCHOLAR_TRANSLATION_MODEL'] = 'local-model';
 });
 describe('Scholar translation enqueue API', () => {
   it('queues only under the authenticated account', async () => {
     const res = await call({ ...valid, userId: '00000000-0000-4000-8000-000000000099' });
     expect(state.rpc).toHaveBeenCalledWith(
-      'enqueue_scholar_translation_job_v3',
-      expect.objectContaining({ p_user_id: state.userId, p_source_file_id: fileId }),
+      'enqueue_scholar_translation_job_v4',
+      expect.objectContaining({
+        p_user_id: state.userId,
+        p_source_file_id: fileId,
+        p_model: 'test/chat-model',
+      }),
     );
     expect(res.status).toHaveBeenCalledWith(202);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ id: jobId, state: 'queued' }));
@@ -61,7 +83,7 @@ describe('Scholar translation enqueue API', () => {
       whiteBackgroundPages: '2',
     });
     expect(state.rpc).toHaveBeenCalledWith(
-      'enqueue_scholar_translation_job_v3',
+      'enqueue_scholar_translation_job_v4',
       expect.objectContaining({
         p_user_id: state.userId,
         p_white_background_compat: true,
@@ -94,10 +116,15 @@ describe('Scholar translation enqueue API', () => {
     expect(res.status).toHaveBeenCalledWith(403);
     expect(state.rpc).not.toHaveBeenCalled();
   });
-  it('rejects invalid mode and identifiers', async () => {
+  it('rejects invalid mode, identifiers, and model profiles', async () => {
     const res = await call({ ...valid, mode: 'free', versionId: '../../etc/passwd' });
     expect(res.status).toHaveBeenCalledWith(400);
     expect(state.rpc).not.toHaveBeenCalled();
+    const local = await call({
+      ...valid,
+      translationModel: { ...valid.translationModel, baseUrl: 'http://127.0.0.1:11434' },
+    });
+    expect(local.status).toHaveBeenCalledWith(400);
   });
   it('does not silently reuse an idempotency key with different input', async () => {
     state.rpc.mockResolvedValue({ data: null, error: { code: 'PT409' } });

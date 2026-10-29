@@ -10,10 +10,31 @@ from unittest.mock import patch
 from io import BytesIO
 from pathlib import Path
 
-from worker import JobFailure, inspect_output, build_cli_command, merge_page_outputs, parse_page_selection, child_environment, engine_progress, find_output, output_key, prepare_asset_links, process_job, run_engine, verify_glossary_text, verify_source_bytes
+from worker import JobFailure, _validate_model_profile, inspect_output, build_cli_command, merge_page_outputs, parse_page_selection, child_environment, engine_progress, find_output, output_key, prepare_asset_links, process_job, run_engine, verify_glossary_text, verify_source_bytes
 
 
 class WorkerContractTests(unittest.TestCase):
+    def test_model_profile_rejects_loopback_and_mismatched_models(self):
+        job = {"model": "provider/model"}
+        with self.assertRaisesRegex(JobFailure, "model_config_unavailable"):
+            _validate_model_profile(
+                {
+                    "baseUrl": "https://127.0.0.1:11434/v1",
+                    "model": "provider/model",
+                    "apiKey": "synthetic-key",
+                },
+                job,
+            )
+        with self.assertRaisesRegex(JobFailure, "model_config_unavailable"):
+            _validate_model_profile(
+                {
+                    "baseUrl": "https://models.example.test/v1",
+                    "model": "other/model",
+                    "apiKey": "synthetic-key",
+                },
+                job,
+            )
+
     def test_cli_uses_local_engine_with_conservative_limits_and_no_secret_argument(self):
         args = build_cli_command(Path("/tmp/source.pdf"), Path("/tmp/out"), "dual")
         self.assertIn("--openaicompatible", args)

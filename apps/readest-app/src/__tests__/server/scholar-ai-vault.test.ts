@@ -3,7 +3,13 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { openAiCredential, readAiVaultKey, sealAiCredential } from '@/server/scholarAiVault';
+import {
+  openAiCredential,
+  openTranslationModelConfig,
+  readAiVaultKey,
+  sealAiCredential,
+  sealTranslationModelConfig,
+} from '@/server/scholarAiVault';
 
 const alice = '00000000-0000-4000-8000-000000000001';
 const bob = '00000000-0000-4000-8000-000000000002';
@@ -16,6 +22,23 @@ describe('Scholar AI credential envelope', () => {
     expect(openAiCredential(key, alice, 'openrouterApiKey', sealed)).toBe('synthetic-secret');
     expect(() => openAiCredential(key, bob, 'openrouterApiKey', sealed)).toThrow();
     expect(() => openAiCredential(key, alice, 'aiGatewayApiKey', sealed)).toThrow();
+  });
+
+  it('binds a translation model envelope to the specific user and job', () => {
+    const key = randomBytes(32);
+    const job = '00000000-0000-4000-8000-000000000003';
+    const sealed = sealTranslationModelConfig(
+      key,
+      alice,
+      job,
+      JSON.stringify({ model: 'test/chat-model', apiKey: 'synthetic-key' }),
+    );
+    expect(JSON.stringify(sealed)).not.toContain('synthetic-key');
+    expect(openTranslationModelConfig(key, alice, job, sealed)).toContain('test/chat-model');
+    expect(() => openTranslationModelConfig(key, bob, job, sealed)).toThrow();
+    expect(() =>
+      openTranslationModelConfig(key, alice, '00000000-0000-4000-8000-000000000004', sealed),
+    ).toThrow();
   });
 
   it('loads a restricted server key file and rejects broad permissions', () => {
