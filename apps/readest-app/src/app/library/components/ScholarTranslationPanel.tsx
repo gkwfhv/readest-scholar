@@ -220,7 +220,14 @@ export default function ScholarTranslationPanel({ book }: { book: Book }) {
       const next = (await response.json()) as Job;
       await loadJob(next.id);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Translation request failed');
+      const message = cause instanceof Error ? cause.message : 'Translation request failed';
+      setError(
+        message === 'Translation model is unavailable'
+          ? _(
+              'PDF translation is not configured on this server. Ask the server administrator to configure a translation model.',
+            )
+          : message,
+      );
     } finally {
       setBusy(false);
     }

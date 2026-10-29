@@ -7,6 +7,8 @@ export interface ReadestRuntimeConfig {
   translationFixedQuota?: number;
   fontBaseUrl?: string;
   selfHosted?: boolean;
+  /** Public web origin used to fetch a saved self-hosted configuration. */
+  selfHostedWebUrl?: string;
   scholarRelease?: boolean;
   authProviders?: string[];
 }
@@ -53,6 +55,7 @@ const parseRuntimeConfig = (value: unknown): ReadestRuntimeConfig | undefined =>
   const candidate = value as Record<string, unknown>;
   const supabaseUrl = normalizeOrigin(candidate['supabaseUrl']);
   const apiBaseUrl = normalizeOrigin(candidate['apiBaseUrl']);
+  const selfHostedWebUrl = normalizeOrigin(candidate['selfHostedWebUrl']);
   const supabaseAnonKey = candidate['supabaseAnonKey'];
   if (!supabaseUrl || !apiBaseUrl || typeof supabaseAnonKey !== 'string' || !supabaseAnonKey) {
     return undefined;
@@ -78,6 +81,7 @@ const parseRuntimeConfig = (value: unknown): ReadestRuntimeConfig | undefined =>
     fontBaseUrl:
       typeof candidate['fontBaseUrl'] === 'string' ? candidate['fontBaseUrl'] : undefined,
     selfHosted: true,
+    selfHostedWebUrl,
     scholarRelease: candidate['scholarRelease'] === true || undefined,
     authProviders: parseAuthProviders(candidate['authProviders']),
   };
@@ -112,7 +116,10 @@ export const loadSelfHostedRuntimeConfig = async (
 
   const config = parseRuntimeConfig(await response.json());
   if (!config) throw new Error('The server did not provide a valid self-hosted configuration.');
-  return config;
+  // The public web URL can differ from the server's API origin. Persist the URL
+  // the person entered so the configuration dialog never suggests an internal
+  // HTTP endpoint after a successful HTTPS connection.
+  return { ...config, selfHostedWebUrl: origin };
 };
 
 export const saveSelfHostedRuntimeConfig = (config: ReadestRuntimeConfig): void => {

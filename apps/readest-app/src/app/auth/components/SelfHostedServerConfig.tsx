@@ -17,7 +17,8 @@ export default function SelfHostedServerConfig() {
   useEffect(() => {
     if (!isOpen) return;
     const config = getRuntimeConfig();
-    if (config?.selfHosted && config.apiBaseUrl) setServerUrl(config.apiBaseUrl);
+    if (config?.selfHosted && config.apiBaseUrl)
+      setServerUrl(config.selfHostedWebUrl ?? config.apiBaseUrl);
   }, [isOpen]);
 
   const saveServer = async (event: FormEvent<HTMLFormElement>) => {
@@ -29,8 +30,12 @@ export default function SelfHostedServerConfig() {
       saveSelfHostedRuntimeConfig(config);
       window.location.reload();
     } catch (cause) {
+      const message =
+        cause instanceof Error ? cause.message : _('The server configuration could not be saved.');
       setError(
-        cause instanceof Error ? cause.message : _('The server configuration could not be saved.'),
+        message === 'Load failed'
+          ? _('Could not reach the server. Check the HTTPS URL and network connection.')
+          : message,
       );
       setIsSaving(false);
     }

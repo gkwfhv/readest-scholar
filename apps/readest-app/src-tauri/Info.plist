@@ -4,6 +4,11 @@
   <dict>
     <key>ITSAppUsesNonExemptEncryption</key>
     <false/>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+      <key>NSAllowsArbitraryLoadsInWebContent</key>
+      <true/>
+    </dict>
     <key>NSLocalNetworkUsageDescription</key>
     <string>Readest uses the local network to discover nearby devices and transfer books with Nearby BookDrop.</string>
     <key>NSUbiquitousContainers</key>

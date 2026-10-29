@@ -1,5 +1,13 @@
 {
   "releases": {
+    "0.12.19": {
+      "date": "2026-10-29",
+      "notes": [
+        "macOS: Self-hosted connections now retain the public HTTPS server address and support an operator-provided HTTP backend.",
+        "AI: Connection checks now verify the embedding model required for book indexing and explain missing embedding configuration.",
+        "PDF translation: Servers without a configured translation model now show an actionable setup message."
+      ]
+    },
     "0.12.18": {
       "date": "2026-10-28",
       "notes": [

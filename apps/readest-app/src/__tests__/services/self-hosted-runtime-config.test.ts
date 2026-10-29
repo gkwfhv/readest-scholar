@@ -9,6 +9,7 @@ const SELF_HOSTED_CONFIG = {
   supabaseUrl: 'https://api.scholar.example.test',
   supabaseAnonKey: 'public-anon-key',
   apiBaseUrl: 'https://scholar.example.test',
+  selfHostedWebUrl: 'https://scholar.example.test',
   selfHosted: true,
 };
 
@@ -48,6 +49,7 @@ describe('saved self-hosted runtime configuration', () => {
     ).resolves.toMatchObject({
       ...SELF_HOSTED_CONFIG,
       authProviders: ['google', 'github'],
+      selfHostedWebUrl: 'https://scholar.example.test',
     });
     expect(fetchMock).toHaveBeenCalledWith('https://scholar.example.test/runtime-config.json', {
       headers: { Accept: 'application/json' },

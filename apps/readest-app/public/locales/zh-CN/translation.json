@@ -2635,5 +2635,9 @@
   "Enter the URL you use to open your Readest Scholar web page.": "请输入你用于打开 Readest Scholar 网页的地址。",
   "Connecting...": "正在连接…",
   "Save and restart": "保存并重启",
-  "The server configuration could not be saved.": "无法保存服务器配置。"
+  "The server configuration could not be saved.": "无法保存服务器配置。",
+  "Could not reach the server. Check the HTTPS URL and network connection.": "无法连接到服务器。请检查 HTTPS 地址和网络连接。",
+  "Tests both the chat model and the embedding model needed to index books.": "同时测试聊天模型和索引图书所需的嵌入模型。",
+  "Book chat needs an embedding model. Configure it and run Test Connection in Settings > AI Assistant before indexing.": "图书问答需要嵌入模型。请先在“设置 > AI 助手”中配置嵌入模型并运行“测试连接”。",
+  "PDF translation is not configured on this server. Ask the server administrator to configure a translation model.": "此服务器尚未配置 PDF 翻译。请让服务器管理员配置翻译模型。"
 }
