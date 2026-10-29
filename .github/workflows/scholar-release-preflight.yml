@@ -59,7 +59,7 @@ jobs:
           apps/readest-app/src-tauri/scholar.release.json apps/readest-app/src-tauri/Cargo.toml \
           LICENSE LICENSES.md RELEASE-IDENTITY.json
       - name: Download only the reviewed candidate artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v7.0.0
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v7.0.0
         with:
           github-token: ${{ github.token }}
           repository: gkwfhv/readest-scholar
