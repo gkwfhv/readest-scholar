@@ -7,6 +7,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { useEnv } from '@/context/EnvContext';
 import { useAuth } from '@/context/AuthContext';
 import { getAIProvider } from '@/services/ai/providers';
+import { verifyEmbeddingModel } from '@/services/ai/embeddingPreflight';
 import {
   fetchOpenRouterModels,
   type OpenRouterModelInfo,
@@ -418,6 +419,7 @@ const AIPanel: React.FC = () => {
       const aiProvider = getAIProvider(testSettings);
       const isHealthy = await aiProvider.healthCheck();
       if (isHealthy) {
+        await verifyEmbeddingModel(aiProvider);
         setConnectionStatus('success');
       } else {
         setConnectionStatus('error');
@@ -855,7 +857,11 @@ const AIPanel: React.FC = () => {
         </div>
       </BoxedList>
 
-      <BoxedList title={_('Connection')} className={disabledSection}>
+      <BoxedList
+        title={_('Connection')}
+        description={_('Tests both the chat model and the embedding model needed to index books.')}
+        className={disabledSection}
+      >
         <div className='flex min-h-14 items-center justify-between gap-3 pe-4'>
           <button
             className='btn btn-outline btn-sm'

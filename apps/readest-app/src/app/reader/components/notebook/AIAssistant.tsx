@@ -16,7 +16,8 @@ import { useReaderStore } from '@/store/readerStore';
 import { useBookProgress } from '@/store/readerProgressStore';
 import { useAIChatStore } from '@/store/aiChatStore';
 import { useNotebookStore } from '@/store/notebookStore';
-import { aiLogger, createTauriAdapter } from '@/services/ai';
+import { aiLogger, createTauriAdapter, verifyEmbeddingModel } from '@/services/ai';
+import { getAIProvider } from '@/services/ai/providers';
 import {
   LegacyIdbBackend,
   ReedyBackend,
@@ -447,6 +448,9 @@ const LegacyAIAssistant = ({ bookKey }: AIAssistantProps) => {
     setIndexError(null);
     setIsIndexing(true);
     try {
+      // Indexing uses an embedding model even when Reedy is disabled. Probe it
+      // first so a chat-only endpoint produces an actionable setting error.
+      await verifyEmbeddingModel(getAIProvider(aiSettings));
       await backend.indexBook(bookData.bookDoc, bookHash, { onProgress: setIndexProgress });
       setIndexed(true);
     } catch (e) {
@@ -504,6 +508,11 @@ const LegacyAIAssistant = ({ bookKey }: AIAssistantProps) => {
           <h3 className='text-foreground mb-0.5 text-sm font-medium'>{_('Index This Book')}</h3>
           <p className='text-muted-foreground text-xs'>
             {_('Enable AI search and chat for this book')}
+          </p>
+          <p className='text-muted-foreground max-w-md text-xs'>
+            {_(
+              'Book chat needs an embedding model. Configure it and run Test Connection in Settings > AI Assistant before indexing.',
+            )}
           </p>
         </div>
         <Button onClick={handleIndex} size='sm' className='h-8 text-xs'>

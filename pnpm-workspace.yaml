@@ -40,7 +40,7 @@ overrides:
   flatted: '>=3.4.2'
   body-parser: '>=2.4.0'
   dompurify: '>=3.4.17'
-  i18next-http-backend: '>=4.0.2 <5'
+  i18next-http-backend: '>=4.0.4 <5'
   picomatch: '>=4.0.4'
   path-to-regexp: '>=8.4.0'
   protobufjs: '>=7.6.5 <8'
