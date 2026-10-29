@@ -106,6 +106,78 @@ def child_environment(base_url: str, model: str, api_key: str, cache_dir: str) -
     }
 
 
+def _validate_model_profile(payload: object, job: dict) -> tuple[str, str]:
+    """Accept only a public HTTPS OpenAI-compatible endpoint for the leased job."""
+    import ipaddress
+    import socket
+    from urllib.parse import urlsplit, urlunsplit
+
+    if not isinstance(payload, dict):
+        raise JobFailure("model_config_unavailable")
+    base_url = payload.get("baseUrl")
+    model = payload.get("model")
+    api_key = payload.get("apiKey")
+    if (
+        not isinstance(base_url, str) or not isinstance(model, str) or not isinstance(api_key, str)
+        or model != job.get("model") or not 1 <= len(model) <= 120
+        or not 1 <= len(api_key) <= 4096 or any(char in api_key for char in "\r\n\x00")
+    ):
+        raise JobFailure("model_config_unavailable")
+    try:
+        parsed = urlsplit(base_url)
+        if (
+            parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password
+            or parsed.query or parsed.fragment or len(base_url) > 2048
+        ):
+            raise ValueError("invalid endpoint")
+        port = parsed.port or 443
+        addresses = {
+            result[4][0] for result in socket.getaddrinfo(
+                parsed.hostname, port, type=socket.SOCK_STREAM
+            )
+        }
+        if not addresses or any(not ipaddress.ip_address(address).is_global for address in addresses):
+            raise ValueError("non-public endpoint")
+    except (OSError, ValueError):
+        raise JobFailure("model_config_unavailable") from None
+    canonical = urlunsplit((parsed.scheme, parsed.netloc, parsed.path.rstrip("/"), "", ""))
+    return canonical, api_key
+
+
+def fetch_model_profile(internal_base_url: str, worker_token: str, job: dict) -> tuple[str, str]:
+    """Read one profile from the Web API after the database lease is acquired."""
+    import json as json_module
+    from urllib.error import HTTPError, URLError
+    from urllib.parse import quote, urlsplit
+    from urllib.request import Request, urlopen
+
+    try:
+        internal = urlsplit(internal_base_url)
+        if (
+            internal.scheme != "http" or not internal.hostname or internal.username
+            or internal.password or internal.query or internal.fragment
+        ):
+            raise ValueError("invalid internal endpoint")
+        endpoint = (
+            internal_base_url.rstrip("/")
+            + "/api/internal/scholar/translation-model/"
+            + quote(str(job["id"]), safe="")
+        )
+        request = Request(
+            endpoint,
+            headers={
+                "X-Scholar-Translation-Worker-Token": worker_token,
+                "X-Scholar-Translation-Lease-Token": str(job["lease_token"]),
+            },
+            method="GET",
+        )
+        with urlopen(request, timeout=20) as response:
+            payload = json_module.loads(response.read(16385))
+    except (HTTPError, URLError, OSError, ValueError, json_module.JSONDecodeError):
+        raise JobFailure("model_config_unavailable") from None
+    return _validate_model_profile(payload, job)
+
+
 def prepare_asset_links(account_cache: Path, asset_root: Path) -> None:
     """Use verified read-only BabelDOC assets with an account-specific text cache."""
     source = asset_root / ".cache" / "babeldoc"
@@ -235,6 +307,38 @@ def engine_progress(log_path: Path) -> int:
     return 20 + round(percent * 0.55)
 
 
+def _grant_engine_access(path: Path) -> None:
+    """Allow the less-privileged PDF engine to use one temporary workspace."""
+    import os
+
+    if os.geteuid() != 0 or path.is_symlink():
+        return
+    for root, directories, files in os.walk(path, followlinks=False):
+        current = Path(root)
+        os.chown(current, 1000, 1000)
+        os.chmod(current, 0o700)
+        for name in directories:
+            candidate = current / name
+            if not candidate.is_symlink():
+                os.chown(candidate, 1000, 1000)
+                os.chmod(candidate, 0o700)
+        for name in files:
+            candidate = current / name
+            if not candidate.is_symlink():
+                os.chown(candidate, 1000, 1000)
+                os.chmod(candidate, 0o600)
+
+
+def _drop_engine_privileges() -> None:
+    """The pdf2zh child does not inherit the worker's secret-file access."""
+    import os
+
+    if os.geteuid() == 0:
+        os.setgroups([])
+        os.setgid(1000)
+        os.setuid(1000)
+
+
 def _terminate_process(process) -> None:
     import os
     import signal
@@ -349,11 +453,20 @@ def run_engine(
             "/no_think Translate English academic prose into fluent Chinese. "
             "Preserve equations, citations, symbols and terminology. Return only the translation.",
         ])
+    if __import__("os").geteuid() == 0:
+        _grant_engine_access(source.parent)
+        _grant_engine_access(Path(cache_dir))
+        _grant_engine_access(output_dir)
+        if glossary is not None:
+            _grant_engine_access(glossary)
+            __import__("os").chmod(glossary, 0o400)
+        __import__("os").chmod(source, 0o400)
     log_path = output_dir.parent / ("engine-pages.log" if pages else "engine.log")
     with log_path.open("wb") as log:
         process = subprocess.Popen(
             command, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
             cwd=output_dir.parent, start_new_session=True,
+            preexec_fn=_drop_engine_privileges if __import__("os").geteuid() == 0 else None,
             env=child_environment(base_url, job["model"], api_key, cache_dir),
         )
         started = time.monotonic()
@@ -550,7 +663,7 @@ def seal_process_credentials() -> None:
         "SCHOLAR_TRANSLATION_DATABASE_URL",
         "S3_ACCESS_KEY_ID",
         "S3_SECRET_ACCESS_KEY",
-        "SCHOLAR_TRANSLATION_API_KEY_FILE",
+        "SCHOLAR_TRANSLATION_WORKER_TOKEN_FILE",
     ):
         os.environ.pop(name, None)
 
@@ -562,9 +675,10 @@ def main() -> None:
 
     dsn = os.environ["SCHOLAR_TRANSLATION_DATABASE_URL"]
     bucket = os.environ["S3_BUCKET_NAME"]
-    base_url = os.environ["SCHOLAR_TRANSLATION_BASE_URL"]
-    key_file = Path(os.environ["SCHOLAR_TRANSLATION_API_KEY_FILE"])
-    api_key = key_file.read_text().strip()
+    internal_base_url = os.environ["SCHOLAR_TRANSLATION_INTERNAL_BASE_URL"]
+    worker_token = Path(os.environ["SCHOLAR_TRANSLATION_WORKER_TOKEN_FILE"]).read_text().strip()
+    if not re.fullmatch(r"[A-Za-z0-9_-]{43}", worker_token):
+        raise ValueError("invalid translation worker token")
     cache_dir = os.environ.get("SCHOLAR_TRANSLATION_CACHE_DIR", "/tmp")
     timeout_seconds = int(os.environ.get("SCHOLAR_TRANSLATION_TIMEOUT_SECONDS", "1800"))
     if not 60 <= timeout_seconds <= 3600:
@@ -577,6 +691,15 @@ def main() -> None:
         job = db.claim(worker_id)
         if not job:
             time.sleep(5)
+            continue
+        try:
+            base_url, api_key = fetch_model_profile(internal_base_url, worker_token, job)
+        except JobFailure as failure:
+            try:
+                db.finish(job, "failed", failure.code)
+            except Exception:
+                pass
+            print(f"translation job {job['id']}: {failure.code}", flush=True)
             continue
         result = process_job(
             job, db, s3, bucket=bucket, base_url=base_url, api_key=api_key,

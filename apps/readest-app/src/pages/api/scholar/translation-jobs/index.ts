@@ -1,7 +1,13 @@
+import { randomUUID } from 'node:crypto';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { validateUserAndToken } from '@/utils/access';
 import { corsAllMethods, runMiddleware } from '@/utils/cors';
 import { createSupabaseAdminClient } from '@/utils/supabase';
+import { readAiVaultKey, sealTranslationModelConfig } from '@/server/scholarAiVault';
+import {
+  normalizeTranslationModelConfig,
+  translationModelFingerprint,
+} from '@/server/scholarTranslationModel';
 
 const isUuid = (value: unknown): value is string =>
   typeof value === 'string' &&
@@ -57,6 +63,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     versionId,
     idempotencyKey,
     mode,
+    translationModel,
     glossarySha256,
     whiteBackgroundCompatibility,
     whiteBackgroundPages,
@@ -76,15 +83,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Invalid translation request' });
   }
 
-  // The model endpoint and credentials are controlled by the server, never by a
-  // document or an untrusted API body. This also prevents an arbitrary URL fetch.
-  const model = process.env['SCHOLAR_TRANSLATION_MODEL']?.trim();
-  if (!model || model.length > 120) {
-    return res.status(503).json({ error: 'Translation model is unavailable' });
+  const modelConfig = normalizeTranslationModelConfig(translationModel);
+  if (!modelConfig) {
+    return res.status(400).json({
+      error:
+        'Configure AI Assistant with AI Gateway or an OpenAI-compatible provider before translating',
+    });
+  }
+
+  const jobId = randomUUID();
+  let sealed;
+  try {
+    sealed = sealTranslationModelConfig(
+      readAiVaultKey(),
+      user.id,
+      jobId,
+      JSON.stringify(modelConfig),
+    );
+  } catch {
+    return res.status(503).json({ error: 'Translation credential vault is unavailable' });
   }
 
   const supabase = createSupabaseAdminClient();
-  const { data: job, error } = await supabase.rpc('enqueue_scholar_translation_job_v3', {
+  const { data: job, error } = await supabase.rpc('enqueue_scholar_translation_job_v4', {
+    p_job_id: jobId,
     p_user_id: user.id,
     p_source_file_id: fileId,
     p_source_version_id: versionId,
@@ -92,7 +114,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     p_mode: mode,
     p_target_language: 'zh-CN',
     p_engine: 'openai-compatible',
-    p_model: model,
+    p_model: modelConfig.model,
+    p_model_provider: modelConfig.provider,
+    p_model_config_fingerprint: translationModelFingerprint(modelConfig),
+    p_model_config_nonce: sealed.nonce,
+    p_model_config_ciphertext: sealed.ciphertext,
+    p_model_config_auth_tag: sealed.authTag,
     p_glossary_sha256: glossarySha256 ?? null,
     p_white_background_compat: whiteBackgroundCompatibility ?? false,
     p_white_background_pages: whiteBackgroundPages ?? null,

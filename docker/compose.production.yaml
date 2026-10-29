@@ -1,0 +1,16 @@
+# Loopback-only production ingress. Put a TLS reverse proxy in front of 10080.
+services:
+  client:
+    image: ${READEST_PRODUCTION_IMAGE:-readest-scholar-production-client:0.12.21}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    ports: !override
+      - "127.0.0.1:10080:3000"
+  kong:
+    ports: !override
+      - "127.0.0.1:10081:8000"
+  minio:
+    ports: !override
+      - "127.0.0.1:10082:9000"
+      - "127.0.0.1:10083:9001"

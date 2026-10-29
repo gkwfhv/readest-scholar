@@ -1,14 +1,25 @@
-# Isolated, synthetic staging translation worker. No public ports.
+# Isolated synthetic staging translation worker. No public ports.
+# Set SCHOLAR_AI_VAULT_KEY_FILE and SCHOLAR_TRANSLATION_WORKER_TOKEN_FILE
+# to distinct 0600 files before starting this overlay.
 services:
   client:
     environment:
-      SCHOLAR_TRANSLATION_MODEL: ${SCHOLAR_TRANSLATION_MODEL:?Set the local model ID}
+      SCHOLAR_AI_VAULT_KEY_FILE: /run/secrets/scholar_ai_vault_key
+      SCHOLAR_TRANSLATION_WORKER_TOKEN_FILE: /run/secrets/translation_client_token
+    secrets:
+      - scholar_ai_vault_key
+      - translation_client_token
+
   translation_asset_warmup:
     image: scholar-translation-worker:phase6
     build:
       context: ../..
       dockerfile: infra/translation-worker/Dockerfile
-    entrypoint: ["python", "/app/warmup-assets.py"]
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-ec"]
+    command: >-
+      python /app/warmup-assets.py &&
+      chown -R 1000:1000 /assets
     environment:
       HOME: /assets
       XDG_CACHE_HOME: /assets
@@ -27,23 +38,27 @@ services:
     security_opt:
       - no-new-privileges:true
     restart: "no"
+
   translator:
     image: scholar-translation-worker:phase6
     build:
       context: ../..
       dockerfile: infra/translation-worker/Dockerfile
+    user: "0:0"
     depends_on:
       db:
         condition: service_started
       minio:
+        condition: service_started
+      client:
         condition: service_started
       translation_asset_warmup:
         condition: service_completed_successfully
     environment:
       SCHOLAR_TRANSLATION_ASSET_DIR: /assets
       SCHOLAR_TRANSLATION_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/postgres
-      SCHOLAR_TRANSLATION_BASE_URL: ${SCHOLAR_TRANSLATION_BASE_URL:?Use the local model endpoint}
-      SCHOLAR_TRANSLATION_API_KEY_FILE: /run/secrets/translation_model_key
+      SCHOLAR_TRANSLATION_INTERNAL_BASE_URL: http://client:3000
+      SCHOLAR_TRANSLATION_WORKER_TOKEN_FILE: /run/secrets/translation_worker_token
       SCHOLAR_TRANSLATION_CACHE_DIR: /tmp
       SCHOLAR_TRANSLATION_TIMEOUT_SECONDS: "1800"
       S3_ENDPOINT: http://minio:9000
@@ -52,7 +67,7 @@ services:
       S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
       S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
     secrets:
-      - translation_model_key
+      - translation_worker_token
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=650m
@@ -68,8 +83,12 @@ services:
     restart: unless-stopped
 
 secrets:
-  translation_model_key:
-    file: ${SCHOLAR_TRANSLATION_MODEL_KEY_FILE:?Point to a private 0600 test key}
+  scholar_ai_vault_key:
+    file: ${SCHOLAR_AI_VAULT_KEY_FILE:?Point to a private 0600 vault key}
+  translation_client_token:
+    file: ${SCHOLAR_TRANSLATION_CLIENT_TOKEN_FILE:?Point to a private 0600 client token}
+  translation_worker_token:
+    file: ${SCHOLAR_TRANSLATION_WORKER_TOKEN_FILE:?Point to a private 0400 worker token}
 
 volumes:
   scholar_translation_assets:

@@ -9,6 +9,18 @@ vi.mock('@/services/scholarFileBaseline', () => ({
   getScholarAccountId: async () => '00000000-0000-4000-8000-000000000001',
 }));
 vi.mock('@/utils/book', () => ({ getRemoteBookFilename: () => 'paper.pdf' }));
+vi.mock('@/utils/access', () => ({ validateUserAndToken: vi.fn() }));
+vi.mock('@/store/settingsStore', () => ({
+  useSettingsStore: () => ({ settings: { aiSettings: {} } }),
+}));
+vi.mock('@/services/ai/translationModel', () => ({
+  getPdfTranslationModel: () => ({
+    provider: 'openrouter',
+    baseUrl: 'https://models.example.test/v1',
+    model: 'test/chat-model',
+    apiKey: 'synthetic-api-key',
+  }),
+}));
 vi.mock('@/utils/fetch', () => ({
   fetchWithAuth: vi.fn(async (url: string, options?: { method?: string; body?: string }) => {
     state.calls.push({ url, body: options?.body });
@@ -56,5 +68,6 @@ it('only sends white-background compatibility when the reader selects it', async
     expect(post).toBeTruthy();
     expect(JSON.parse(post!.body!).whiteBackgroundCompatibility).toBe(true);
     expect(JSON.parse(post!.body!).whiteBackgroundPages).toBe('2');
+    expect(JSON.parse(post!.body!).translationModel.model).toBe('test/chat-model');
   });
 });

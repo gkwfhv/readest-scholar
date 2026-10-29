@@ -4,8 +4,8 @@
 
 | 名称 | 值 | 证据 |
 |---|---|---|
-| `scholar_version` | `0.12.20` | `apps/readest-app/src-tauri/scholar.release.json` 的 Scholar 候选版本 |
-| `scholar_app_version` | `0.12.20` | `apps/readest-app/package.json` 的 Scholar 前端版本 |
+| `scholar_version` | `0.12.21` | `apps/readest-app/src-tauri/scholar.release.json` 的 Scholar 候选版本 |
+| `scholar_app_version` | `0.12.21` | `apps/readest-app/package.json` 的 Scholar 前端版本 |
 | `readest_ref` | `main` | GitHub `repos/readest/readest/commits/main` |
 | `readest_sha` | `2d37bbfc2e94725e1343ab2a825573545aa59f5f` | 同上，提交时间 `2026-10-18T18:31:33Z` |
 | `readest_app_version` | `0.12.16` | `apps/readest-app/package.json` 的 `version` |
