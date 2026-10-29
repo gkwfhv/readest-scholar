@@ -17,16 +17,12 @@
     "deep-link": {
       "mobile": [
         {
-          "scheme": [
-            "readest-scholar"
-          ],
+          "scheme": ["readest-scholar"],
           "appLink": false
         }
       ],
       "desktop": {
-        "schemes": [
-          "readest-scholar"
-        ]
+        "schemes": ["readest-scholar"]
       }
     },
     "updater": {
