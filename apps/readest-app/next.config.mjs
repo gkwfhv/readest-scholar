@@ -42,6 +42,12 @@ const exportOutput = appPlatform !== 'web' && !isDev;
 // local `build-web` (output undefined), dev, and the Cloudflare/OpenNext
 // deploy — which forces standalone itself via NEXT_PRIVATE_STANDALONE.
 const standaloneOutput = !exportOutput && process.env['BUILD_STANDALONE'] === 'true';
+// Public self-hosted clients load Supabase through the same HTTPS origin. The
+// production container resolves `kong` on its private Docker network, so this
+// avoids requiring desktop WebViews to call an insecure public API port.
+const selfHostedKongOrigin = (
+  process.env['SELF_HOSTED_KONG_ORIGIN'] || 'http://kong:8000'
+).replace(/\/+$/, '');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -156,6 +162,29 @@ const nextConfig = {
   ],
   async rewrites() {
     return [
+      // Self-hosted Supabase routes are proxied by the app container. The
+      // public runtime config can therefore use the HTTPS web origin for
+      // authentication, database, storage, realtime, and functions APIs.
+      {
+        source: '/auth/v1/:path*',
+        destination: `${selfHostedKongOrigin}/auth/v1/:path*`,
+      },
+      {
+        source: '/rest/v1/:path*',
+        destination: `${selfHostedKongOrigin}/rest/v1/:path*`,
+      },
+      {
+        source: '/storage/v1/:path*',
+        destination: `${selfHostedKongOrigin}/storage/v1/:path*`,
+      },
+      {
+        source: '/realtime/v1/:path*',
+        destination: `${selfHostedKongOrigin}/realtime/v1/:path*`,
+      },
+      {
+        source: '/functions/v1/:path*',
+        destination: `${selfHostedKongOrigin}/functions/v1/:path*`,
+      },
       {
         source: '/reader/:ids',
         destination: '/reader?ids=:ids',
