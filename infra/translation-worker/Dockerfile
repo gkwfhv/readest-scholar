@@ -17,6 +17,6 @@ ENV HOME=/tmp XDG_CACHE_HOME=/tmp XDG_CONFIG_HOME=/tmp
 COPY infra/translation-worker/worker.py /app/worker.py
 COPY infra/translation-worker/engine.py /app/engine.py
 COPY infra/staging/warmup-translation-assets.py /app/warmup-assets.py
-RUN mkdir -p /assets && chown -R 10001:10001 /app /assets
-USER 10001:10001
+RUN mkdir -p /assets && chown -R 1000:1000 /app /assets
+USER 1000:1000
 CMD ["python", "/app/worker.py"]

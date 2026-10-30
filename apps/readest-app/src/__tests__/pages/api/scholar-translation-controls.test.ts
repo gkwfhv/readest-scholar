@@ -15,6 +15,14 @@ vi.mock('@/utils/access', () => ({
 vi.mock('@/utils/supabase', () => ({
   createSupabaseAdminClient: () => ({ rpc: state.rpc }),
 }));
+vi.mock('@/server/scholarAiVault', () => ({
+  readAiVaultKey: () => Buffer.alloc(32, 9),
+  sealTranslationModelConfig: () => ({
+    nonce: Buffer.alloc(12, 1).toString('base64'),
+    ciphertext: Buffer.from('synthetic-envelope').toString('base64'),
+    authTag: Buffer.alloc(16, 2).toString('base64'),
+  }),
+}));
 import cancelHandler from '@/pages/api/scholar/translation-jobs/[id]/cancel';
 import retryHandler from '@/pages/api/scholar/translation-jobs/[id]/retry';
 
@@ -51,13 +59,22 @@ describe('Scholar translation controls', () => {
     expect(res.status).toHaveBeenCalledWith(200);
   });
   it('retries into a new job with a fresh idempotency key', async () => {
-    const res = await call(retryHandler, jobId, { idempotencyKey: retryId });
-    expect(state.rpc).toHaveBeenCalledWith('retry_scholar_translation_job_v3', {
-      p_user_id: state.userId,
-      p_job_id: jobId,
-      p_idempotency_key: retryId,
-    });
+    const translationModel = {
+      provider: 'ai-gateway',
+      model: 'test/chat-model',
+      apiKey: 'synthetic-api-key',
+    };
+    const res = await call(retryHandler, jobId, { idempotencyKey: retryId, translationModel });
     expect(res.status).toHaveBeenCalledWith(202);
+    expect(state.rpc).toHaveBeenCalledWith(
+      'retry_scholar_translation_job_v4',
+      expect.objectContaining({
+        p_user_id: state.userId,
+        p_prior_job_id: jobId,
+        p_idempotency_key: retryId,
+        p_model: 'test/chat-model',
+      }),
+    );
   });
   it('rejects unauthenticated cancellation', async () => {
     state.userId = '';

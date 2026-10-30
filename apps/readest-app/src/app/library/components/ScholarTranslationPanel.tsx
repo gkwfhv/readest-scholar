@@ -7,6 +7,8 @@ import { getRemoteBookFilename } from '@/utils/book';
 import { fetchWithAuth } from '@/utils/fetch';
 import { eventDispatcher } from '@/utils/event';
 import { useTranslation } from '@/hooks/useTranslation';
+import { useSettingsStore } from '@/store/settingsStore';
+import { getPdfTranslationModel } from '@/services/ai/translationModel';
 
 type Mode = 'mono' | 'dual' | 'both';
 type JobState = 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled';
@@ -27,6 +29,7 @@ interface FileStatus {
 
 export default function ScholarTranslationPanel({ book }: { book: Book }) {
   const _ = useTranslation();
+  const { settings } = useSettingsStore();
   const [status, setStatus] = useState<FileStatus | null>(null);
   const [job, setJob] = useState<Job | null>(null);
   const [mode, setMode] = useState<Mode>('dual');
@@ -196,6 +199,15 @@ export default function ScholarTranslationPanel({ book }: { book: Book }) {
           : '/scholar/translation-jobs/' +
             encodeURIComponent(job!.id) +
             (action === 'cancel' ? '/cancel' : '/retry');
+      const translationModel =
+        action === 'cancel' ? null : getPdfTranslationModel(settings?.aiSettings);
+      if (action !== 'cancel' && !translationModel) {
+        throw new Error(
+          _(
+            'Configure AI Assistant with AI Gateway or an OpenAI-compatible provider before translating.',
+          ),
+        );
+      }
       const body =
         action === 'start'
           ? {
@@ -203,6 +215,7 @@ export default function ScholarTranslationPanel({ book }: { book: Book }) {
               versionId: status.activeVersionId,
               idempotencyKey: crypto.randomUUID(),
               mode,
+              translationModel,
               whiteBackgroundCompatibility,
               ...(whiteBackgroundCompatibility
                 ? { whiteBackgroundPages: whiteBackgroundPages.trim() }
@@ -210,7 +223,7 @@ export default function ScholarTranslationPanel({ book }: { book: Book }) {
               ...(glossarySha ? { glossarySha256: glossarySha } : {}),
             }
           : action === 'retry'
-            ? { idempotencyKey: crypto.randomUUID() }
+            ? { idempotencyKey: crypto.randomUUID(), translationModel }
             : {};
       const response = await fetchWithAuth(getAPIBaseUrl() + path, {
         method: 'POST',

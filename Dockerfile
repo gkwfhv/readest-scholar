@@ -8,7 +8,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/readest-app/package.json ./apps/readest-app/
 COPY patches/ ./patches/
 COPY packages/ ./packages/
-RUN --mount=type=cache,id=pnpm,sharing=locked,target=/pnpm/store pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=pnpm,sharing=locked,target=/pnpm/store pnpm install --frozen-lockfile --fetch-timeout 300000 --fetch-retries 5
 RUN test -f packages/foliate-js/vendor/pdfjs/annotation_layer_builder.css \
     && test -d packages/simplecc-wasm/dist/web \
     || { printf '\nERROR: Required git submodules are not initialized in the source directory.\nEnsure submodules are initialized before running docker build.\nRun: git submodule update --init packages/foliate-js packages/simplecc-wasm\n\n'; exit 1; }

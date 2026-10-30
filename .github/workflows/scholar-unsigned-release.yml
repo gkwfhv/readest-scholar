@@ -431,6 +431,25 @@ jobs:
 
           此版本提供 macOS（Apple Silicon、Intel）、Windows x64 和 Linux x64 的无签名桌面安装包。
 
+          ## 修复内容、影响范围与验证
+
+          EOF
+          node <<'NODE'
+          const fs = require('fs');
+          const version = require('./apps/readest-app/src-tauri/scholar.release.json').version;
+          const release = JSON.parse(fs.readFileSync('./apps/readest-app/release-notes.json', 'utf8')).releases[version];
+          if (!release || !Array.isArray(release.notes) || release.notes.length === 0) {
+            throw new Error(`Missing release notes for ${version}`);
+          }
+          fs.appendFileSync(
+            'distribution/RELEASE-NOTES.md',
+            `${release.notes.map((note) => `- ${note}`).join('\n')}\n`,
+          );
+          NODE
+          cat >> distribution/RELEASE-NOTES.md <<EOF
+
+          ## 安装与已知状态
+
           - 安装包由 GitHub Actions 从提交 ${{ github.sha }} 构建。
           - 请在安装前用 SHA256SUMS 验证下载文件。
           - macOS 与 Windows 会提示未签名或未知发布者；这是此版本的已知发布状态。

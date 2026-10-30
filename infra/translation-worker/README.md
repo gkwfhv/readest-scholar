@@ -1,25 +1,29 @@
 # Scholar PDF translation worker
 
-The isolated Worker uses pdf2zh Next 2.9.0 to create a new translated PDF. It never writes the source object. The database queue stores the source version and SHA-256; the Worker verifies both before starting and verifies uploaded output bytes before publishing a separate attachment on the same document.
+This self-hosted pdf2zh Next 2.9.0 worker creates Chinese, bilingual, or both PDF outputs through the durable Scholar queue.
 
-## Staging configuration
+## Model selection and secrets
 
-Apply database migrations 051 and 052 after the preceding Scholar translation migrations. Use `infra/staging/translation-worker.yaml` as the Compose overlay. Keep the model endpoint and PostgreSQL/MinIO on a private Docker network; this overlay publishes no Worker port. The warmup job downloads BabelDOC assets into a named volume and verifies their published hashes before the Worker starts. Keep the asset volume for subsequent restarts.
+The worker uses the model currently selected in the signed-in user's **AI Assistant** settings:
 
-Set these private environment values outside Git:
+- **AI Gateway** uses its official OpenAI-compatible endpoint.
+- **OpenAI-compatible** (shown as "OpenRouter (Custom)") uses the configured endpoint, chat model, and API key.
+- **Ollama** remains local to the device. A loopback or LAN endpoint on a desktop cannot safely be sent to a server worker.
 
-- `SCHOLAR_TRANSLATION_BASE_URL`: an OpenAI-compatible `/v1` model endpoint reachable from the Worker.
-- `SCHOLAR_TRANSLATION_MODEL`: the exact model ID used by the Web API and local model endpoint.
-- `SCHOLAR_TRANSLATION_MODEL_KEY_FILE`: a 0600 file containing the model API key, or a local-only test token if the model is isolated and does not enforce authentication.
+The Web API encrypts each profile with AES-256-GCM and binds it to its user and job. The worker receives it only after it has a live job lease through Docker's private network. The model key is neither a server-wide environment variable nor written to worker logs.
 
-The Compose overlay limits the Worker to 2 CPU cores, 4 GiB RAM, 128 PIDs and a 650 MiB temporary filesystem. The model service needs its own capacity; a 4B CPU model took about 18 minutes for a two-page, two-pass sample on the 10 GiB staging host. Translation duration depends strongly on model speed and paper complexity. Each pdf2zh pass has a 30-minute Worker timeout.
+## Deployment
 
-## White-background pages
+Apply the normal production migrations, then prepare three server-local secret files and bring up the overlay:
 
-Ordinary vector translation preserves figures but can leave source text visible under the Chinese on some white pages. The UI offers an explicit compatibility option with a page list such as `2,4-6`. The Worker first translates normally, then runs pdf2zh's OCR workaround for only those pages and replaces them in the output PDF. Select text-heavy pages: the workaround can cover text labels inside diagrams. The page list is one-based and limited to source pages.
+```sh
+infra/translation-worker/prepare-secrets.sh
+docker compose -f docker/compose.yaml -f docker/compose.production.yaml \
+  -f docker/compose.translation-worker.yaml up -d --build
+```
 
-A PDF that is structurally invalid, identical to the source, over the output size limit, or contains newly generated visible `<style` markup is rejected before publication. A rejected task leaves the original source intact and can be retried. The model still requires visual review for layout and translation quality; the automated checks do not measure fluency.
+The overlay publishes no worker port. It starts a one-shot asset warmup job, then a restricted `translator` service with 2 CPU and 4 GiB memory limits. Keep the named `scholar_translation_assets` volume across restarts so BabelDOC assets are not downloaded again.
 
-## Recovery
+The vault key and client token under `docker/secrets/` remain mode `0600`; the matching worker token is mode `0400` for root only. The duplicate tokens let the Web container and root worker authenticate each other while the unprivileged pdf2zh subprocess cannot read either token. None of these files may be committed or printed, and they must be backed up with production secrets. Rotating the vault key makes queued profile envelopes unreadable, so allow in-progress jobs to finish before rotation.
 
-Cancel requests stop the child translation process. Retrying a failed or canceled job creates a new queue row with the original source version, mode, glossary and compatibility pages. If a Worker container is lost, the expired lease moves the job to a visible failed state; an explicit retry is required before another model call. Before upgrading a running Worker, let active jobs finish or explicitly cancel them. Keep a database backup before applying migrations and retain the previous image digest for rollback.
+For development and synthetic staging, use `infra/staging/translation-worker.yaml` after supplying the same restricted secret files. No server-wide model environment variable is required.
