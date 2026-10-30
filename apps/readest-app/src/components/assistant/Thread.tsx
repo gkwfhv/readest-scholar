@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, type FC } from 'react';
+import { useEffect, useRef, useState, type FC } from 'react';
 import {
   ActionBarPrimitive,
   AssistantIf,
@@ -11,23 +11,32 @@ import {
   useAssistantState,
   useThreadViewport,
   useThread,
+  useComposerRuntime,
 } from '@assistant-ui/react';
 import {
   ArrowUpIcon,
   BookOpenIcon,
+  BrainIcon,
   CheckIcon,
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   CopyIcon,
+  FileTextIcon,
+  GlobeIcon,
+  NotebookPenIcon,
+  PaperclipIcon,
   PencilIcon,
   RefreshCwIcon,
   SquareIcon,
   Trash2Icon,
+  XIcon,
 } from 'lucide-react';
 
 import { MarkdownText } from './MarkdownText';
+import { ModelSwitcher } from './ModelSwitcher';
 import { Button } from '@/components/ui/button';
+import { useTranslation } from '@/hooks/useTranslation';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,6 +44,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/utils/tailwind';
 import type { SourceItem } from '@/services/ai/adapters/reedySourceStore';
+import type { ComposerToggles } from '@/services/ai/adapters/TauriChatAdapter';
 
 interface ThreadProps {
   sources?: SourceItem[];
@@ -46,6 +56,9 @@ interface ThreadProps {
   onResetIndex?: () => void;
   isLoadingHistory?: boolean;
   hasActiveConversation?: boolean;
+  /** Composer capability toggles (web search / notes / thinking). */
+  toggles?: ComposerToggles;
+  onToggle?: (key: keyof ComposerToggles) => void;
 }
 
 const LoadingOverlay: FC<{ isVisible: boolean }> = ({ isVisible }) => {
@@ -112,6 +125,8 @@ export const Thread: FC<ThreadProps> = ({
   onResetIndex,
   isLoadingHistory = false,
   hasActiveConversation = false,
+  toggles,
+  onToggle,
 }) => {
   const viewportRef = useRef<HTMLDivElement>(null);
   const isInitialMount = useRef(true);
@@ -178,7 +193,12 @@ export const Thread: FC<ThreadProps> = ({
             <p className='text-base-content/60 mb-4 text-xs'>
               Get answers based on the book content
             </p>
-            <Composer onClear={onClear} onResetIndex={onResetIndex} />
+            <Composer
+              onClear={onClear}
+              onResetIndex={onResetIndex}
+              toggles={toggles}
+              onToggle={onToggle}
+            />
           </div>
         </ThreadPrimitive.Empty>
       )}
@@ -221,7 +241,12 @@ export const Thread: FC<ThreadProps> = ({
           <ScrollToBottomButton />
         </div>
 
-        <Composer onClear={onClear} onResetIndex={onResetIndex} />
+        <Composer
+          onClear={onClear}
+          onResetIndex={onResetIndex}
+          toggles={toggles}
+          onToggle={onToggle}
+        />
       </AssistantIf>
     </ThreadPrimitive.Root>
   );
@@ -230,11 +255,145 @@ export const Thread: FC<ThreadProps> = ({
 interface ComposerProps {
   onClear?: () => void;
   onResetIndex?: () => void;
+  toggles?: ComposerToggles;
+  onToggle?: (key: keyof ComposerToggles) => void;
 }
 
-const Composer: FC<ComposerProps> = ({ onClear, onResetIndex }) => {
+const MAX_IMAGE_DIMENSION = 1280;
+const MAX_TEXT_ATTACHMENT_BYTES = 200_000;
+
+function downscaleImage(file: File, maxDim = MAX_IMAGE_DIMENSION, quality = 0.85): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const finish = (result: File) => {
+        URL.revokeObjectURL(url);
+        resolve(result);
+      };
+      try {
+        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        if (scale >= 1) return finish(file);
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return finish(file);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              finish(new File([blob], file.name || 'pasted-image.png', { type: 'image/jpeg' }));
+            } else {
+              finish(file);
+            }
+          },
+          'image/jpeg',
+          quality,
+        );
+      } catch {
+        finish(file);
+      }
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Could not read image'));
+    };
+    img.src = url;
+  });
+}
+
+const AttachmentPreview: FC = () => {
+  const attachment = useAssistantState((s) => s.attachment);
+  const composer = useComposerRuntime();
+  const _ = useTranslation();
+  if (!attachment) return null;
+  const previewUrl =
+    attachment.type === 'image' && attachment.file
+      ? URL.createObjectURL(attachment.file)
+      : undefined;
+  const removeAttachment = async () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    const index = composer.getState().attachments.findIndex((a) => a.id === attachment.id);
+    if (index >= 0) await composer.getAttachmentByIndex(index).remove();
+  };
+  return (
+    <div className='border-base-content/10 bg-base-200 relative mr-1 inline-flex items-center gap-2 rounded-lg border px-2 py-1'>
+      {previewUrl ? (
+        <img src={previewUrl} alt={attachment.name} className='size-6 rounded object-cover' />
+      ) : (
+        <FileTextIcon className='size-3.5' />
+      )}
+      <span className='max-w-40 truncate text-xs'>{attachment.name}</span>
+      <button
+        type='button'
+        aria-label={_('Remove attachment')}
+        className='text-base-content/50 hover:text-base-content'
+        onClick={() => void removeAttachment()}
+      >
+        <XIcon className='size-3' />
+      </button>
+    </div>
+  );
+};
+
+const Composer: FC<ComposerProps> = ({ onClear, onResetIndex, toggles, onToggle }) => {
+  const _ = useTranslation();
   const isEmpty = useAssistantState((s) => s.composer.isEmpty);
   const isRunning = useAssistantState((s) => s.thread.isRunning);
+  const composer = useComposerRuntime();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+
+  const addFile = async (file: File) => {
+    setAttachmentError(null);
+    try {
+      if (file.type.startsWith('image/')) {
+        await composer.addAttachment(await downscaleImage(file));
+      } else if (
+        file.type.startsWith('text/') ||
+        /\.(md|markdown|txt|csv|json)$/i.test(file.name)
+      ) {
+        if (file.size > MAX_TEXT_ATTACHMENT_BYTES) {
+          setAttachmentError(_('Text attachments are limited to 200 KB.'));
+          return;
+        }
+        await composer.addAttachment(file);
+      } else {
+        setAttachmentError(_('Only images and text files can be attached.'));
+      }
+    } catch {
+      setAttachmentError(_('Could not read the attachment.'));
+    }
+  };
+
+  const onPaste = (event: React.ClipboardEvent) => {
+    const files = Array.from(event.clipboardData.files);
+    if (!files.length) return;
+    event.preventDefault();
+    void Promise.all(files.map((file) => addFile(file)));
+  };
+
+  const toggleButton = (key: keyof ComposerToggles, icon: React.ReactNode, label: string) => {
+    const active = toggles?.[key] ?? false;
+    return (
+      <button
+        type='button'
+        onClick={() => onToggle?.(key)}
+        title={label}
+        aria-label={label}
+        aria-pressed={active}
+        className={cn(
+          'mb-0.5 flex size-7 shrink-0 items-center justify-center rounded-full transition-colors',
+          active
+            ? 'bg-primary/15 text-primary'
+            : 'text-base-content/60 hover:bg-base-300 hover:text-base-content',
+        )}
+      >
+        {icon}
+      </button>
+    );
+  };
 
   return (
     <ComposerPrimitive.Root
@@ -242,8 +401,44 @@ const Composer: FC<ComposerProps> = ({ onClear, onResetIndex }) => {
       data-empty={isEmpty}
       data-running={isRunning}
     >
-      <div className='bg-base-200 ring-base-content/10 focus-within:ring-base-content/20 overflow-hidden rounded-2xl shadow-xs ring-1 ring-inset transition-all duration-200'>
+      <div
+        className='bg-base-200 ring-base-content/10 focus-within:ring-base-content/20 overflow-hidden rounded-2xl shadow-xs ring-1 ring-inset transition-all duration-200'
+        onPaste={onPaste}
+      >
+        <ComposerPrimitive.Attachments components={{ Attachment: AttachmentPreview }} />
         <div className='flex items-end gap-0.5 p-1.5'>
+          <ModelSwitcher />
+
+          {toggleButton('webSearch', <GlobeIcon className='size-3.5' />, _('Web search'))}
+          {toggleButton(
+            'includeNotes',
+            <NotebookPenIcon className='size-3.5' />,
+            _('Read my notes'),
+          )}
+          {toggleButton('thinking', <BrainIcon className='size-3.5' />, _('Deep thinking'))}
+
+          <input
+            ref={fileInputRef}
+            type='file'
+            multiple
+            accept='image/*,text/plain,text/markdown,text/csv,.md,.txt,.csv,.json'
+            className='hidden'
+            onChange={(event) => {
+              const files = Array.from(event.target.files ?? []);
+              event.target.value = '';
+              void Promise.all(files.map((file) => addFile(file)));
+            }}
+          />
+          <button
+            type='button'
+            onClick={() => fileInputRef.current?.click()}
+            className='text-base-content/60 hover:bg-base-300 hover:text-base-content mb-0.5 flex size-7 shrink-0 items-center justify-center rounded-full transition-colors'
+            aria-label={_('Attach file')}
+            title={_('Attach file')}
+          >
+            <PaperclipIcon className='size-3.5' />
+          </button>
+
           {onClear && (
             <button
               type='button'
@@ -288,6 +483,11 @@ const Composer: FC<ComposerProps> = ({ onClear, onResetIndex }) => {
             </div>
           </div>
         </div>
+        {attachmentError && (
+          <p role='alert' className='text-error px-3 pb-1.5 text-xs'>
+            {attachmentError}
+          </p>
+        )}
       </div>
     </ComposerPrimitive.Root>
   );

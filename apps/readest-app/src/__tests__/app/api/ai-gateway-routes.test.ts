@@ -81,8 +81,8 @@ describe('AI gateway routes', () => {
   it('chat rejects oversized input', async () => {
     const res = await chatPOST(
       post('chat', {
-        messages: [{ role: 'user', content: 'a'.repeat(400_000) }],
-        system: 'a'.repeat(100_001),
+        messages: [{ role: 'user', content: 'a'.repeat(2_000_000) }],
+        system: 'b',
         apiKey: 'user-key',
       }),
     );

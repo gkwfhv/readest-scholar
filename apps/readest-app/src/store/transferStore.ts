@@ -97,7 +97,7 @@ interface TransferState {
   removeTransfer: (transferId: string) => void;
   promoteScholarMirrorDownload: (transferId: string, priority: number) => void;
   setScholarSnapshotPath: (transferId: string, path: string | undefined) => void;
-  rebaseScholarDelete: (transferId: string, expectedVersionId: string) => void;
+  rebaseScholarDelete: (transferId: string, expectedVersionId: string | null) => void;
   updateTransferProgress: (
     transferId: string,
     progress: number,

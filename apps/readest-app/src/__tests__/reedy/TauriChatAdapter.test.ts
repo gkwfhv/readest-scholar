@@ -28,6 +28,14 @@ vi.mock('@/services/ai/providers', () => ({
   }),
 }));
 
+// Web search is exercised only when the composer toggle asks for it.
+const searchWebMock = vi.fn(
+  async (): Promise<Array<{ title: string; url: string; snippet: string }>> => [],
+);
+vi.mock('@/services/ai/webSearch', () => ({
+  searchWeb: searchWebMock,
+}));
+
 // Import after mocks so the adapter picks up the mocked streamText.
 const { createTauriAdapter } = await import('@/services/ai/adapters/TauriChatAdapter');
 
@@ -87,6 +95,8 @@ async function drainRun(adapterRun: AsyncIterable<unknown>): Promise<void> {
 beforeEach(() => {
   streamTextMock.mockReset();
   stepCountIsMock.mockClear();
+  searchWebMock.mockReset();
+  searchWebMock.mockImplementation(async () => []);
   // Default: streamText returns an empty text stream so the for-await loop
   // in the adapter completes immediately.
   streamTextMock.mockImplementation(
@@ -282,7 +292,10 @@ describe('TauriChatAdapter wiring (M1.11)', () => {
     );
   });
 
-  it('PDF without retrieved evidence refuses before calling the model', async () => {
+  it('PDF without retrieved evidence still calls the model with a general-question prompt', async () => {
+    streamTextMock.mockImplementationOnce(() => ({
+      textStream: asyncIter(['That is not in the document; it is 42.']),
+    }));
     const adapter = createTauriAdapter(() => ({
       settings: { ...baseSettings, reedy: { enabled: false }, spoilerProtection: false },
       bookHash: 'pdf-1',
@@ -303,8 +316,12 @@ describe('TauriChatAdapter wiring (M1.11)', () => {
     }>) {
       output.push(event.content[0]!.text);
     }
-    expect(streamTextMock).not.toHaveBeenCalled();
-    expect(output.join(' ')).toMatch(/cannot verify|can't verify/i);
+    expect(streamTextMock).toHaveBeenCalledTimes(1);
+    expect(output).toHaveLength(1);
+    expect(output[0]).toBe('That is not in the document; it is 42.');
+    const call = streamTextMock.mock.calls[0]![0] as RunCall;
+    expect(call.system).toMatch(/NOT about the document/);
+    expect(call.system).not.toContain('I cannot verify that from this PDF.');
   });
 
   it('PDF with evidence gives the model a physical page citation and untrusted-source rules', async () => {
@@ -345,7 +362,10 @@ describe('TauriChatAdapter wiring (M1.11)', () => {
     expect(call.system).toContain('The measured value was 42.');
     expect(call.temperature).toBe(0);
   });
-  it('Reedy PDF without evidence refuses before generation', async () => {
+  it('Reedy PDF without evidence still calls the model', async () => {
+    streamTextMock.mockImplementationOnce(() => ({
+      textStream: asyncIter(['Not in the document; answering from general knowledge.']),
+    }));
     const searchPdfEvidence = vi.fn(async () => ({ passages: [], status: 'ok' }));
     const backend = Object.assign(fakeReedy(), { searchPdfEvidence });
     const adapter = createTauriAdapter(() => ({
@@ -369,8 +389,9 @@ describe('TauriChatAdapter wiring (M1.11)', () => {
       output.push(event.content[0]!.text);
     }
     expect(searchPdfEvidence).toHaveBeenCalled();
-    expect(streamTextMock).not.toHaveBeenCalled();
-    expect(output.join(' ')).toMatch(/cannot verify|can't verify/i);
+    expect(streamTextMock).toHaveBeenCalledTimes(1);
+    expect(output).toHaveLength(1);
+    expect(output[0]).toBe('Not in the document; answering from general knowledge.');
   });
 
   it('Reedy PDF retrieves page evidence before generation and exposes its source', async () => {
@@ -420,7 +441,7 @@ describe('TauriChatAdapter wiring (M1.11)', () => {
     const turnIds = (sourceStore as unknown as { sources: Map<string, unknown[]> }).sources;
     expect([...turnIds.values()][0]).toHaveLength(1);
   });
-  it('refuses a numeric PDF claim cited to a different retrieved page', async () => {
+  it('streams the model answer even when a numeric claim cites a different page', async () => {
     streamTextMock.mockImplementationOnce(() => ({
       textStream: asyncIter(['The replacement rate is 80% [p. 1].']),
     }));
@@ -469,10 +490,10 @@ describe('TauriChatAdapter wiring (M1.11)', () => {
       output.push(event.content[0]!.text);
     }
     expect(output).toHaveLength(1);
-    expect(output[0]).toMatch(/cannot verify|can't verify/i);
+    expect(output[0]).toBe('The replacement rate is 80% [p. 1].');
   });
 
-  it('does not stream an uncited PDF answer into the UI', async () => {
+  it('streams an uncited PDF answer from the model', async () => {
     streamTextMock.mockImplementationOnce(() => ({
       textStream: asyncIter(['The value', ' was 42.']),
     }));
@@ -511,7 +532,7 @@ describe('TauriChatAdapter wiring (M1.11)', () => {
       output.push(event.content[0]!.text);
     }
     expect(output).toHaveLength(1);
-    expect(output[0]).toMatch(/cannot verify|can't verify/i);
+    expect(output[0]).toBe('The value was 42.');
   });
 
   it('PDF index lookup errors fail closed before generation', async () => {
@@ -541,5 +562,143 @@ describe('TauriChatAdapter wiring (M1.11)', () => {
     }
     expect(streamTextMock).not.toHaveBeenCalled();
     expect(output.join(' ')).toMatch(/cannot verify|can't verify/i);
+  });
+});
+
+interface TriliumCall {
+  system: string;
+  messages: Array<{ role: string; content: unknown }>;
+  providerOptions?: { ollama?: { think?: boolean } };
+}
+
+describe('Trilium-style composer capabilities', () => {
+  const runWithToggles = async (
+    toggles: { webSearch: boolean; includeNotes: boolean; thinking: boolean },
+    extra: { getNotebookContext?: () => string; getAnnotationsContext?: () => string } = {},
+  ) => {
+    const adapter = createTauriAdapter(() => ({
+      settings: { ...baseSettings, reedy: { enabled: false } },
+      bookHash: 'bk1',
+      bookTitle: 'Title',
+      authorName: 'Author',
+      currentPage: 1,
+      currentSectionIndex: 0,
+      backend: fakeLegacy(),
+      sourceStore: new ReedySourceStore(),
+      composerToggles: toggles,
+      ...extra,
+    }));
+    await drainRun(
+      adapter.run({
+        messages: [
+          { role: 'user', content: [{ type: 'text', text: 'Is the web result reliable?' }] },
+        ],
+        abortSignal: undefined,
+      } as unknown as Parameters<typeof adapter.run>[0]) as AsyncIterable<unknown>,
+    );
+    return streamTextMock.mock.calls[0]![0] as TriliumCall;
+  };
+
+  it('web search toggle: query goes to DuckDuckGo and results land in the system prompt', async () => {
+    searchWebMock.mockImplementationOnce(async () => [
+      { title: 'Reliable Source', url: 'https://example.com/a', snippet: 'a snippet' },
+    ]);
+    const call = await runWithToggles({ webSearch: true, includeNotes: false, thinking: false });
+
+    expect(searchWebMock).toHaveBeenCalledWith('Is the web result reliable?');
+    expect(call.system).toContain('WEB SEARCH RESULTS');
+    expect(call.system).toContain('Reliable Source');
+    expect(call.system).toContain('https://example.com/a');
+  });
+
+  it('web search failure is logged and does not abort the turn', async () => {
+    searchWebMock.mockRejectedValueOnce(new Error('ddg down'));
+    const call = await runWithToggles({ webSearch: true, includeNotes: false, thinking: false });
+
+    expect(streamTextMock).toHaveBeenCalledTimes(1);
+    expect(call.system).not.toContain('WEB SEARCH RESULTS');
+  });
+
+  it('includeNotes toggle: notebook and annotations contexts land in the prompt', async () => {
+    const call = await runWithToggles(
+      { webSearch: false, includeNotes: true, thinking: false },
+      {
+        getNotebookContext: () => '# My notes\nChapter one was slow.',
+        getAnnotationsContext: () => '「quoted line」 → I loved this',
+      },
+    );
+
+    expect(call.system).toContain('USER NOTEBOOK');
+    expect(call.system).toContain('# My notes');
+    expect(call.system).toContain('USER HIGHLIGHTS/ANNOTATIONS');
+    expect(call.system).toContain('I loved this');
+  });
+
+  it('includeNotes toggle off keeps user notes out of the prompt', async () => {
+    const call = await runWithToggles(
+      { webSearch: false, includeNotes: false, thinking: false },
+      {
+        getNotebookContext: () => '# My notes',
+        getAnnotationsContext: () => 'annotation',
+      },
+    );
+
+    expect(call.system).not.toContain('USER NOTEBOOK');
+    expect(call.system).not.toContain('USER HIGHLIGHTS/ANNOTATIONS');
+  });
+
+  it('thinking toggle: adds the THINKING MODE directive and ollama think option', async () => {
+    const call = await runWithToggles({ webSearch: false, includeNotes: false, thinking: true });
+
+    expect(call.system).toContain('THINKING MODE');
+    expect(call.providerOptions?.ollama?.think).toBe(true);
+  });
+
+  it('thinking toggle off leaves the prompt and provider options untouched', async () => {
+    const call = await runWithToggles({ webSearch: false, includeNotes: false, thinking: false });
+
+    expect(call.system).not.toContain('THINKING MODE');
+    expect(call.providerOptions).toBeUndefined();
+  });
+
+  it('pasted image attachments reach the model as image content parts', async () => {
+    const adapter = createTauriAdapter(() => ({
+      settings: { ...baseSettings, reedy: { enabled: false } },
+      bookHash: 'bk1',
+      bookTitle: 'Title',
+      authorName: 'Author',
+      currentPage: 1,
+      currentSectionIndex: 0,
+      backend: fakeLegacy(),
+      sourceStore: new ReedySourceStore(),
+      composerToggles: { webSearch: false, includeNotes: false, thinking: false },
+    }));
+    await drainRun(
+      adapter.run({
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'What does this chart show?' },
+              { type: 'image', image: 'data:image/jpeg;base64,AAAA' },
+            ],
+          },
+        ],
+        abortSignal: undefined,
+      } as unknown as Parameters<typeof adapter.run>[0]) as AsyncIterable<unknown>,
+    );
+
+    const call = streamTextMock.mock.calls[0]![0] as TriliumCall;
+    const userContent = call.messages[0]!.content as Array<{
+      type: string;
+      text?: string;
+      image?: string;
+    }>;
+    expect(userContent.find((part) => part.type === 'text')?.text).toBe(
+      'What does this chart show?',
+    );
+    expect(userContent.find((part) => part.type === 'image')?.image).toBe(
+      'data:image/jpeg;base64,AAAA',
+    );
   });
 });

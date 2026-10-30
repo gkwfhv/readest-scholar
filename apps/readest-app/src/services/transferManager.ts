@@ -614,15 +614,19 @@ class TransferManager {
 
   async requeueScholarDeleteConflict(
     transferId: string,
-    fileId: string,
-    activeVersionId: string,
+    fileId: string | null,
+    activeVersionId: string | null,
   ): Promise<void> {
     const task = await this.getScholarDeleteConflictTask(transferId);
     const baseline = getScholarFileBaseline(task.scholarAccountId!, task.scholarFilePath!);
-    if (baseline && baseline.fileId !== fileId) {
+    if (fileId && baseline && baseline.fileId !== fileId) {
       throw new Error('Scholar file identity changed; refresh this dialog');
     }
-    useTransferStore.getState().rebaseScholarDelete(transferId, activeVersionId);
+    // A null expectation is what remains when the review could not be loaded:
+    // a still-live file re-raises the conflict (the dialog can be reviewed
+    // again), while a vanished or tombstoned file is reported by the server as
+    // already-deleted success, so the queue row converges either way.
+    useTransferStore.getState().rebaseScholarDelete(transferId, activeVersionId ?? null);
     if (useTransferStore.getState().transfers[transferId]?.status !== 'pending') {
       throw new Error('Scholar delete conflict is no longer available');
     }

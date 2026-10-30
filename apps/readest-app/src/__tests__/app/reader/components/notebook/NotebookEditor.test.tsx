@@ -17,6 +17,70 @@ vi.mock('@/app/reader/hooks/useNotebookDocumentCoordinator', () => ({
   flushNotebookDocument: (bookKey: string) => flushNotebookDocument(bookKey),
 }));
 
+// The real editor is a Milkdown Crepe instance, which cannot be driven by
+// fireEvent.change in jsdom. This stand-in replicates the old TextEditor
+// contract so these tests keep exercising NotebookEditor's wiring.
+vi.mock('@/components/MarkdownTextEditor', async () => {
+  const React = await import('react');
+  const { forwardRef, useEffect, useImperativeHandle, useRef } = React;
+  interface MockEditorProps {
+    value?: string;
+    ariaLabel?: string;
+    placeholder?: string;
+    spellCheck?: boolean;
+    className?: string;
+    onChange?: (v: string) => void;
+    onBlur?: () => void;
+    onEscape?: () => void;
+    onSave?: () => void;
+    onSelect?: (s: number, e: number) => void;
+    onCompositionStart?: () => void;
+    onCompositionEnd?: (v: string) => void;
+  }
+  const MockEditor = forwardRef<unknown, MockEditorProps>((props, ref) => {
+    const elRef = useRef<HTMLTextAreaElement>(null);
+    useEffect(() => {
+      if (elRef.current) elRef.current.value = props.value ?? '';
+    }, [props.value]);
+    useImperativeHandle(ref, () => ({
+      focus: () => elRef.current?.focus(),
+      blur: () => elRef.current?.blur(),
+      getValue: () => elRef.current?.value ?? '',
+      setValue: (v: string) => {
+        if (elRef.current) elRef.current.value = v;
+      },
+      getElement: () => elRef.current,
+    }));
+    return (
+      <textarea
+        ref={elRef}
+        aria-label={props.ariaLabel}
+        placeholder={props.placeholder}
+        dir='auto'
+        spellCheck={Boolean(props.spellCheck)}
+        className={`select-text ${props.className ?? ''}`}
+        data-note-editor=''
+        defaultValue={props.value}
+        onChange={(e) => props.onChange?.(e.currentTarget.value)}
+        onBlur={props.onBlur}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') props.onEscape?.();
+          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault();
+            props.onSave?.();
+          }
+        }}
+        onSelect={(e) =>
+          props.onSelect?.(e.currentTarget.selectionStart, e.currentTarget.selectionEnd)
+        }
+        onCompositionStart={props.onCompositionStart}
+        onCompositionEnd={(e) => props.onCompositionEnd?.(e.currentTarget.value)}
+      />
+    );
+  });
+  return { default: MockEditor };
+});
+
 describe('NotebookEditor', () => {
   beforeEach(() => {
     vi.clearAllMocks();

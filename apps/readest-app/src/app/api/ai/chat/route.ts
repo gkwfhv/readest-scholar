@@ -3,7 +3,8 @@ import { streamText, createGateway } from 'ai';
 import type { ModelMessage } from 'ai';
 
 const MAX_MESSAGES = 500;
-const MAX_INPUT_CHARS = 500_000;
+// Room for a few downscaled image data-URLs alongside text (web builds only).
+const MAX_INPUT_CHARS = 2_000_000;
 
 export async function POST(req: Request): Promise<Response> {
   try {

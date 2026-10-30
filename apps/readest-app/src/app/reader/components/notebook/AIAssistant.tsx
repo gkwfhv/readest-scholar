@@ -5,6 +5,9 @@ import {
   AssistantRuntimeProvider,
   useLocalRuntime,
   useAssistantRuntime,
+  CompositeAttachmentAdapter,
+  SimpleImageAttachmentAdapter,
+  SimpleTextAttachmentAdapter,
   type ThreadMessage,
   type ThreadHistoryAdapter,
 } from '@assistant-ui/react';
@@ -16,6 +19,7 @@ import { useReaderStore } from '@/store/readerStore';
 import { useBookProgress } from '@/store/readerProgressStore';
 import { useAIChatStore } from '@/store/aiChatStore';
 import { useNotebookStore } from '@/store/notebookStore';
+import { useNotebookDocumentStore } from '@/store/notebookDocumentStore';
 import { aiLogger, createTauriAdapter, verifyEmbeddingModel } from '@/services/ai';
 import { getAIProvider } from '@/services/ai/providers';
 import {
@@ -26,6 +30,7 @@ import {
   type RetrievalBackend,
   type SourceItem,
 } from '@/services/ai/adapters';
+import type { ComposerToggles } from '@/services/ai/adapters/TauriChatAdapter';
 import type { EmbeddingProgress, AISettings, AIMessage } from '@/services/ai/types';
 import type { RetrievedChunk } from '@/services/reedy/retrieval/BookRetriever';
 import { useEnv } from '@/context/EnvContext';
@@ -36,10 +41,26 @@ import type { AppService } from '@/types/system';
 import { ReedyAssistant } from '@/services/reedy/ui/ReedyAssistant';
 import { useReedyStore } from '@/services/reedy/store/reedyStore';
 import type { ReadingContextSnapshot } from '@/services/reedy/tools/builtins/types';
+import type { BookNote } from '@/types/book';
 
 import { Button } from '@/components/ui/button';
 import { Loader2Icon, BookOpenIcon } from 'lucide-react';
 import { Thread } from '@/components/assistant/Thread';
+import ConfirmDialog from '@/components/ConfirmDialog';
+
+const DEFAULT_TOGGLES: ComposerToggles = { webSearch: false, includeNotes: true, thinking: false };
+const TOGGLES_STORAGE_KEY = 'readest_ai_composer_toggles';
+
+function loadToggles(): ComposerToggles {
+  try {
+    const saved = JSON.parse(
+      localStorage.getItem(TOGGLES_STORAGE_KEY) ?? '{}',
+    ) as Partial<ComposerToggles>;
+    return { ...DEFAULT_TOGGLES, ...saved };
+  } catch {
+    return DEFAULT_TOGGLES;
+  }
+}
 
 // Helper function to convert AIMessage array to ExportedMessageRepository format
 // Each message needs to be wrapped with { message, parentId } structure
@@ -94,6 +115,7 @@ const AIAssistantChat = ({
   isPdf,
   onSourceClick,
   onResetIndex,
+  getAnnotationsContext,
 }: {
   aiSettings: AISettings;
   bookHash: string;
@@ -108,6 +130,7 @@ const AIAssistantChat = ({
   isPdf: boolean;
   onSourceClick?: (source: SourceItem) => void;
   onResetIndex: () => void;
+  getAnnotationsContext?: () => string;
 }) => {
   const {
     activeConversationId,
@@ -123,6 +146,19 @@ const AIAssistantChat = ({
     },
     [setCurrentTurnId],
   );
+
+  const [toggles, setToggles] = useState<ComposerToggles>(loadToggles);
+  const handleToggle = useCallback((key: keyof ComposerToggles) => {
+    setToggles((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      try {
+        localStorage.setItem(TOGGLES_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        /* storage unavailable */
+      }
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     currentTurnIdRef.current = null;
@@ -141,6 +177,9 @@ const AIAssistantChat = ({
     backend,
     sourceStore,
     onTurnStart: handleTurnStart,
+    composerToggles: toggles,
+    getNotebookContext: (): string => '',
+    getAnnotationsContext,
   });
 
   // update ref on every render with latest values
@@ -156,6 +195,10 @@ const AIAssistantChat = ({
       backend,
       sourceStore,
       onTurnStart: handleTurnStart,
+      composerToggles: toggles,
+      getNotebookContext: () =>
+        useNotebookDocumentStore.getState().sessions[bookHash]?.content ?? '',
+      getAnnotationsContext,
     };
   });
 
@@ -229,6 +272,8 @@ const AIAssistantChat = ({
       sourcesByMessageId={sourcesByMessageId}
       isPdf={isPdf}
       onSourceClick={onSourceClick}
+      toggles={toggles}
+      onToggle={handleToggle}
     />
   );
 };
@@ -245,6 +290,8 @@ const AIAssistantWithRuntime = ({
   sourcesByMessageId,
   isPdf,
   onSourceClick,
+  toggles,
+  onToggle,
 }: {
   scope: string;
   adapter: NonNullable<ReturnType<typeof createTauriAdapter>>;
@@ -257,9 +304,22 @@ const AIAssistantWithRuntime = ({
   sourcesByMessageId: Record<string, SourceItem[]>;
   isPdf: boolean;
   onSourceClick?: (source: SourceItem) => void;
+  toggles: ComposerToggles;
+  onToggle: (key: keyof ComposerToggles) => void;
 }) => {
+  const attachmentsAdapter = useMemo(
+    () =>
+      new CompositeAttachmentAdapter([
+        new SimpleImageAttachmentAdapter(),
+        new SimpleTextAttachmentAdapter(),
+      ]),
+    [],
+  );
   const runtime = useLocalRuntime(adapter, {
-    adapters: historyAdapter ? { history: historyAdapter } : undefined,
+    adapters: {
+      history: historyAdapter,
+      attachments: attachmentsAdapter,
+    },
   });
 
   if (!runtime) return null;
@@ -276,6 +336,8 @@ const AIAssistantWithRuntime = ({
         sourcesByMessageId={sourcesByMessageId}
         isPdf={isPdf}
         onSourceClick={onSourceClick}
+        toggles={toggles}
+        onToggle={onToggle}
       />
     </AssistantRuntimeProvider>
   );
@@ -291,6 +353,8 @@ const ThreadWrapper = ({
   sourcesByMessageId,
   isPdf,
   onSourceClick,
+  toggles,
+  onToggle,
 }: {
   scope: string;
   onResetIndex: () => void;
@@ -301,6 +365,8 @@ const ThreadWrapper = ({
   sourcesByMessageId: Record<string, SourceItem[]>;
   isPdf: boolean;
   onSourceClick?: (source: SourceItem) => void;
+  toggles: ComposerToggles;
+  onToggle: (key: keyof ComposerToggles) => void;
 }) => {
   const [sources, setSources] = useState<RetrievedChunk[]>(
     currentTurnId ? sourceStore.get(currentTurnId) : [],
@@ -344,6 +410,8 @@ const ThreadWrapper = ({
       onResetIndex={onResetIndex}
       isLoadingHistory={isLoadingHistory}
       hasActiveConversation={hasActiveConversation}
+      toggles={toggles}
+      onToggle={onToggle}
     />
   );
 };
@@ -406,6 +474,9 @@ const LegacyAIAssistant = ({ bookKey }: AIAssistantProps) => {
   const [indexError, setIndexError] = useState<string | null>(null);
   const [indexed, setIndexed] = useState(false);
   const [currentTurnId, setCurrentTurnId] = useState<string | null>(null);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
 
   const { user } = useAuth();
   const bookHash = aiAccountScope(bookKey.split('-')[0] || '', user?.id);
@@ -414,6 +485,15 @@ const LegacyAIAssistant = ({ bookKey }: AIAssistantProps) => {
   const currentPage = progress?.pageinfo?.current ?? 0;
   const currentSectionIndex = progress?.section?.current ?? 0;
   const aiSettings = settings?.aiSettings;
+
+  const getAnnotationsContext = useCallback(() => {
+    const data = useBookDataStore.getState().getBookData(bookKey);
+    const notes = (data?.config?.booknotes ?? []) as BookNote[];
+    return notes
+      .map((n) => (n.text || n.note ? `「${n.text ?? ''}」 → ${n.note ?? ''}` : ''))
+      .filter(Boolean)
+      .join('\n');
+  }, [bookKey]);
 
   // Per-instance source store, plus the active backend chosen via the same
   // selectBackend gate the chat adapter will hit (Reedy on Tauri when
@@ -463,12 +543,29 @@ const LegacyAIAssistant = ({ bookKey }: AIAssistantProps) => {
     }
   }, [bookData?.bookDoc, bookHash, aiSettings]);
 
-  const handleResetIndex = useCallback(async () => {
-    if (!appService || !backend) return;
-    if (!(await appService.ask(_('Are you sure you want to re-index this book?')))) return;
-    await backend.clearBook(bookHash);
-    setIndexed(false);
-  }, [bookHash, appService, backend, _]);
+  const handleResetIndex = useCallback(() => {
+    setResetError(null);
+    setConfirmReset(true);
+  }, []);
+
+  const handleConfirmReset = useCallback(async () => {
+    if (!backend) return;
+    setResetBusy(true);
+    setResetError(null);
+    try {
+      await backend.clearBook(bookHash);
+      setIndexed(false);
+      setConfirmReset(false);
+    } catch (cause) {
+      setResetError(
+        cause instanceof Error
+          ? _(cause.message)
+          : _('Could not re-index the book. Please try again.'),
+      );
+    } finally {
+      setResetBusy(false);
+    }
+  }, [backend, bookHash, _]);
 
   // PDF sections map one-to-one to pages, including for legacy chunks without CFI.
   const handleSourceClick = useCallback(
@@ -553,21 +650,36 @@ const LegacyAIAssistant = ({ bookKey }: AIAssistantProps) => {
   if (!backend) return null;
 
   return (
-    <AIAssistantChat
-      aiSettings={aiSettings}
-      bookHash={bookHash}
-      bookTitle={bookTitle}
-      authorName={authorName}
-      currentPage={currentPage}
-      currentSectionIndex={currentSectionIndex}
-      backend={backend}
-      sourceStore={sourceStore}
-      currentTurnId={currentTurnId}
-      setCurrentTurnId={setCurrentTurnId}
-      isPdf={bookData?.book?.format === 'PDF'}
-      onSourceClick={handleSourceClick}
-      onResetIndex={handleResetIndex}
-    />
+    <>
+      <AIAssistantChat
+        aiSettings={aiSettings}
+        bookHash={bookHash}
+        bookTitle={bookTitle}
+        authorName={authorName}
+        currentPage={currentPage}
+        currentSectionIndex={currentSectionIndex}
+        backend={backend}
+        sourceStore={sourceStore}
+        currentTurnId={currentTurnId}
+        setCurrentTurnId={setCurrentTurnId}
+        isPdf={bookData?.book?.format === 'PDF'}
+        onSourceClick={handleSourceClick}
+        onResetIndex={handleResetIndex}
+        getAnnotationsContext={getAnnotationsContext}
+      />
+      {confirmReset && (
+        <ConfirmDialog
+          title={_('Are you sure you want to re-index this book?')}
+          message={_('Re-indexing clears the current index and indexes the book again.')}
+          confirmLabel={_('Re-index')}
+          cancelLabel={_('Cancel')}
+          busy={resetBusy}
+          error={resetError ?? undefined}
+          onConfirm={() => void handleConfirmReset()}
+          onCancel={() => setConfirmReset(false)}
+        />
+      )}
+    </>
   );
 };
 

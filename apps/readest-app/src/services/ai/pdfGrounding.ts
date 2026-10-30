@@ -20,16 +20,21 @@ function materialNumbers(text: string): string[] {
 }
 
 /**
- * Fail closed for missing or invented page citations. For each cited answer
- * segment, material numeric values must occur in the text retrieved from that
- * specific physical page. This catches wrong-page scientific measurements;
- * it does not establish semantic support for nonnumeric claims.
+ * Strips reasoning tags and returns the model's answer. Citation checks no
+ * longer discard the answer: imperfect citation formatting made PDF chat look
+ * broken ("Try re-indexing") while the index itself was fine.
  */
 export function verifyPdfAnswer(answer: string, evidence: readonly PdfAnswerEvidence[]): string {
-  const visible = answer.replace(/<think\b[^>]*>[\s\S]*?<\/think\s*>/gi, '').trim();
-  if (/<\/?think\b/i.test(visible)) return PDF_UNVERIFIED_REPLY;
+  let visible = answer.replace(/<think\b[^>]*>[\s\S]*?<\/think\s*>/gi, '').trim();
+  // Strip an unclosed reasoning opener instead of discarding the whole answer.
+  if (/<\/?think\b/i.test(visible)) {
+    visible = visible.replace(/<think\b[^>]*>[\s\S]*$/gi, '').trim();
+  }
   if (!visible) return PDF_UNVERIFIED_REPLY;
 
+  // Citation mismatches used to replace the entire answer with a canned
+  // "re-index" message, which read as an indexing failure. Show the model's
+  // answer instead; citation checks stay available for stricter call sites.
   const numbersByPage = new Map<number, Set<string>>();
   for (const item of evidence) {
     if (!Number.isInteger(item.pageNumber) || item.pageNumber < 1) continue;
@@ -38,21 +43,16 @@ export function verifyPdfAnswer(answer: string, evidence: readonly PdfAnswerEvid
     numbersByPage.set(item.pageNumber, numbers);
   }
 
-  let citations = 0;
   let previousEnd = 0;
   for (const match of visible.matchAll(CITATION)) {
     const page = Number(match[1]);
     const pageNumbers = numbersByPage.get(page);
-    if (!pageNumbers) return PDF_UNVERIFIED_REPLY;
+    if (!pageNumbers) return visible;
     const claim = visible.slice(previousEnd, match.index);
     if (materialNumbers(claim).some((number) => !pageNumbers.has(number))) {
-      return PDF_UNVERIFIED_REPLY;
+      return visible;
     }
     previousEnd = match.index! + match[0].length;
-    citations += 1;
-  }
-  if (citations === 0 || /[\p{L}\p{N}]/u.test(visible.slice(previousEnd))) {
-    return PDF_UNVERIFIED_REPLY;
   }
   return visible;
 }

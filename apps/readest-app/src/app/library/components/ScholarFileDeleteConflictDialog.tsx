@@ -99,17 +99,18 @@ export default function ScholarFileDeleteConflictDialog({
   }, [transfer.scholarAccountId, transfer.scholarFilePath, transfer.scholarOpId]);
 
   const resolve = async (deleteCurrent: boolean) => {
-    if (!review || busy) return;
+    if (busy) return;
     setBusy(true);
     setError('');
     try {
       if (deleteCurrent) {
         await transferManager.requeueScholarDeleteConflict(
           transfer.id,
-          review.fileId,
-          review.activeVersionId,
+          review?.fileId ?? null,
+          review?.activeVersionId ?? null,
         );
       } else {
+        if (!review) throw new Error('Cloud version not loaded; reopen this dialog');
         await transferManager.keepScholarCloudAfterDeleteConflict(
           transfer.id,
           review.fileId,
@@ -178,7 +179,7 @@ export default function ScholarFileDeleteConflictDialog({
           <button
             type='button'
             className='btn btn-contrast'
-            disabled={!review || busy}
+            disabled={busy || (review === null && !error)}
             onClick={() => void resolve(true)}
           >
             {_('Delete current cloud version')}

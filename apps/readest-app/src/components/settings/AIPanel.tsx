@@ -105,6 +105,7 @@ const AIPanel: React.FC = () => {
   const [openrouterEmbeddingModel, setOpenrouterEmbeddingModel] = useState(
     aiSettings.openrouterEmbeddingModel ?? '',
   );
+  const [spoilerProtection, setSpoilerProtection] = useState(aiSettings.spoilerProtection);
   useEffect(() => {
     setGatewayKey(aiSettings.aiGatewayApiKey ?? '');
     setOpenrouterKey(aiSettings.openrouterApiKey ?? '');
@@ -320,6 +321,14 @@ const AIPanel: React.FC = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openrouterEmbeddingModel]);
+
+  useEffect(() => {
+    if (!isMounted.current) return;
+    if (spoilerProtection !== aiSettings.spoilerProtection) {
+      saveAiSetting('spoilerProtection', spoilerProtection);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spoilerProtection]);
 
   // Get the effective model ID to use (either selected or custom)
   const getEffectiveModelId = useCallback(() => {
@@ -789,6 +798,19 @@ const AIPanel: React.FC = () => {
           </div>
         </BoxedList>
       )}
+
+      <BoxedList
+        title={_('PDF Search')}
+        className={disabledSection}
+        description={_('Options for AI chat over indexed PDFs.')}
+      >
+        <SettingsSwitchRow
+          label={_('Prevent spoilers (only use pages you have read)')}
+          checked={spoilerProtection}
+          disabled={!enabled}
+          onChange={() => setSpoilerProtection(!spoilerProtection)}
+        />
+      </BoxedList>
 
       <BoxedList
         title={_('Reedy Retrieval (Beta)')}

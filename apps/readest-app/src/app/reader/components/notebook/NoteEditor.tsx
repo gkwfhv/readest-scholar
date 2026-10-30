@@ -6,7 +6,7 @@ import { TextSelection } from '@/utils/sel';
 import { md5Fingerprint } from '@/utils/md5';
 import { BookNote } from '@/types/book';
 import useShortcuts from '@/hooks/useShortcuts';
-import TextEditor, { TextEditorRef } from '@/components/TextEditor';
+import MarkdownTextEditor, { MarkdownTextEditorRef } from '@/components/MarkdownTextEditor';
 import TextButton from '@/components/TextButton';
 
 interface NoteEditorProps {
@@ -25,7 +25,7 @@ const NoteEditor: React.FC<NoteEditorProps> = ({ onSave, onEdit }) => {
     getNotebookAnnotationDraft,
   } = useNotebookStore();
 
-  const editorRef = useRef<TextEditorRef>(null);
+  const editorRef = useRef<MarkdownTextEditorRef>(null);
   const [note, setNote] = useState('');
   const separatorWidth = useResponsiveSize(3);
 
@@ -102,8 +102,8 @@ const NoteEditor: React.FC<NoteEditorProps> = ({ onSave, onEdit }) => {
 
   return (
     <div className='content booknote-item note-editor-container bg-base-100 mt-2 rounded-md p-2'>
-      <div className='flex w-full'>
-        <TextEditor
+      <div className='flex w-full min-h-[3rem]'>
+        <MarkdownTextEditor
           ref={editorRef}
           value={note}
           onChange={handleNoteChange}

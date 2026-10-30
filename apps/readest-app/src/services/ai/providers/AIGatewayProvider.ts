@@ -1,9 +1,11 @@
-import { createGateway } from 'ai';
+import { createGateway, streamText } from 'ai';
 import type { LanguageModel, EmbeddingModel } from 'ai';
 import type { AIProvider, AISettings, AIProviderName } from '../types';
 import { aiLogger } from '../logger';
 import { GATEWAY_MODELS } from '../constants';
 import { AI_TIMEOUTS } from '../utils/retry';
+import { getAIFetch } from '../utils/httpFetch';
+import { isTauriAppPlatform } from '@/services/environment';
 import { createProxiedEmbeddingModel } from './ProxiedGatewayEmbedding';
 
 export class AIGatewayProvider implements AIProvider {
@@ -19,7 +21,9 @@ export class AIGatewayProvider implements AIProvider {
     if (!settings.aiGatewayApiKey) {
       throw new Error('AI Gateway API key required');
     }
-    this.gateway = createGateway({ apiKey: settings.aiGatewayApiKey });
+    // On Tauri the request leaves from the Rust HTTP transport (no CORS, no
+    // cleartext restrictions); on web builds this is window.fetch.
+    this.gateway = createGateway({ apiKey: settings.aiGatewayApiKey, fetch: getAIFetch() });
     aiLogger.provider.init(
       'ai-gateway',
       settings.aiGatewayModel || GATEWAY_MODELS.GEMINI_FLASH_LITE,
@@ -34,7 +38,9 @@ export class AIGatewayProvider implements AIProvider {
   getEmbeddingModel(): EmbeddingModel {
     const embedModel = this.settings.aiGatewayEmbeddingModel || 'openai/text-embedding-3-small';
 
-    if (typeof window !== 'undefined') {
+    // The /api/ai/embed proxy route only exists on web builds; on Tauri call
+    // the gateway directly through the Rust HTTP transport.
+    if (!isTauriAppPlatform()) {
       return createProxiedEmbeddingModel({
         apiKey: this.settings.aiGatewayApiKey!,
         model: embedModel,
@@ -51,8 +57,29 @@ export class AIGatewayProvider implements AIProvider {
   async healthCheck(): Promise<boolean> {
     if (!this.settings.aiGatewayApiKey) return false;
 
+    const modelId = this.settings.aiGatewayModel || GATEWAY_MODELS.GEMINI_FLASH_LITE;
+
+    // On Tauri the /api/ai/chat proxy route does not exist (asset protocol
+    // serves static files only), so probe the gateway directly.
+    if (isTauriAppPlatform()) {
+      try {
+        aiLogger.provider.init('ai-gateway', `healthCheck starting with model: ${modelId}`);
+        const result = streamText({
+          model: this.gateway(modelId),
+          messages: [{ role: 'user', content: 'hi' }],
+          abortSignal: AbortSignal.timeout(AI_TIMEOUTS.HEALTH_CHECK),
+        });
+        await result.text;
+        aiLogger.provider.init('ai-gateway', 'healthCheck success');
+        return true;
+      } catch (e) {
+        const error = e as Error;
+        aiLogger.provider.error('ai-gateway', `healthCheck failed: ${error.message}`);
+        return false;
+      }
+    }
+
     try {
-      const modelId = this.settings.aiGatewayModel || GATEWAY_MODELS.GEMINI_FLASH_LITE;
       aiLogger.provider.init('ai-gateway', `healthCheck starting with model: ${modelId}`);
 
       const response = await fetch('/api/ai/chat', {

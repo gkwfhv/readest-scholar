@@ -27,10 +27,21 @@ export interface BookDocType {
   metadata?: { title?: string | { [key: string]: string }; author?: string | { name?: string } };
 }
 
+// A bm25-only meta is written when embedding fails for a PDF. Treating it as
+// indexed makes every later index attempt a no-op, so the book never recovers.
+const DEGRADED_EMBEDDING_MODEL = 'bm25-only';
+
+// The whole book used to go out as one embeddings POST, which blows the
+// per-request timeout once a PDF has a few hundred chunks.
+const EMBEDDING_BATCH_SIZE = 32;
+
 export async function isBookIndexed(bookHash: string, pdfPageSections = false): Promise<boolean> {
   const meta = await aiStore.getMeta(bookHash);
   const indexed =
-    !!meta && meta.totalChunks > 0 && (!pdfPageSections || meta.pageNumberScheme === 'pdf-section');
+    !!meta &&
+    meta.totalChunks > 0 &&
+    meta.embeddingModel !== DEGRADED_EMBEDDING_MODEL &&
+    (!pdfPageSections || meta.pageNumberScheme === 'pdf-section');
   aiLogger.rag.isIndexed(bookHash, indexed);
   return indexed;
 }
@@ -158,15 +169,28 @@ async function indexBookInner(
 
     const texts = allChunks.map((c) => c.text);
     try {
-      const { embeddings } = await withRetryAndTimeout(
-        () =>
-          embedMany({
-            model: provider.getEmbeddingModel(),
-            values: texts,
-          }),
-        AI_TIMEOUTS.EMBEDDING_BATCH,
-        AI_RETRY_CONFIGS.EMBEDDING,
-      );
+      // Batched so each request stays well inside AI_TIMEOUTS.EMBEDDING_BATCH;
+      // one POST per book times out on books with a few hundred chunks.
+      const embeddings: number[][] = [];
+      for (let start = 0; start < texts.length; start += EMBEDDING_BATCH_SIZE) {
+        assertCurrent();
+        const values = texts.slice(start, start + EMBEDDING_BATCH_SIZE);
+        const { embeddings: batchEmbeddings } = await withRetryAndTimeout(
+          () =>
+            embedMany({
+              model: provider.getEmbeddingModel(),
+              values,
+            }),
+          AI_TIMEOUTS.EMBEDDING_BATCH,
+          AI_RETRY_CONFIGS.EMBEDDING,
+        );
+        embeddings.push(...batchEmbeddings);
+        onProgress?.({
+          current: Math.min(start + values.length, texts.length),
+          total: texts.length,
+          phase: 'embedding',
+        });
+      }
 
       if (
         embeddings.length !== allChunks.length ||

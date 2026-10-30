@@ -263,18 +263,17 @@ const Notebook: React.FC = () => {
             handleTogglePin={handleTogglePin}
           />
         </div>
-        {notebookActiveTab === 'ai' ? (
-          <div className='flex min-h-0 flex-1 flex-col'>
-            <AIAssistant key={activeConversationId ?? 'new'} bookKey={sideBarBookKey} />
-          </div>
-        ) : (
+        <div className='flex min-h-0 flex-1 flex-col' hidden={notebookActiveTab !== 'ai'}>
+          <AIAssistant key={activeConversationId ?? 'new'} bookKey={sideBarBookKey} />
+        </div>
+        <div className='flex min-h-0 flex-1 flex-col' hidden={notebookActiveTab !== 'notes'}>
           <NotebookEditor
             bookKey={sideBarBookKey}
             handleOpenAnnotations={handleOpenAnnotations}
             excerpts={excerptNotes}
             onDeleteExcerpt={handleDeleteExcerpt}
           />
-        )}
+        </div>
         <div
           className='shrink-0'
           style={{ paddingBottom: `${(safeAreaInsets?.bottom || 0) / 2}px` }}

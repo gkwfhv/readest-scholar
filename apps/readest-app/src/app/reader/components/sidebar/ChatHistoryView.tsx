@@ -10,9 +10,9 @@ import { useBookDataStore } from '@/store/bookDataStore';
 import { useAIChatStore } from '@/store/aiChatStore';
 import { useNotebookStore } from '@/store/notebookStore';
 import type { AIConversation } from '@/services/ai/types';
-import { useEnv } from '@/context/EnvContext';
 import { useAuth } from '@/context/AuthContext';
 import { aiAccountScope } from '@/services/ai/accountScope';
+import ConfirmDialog from '@/components/ConfirmDialog';
 
 interface ChatHistoryViewProps {
   bookKey: string;
@@ -20,7 +20,6 @@ interface ChatHistoryViewProps {
 
 const ChatHistoryView: React.FC<ChatHistoryViewProps> = ({ bookKey }) => {
   const _ = useTranslation();
-  const { appService } = useEnv();
   const { user } = useAuth();
   const { getBookData } = useBookDataStore();
   const {
@@ -37,6 +36,9 @@ const ChatHistoryView: React.FC<ChatHistoryViewProps> = ({ bookKey }) => {
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   const bookData = getBookData(bookKey);
   const bookHash = aiAccountScope(bookKey.split('-')[0] || '', user?.id);
@@ -64,16 +66,25 @@ const ChatHistoryView: React.FC<ChatHistoryViewProps> = ({ bookKey }) => {
     setNotebookActiveTab('ai');
   }, [bookHash, bookTitle, createConversation, setNotebookVisible, setNotebookActiveTab]);
 
-  const handleDeleteConversation = useCallback(
-    async (e: React.MouseEvent, id: string) => {
-      e.stopPropagation();
-      if (!appService) return;
-      if (await appService.ask(_('Delete this conversation?'))) {
-        await deleteConversation(id);
-      }
-    },
-    [deleteConversation, _, appService],
-  );
+  const handleDeleteConversation = useCallback((e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    setDeleteError('');
+    setDeletingId(id);
+  }, []);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!deletingId) return;
+    setDeleteBusy(true);
+    setDeleteError('');
+    try {
+      await deleteConversation(deletingId);
+      setDeletingId(null);
+    } catch {
+      setDeleteError(_('Could not delete the conversation. Please try again.'));
+    } finally {
+      setDeleteBusy(false);
+    }
+  }, [deletingId, deleteConversation, _]);
 
   const handleStartRename = useCallback((e: React.MouseEvent, conversation: AIConversation) => {
     e.stopPropagation();
@@ -255,6 +266,19 @@ const ChatHistoryView: React.FC<ChatHistoryViewProps> = ({ bookKey }) => {
           <span className='text-sm font-medium'>{_('New Chat')}</span>
         </button>
       </div>
+
+      {deletingId && (
+        <ConfirmDialog
+          title={_('Delete this conversation?')}
+          message={_('This will permanently delete the conversation and its messages.')}
+          confirmLabel={_('Delete')}
+          cancelLabel={_('Cancel')}
+          busy={deleteBusy}
+          error={deleteError || undefined}
+          onConfirm={() => void handleConfirmDelete()}
+          onCancel={() => setDeletingId(null)}
+        />
+      )}
     </div>
   );
 };

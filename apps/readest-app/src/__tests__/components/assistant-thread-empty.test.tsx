@@ -4,6 +4,10 @@ import type { PropsWithChildren } from 'react';
 
 import { Thread } from '@/components/assistant/Thread';
 
+vi.mock('@/components/assistant/ModelSwitcher', () => ({
+  ModelSwitcher: () => null,
+}));
+
 vi.mock('@assistant-ui/react', () => {
   const Container = ({ children }: PropsWithChildren) => <div>{children}</div>;
   return {
@@ -13,16 +17,24 @@ vi.mock('@assistant-ui/react', () => {
       Input: ({ placeholder }: { placeholder: string }) => <textarea placeholder={placeholder} />,
       Send: Container,
       Cancel: Container,
+      Attachments: () => null,
     },
     AssistantIf: () => null,
+    useComposerRuntime: () => ({
+      addAttachment: vi.fn(),
+      getState: () => ({ attachments: [] }),
+      getAttachmentByIndex: () => ({ remove: vi.fn(async () => {}) }),
+    }),
     useThread: (select: (state: { messages: never[]; isRunning: boolean }) => unknown) =>
       select({ messages: [], isRunning: false }),
     useAssistantState: (
       select: (state: {
         composer: { isEmpty: boolean };
         thread: { isRunning: boolean };
+        attachment: undefined;
       }) => unknown,
-    ) => select({ composer: { isEmpty: true }, thread: { isRunning: false } }),
+    ) =>
+      select({ composer: { isEmpty: true }, thread: { isRunning: false }, attachment: undefined }),
   };
 });
 

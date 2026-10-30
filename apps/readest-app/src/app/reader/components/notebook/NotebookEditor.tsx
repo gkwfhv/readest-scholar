@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { PiCaretDown, PiNotePencil } from 'react-icons/pi';
-import TextEditor, { TextEditorRef } from '@/components/TextEditor';
+import MarkdownTextEditor, { MarkdownTextEditorRef } from '@/components/MarkdownTextEditor';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useNotebookDocumentStore } from '@/store/notebookDocumentStore';
 import { BookNote } from '@/types/book';
@@ -25,7 +25,7 @@ const NotebookEditor: React.FC<NotebookEditorProps> = ({
   const mutate = useNotebookDocumentStore((state) => state.mutate);
   const setSelection = useNotebookDocumentStore((state) => state.setSelection);
   const chooseRecovery = useNotebookDocumentStore((state) => state.chooseRecovery);
-  const editorRef = useRef<TextEditorRef>(null);
+  const editorRef = useRef<MarkdownTextEditorRef>(null);
   const composingRef = useRef(false);
 
   if (!session) return null;
@@ -102,7 +102,7 @@ const NotebookEditor: React.FC<NotebookEditorProps> = ({
         </section>
       )}
       <div className='eink-bordered bg-base-100 min-h-0 flex-1 rounded-lg border p-3'>
-        <TextEditor
+        <MarkdownTextEditor
           ref={editorRef}
           value={session.content}
           onChange={(value) => {

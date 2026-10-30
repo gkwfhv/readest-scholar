@@ -32,9 +32,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (error) {
     if (error.code === 'PT409')
       return res.status(409).json({ error: 'Scholar delete conflict; remote version retained' });
-    if (error.code === 'PT410')
-      return res.status(410).json({ error: 'Scholar file already deleted' });
-    if (error.code === 'PT404' || error.code === '42501') {
+    // A delete whose target is already gone or tombstoned has achieved its
+    // goal. Report idempotent success so queued deletes converge instead of
+    // failing forever (a conflict dialog may open after the file vanished).
+    if (error.code === 'PT410' || error.code === 'PT404') {
+      return res.status(200).json({ fileId: null, alreadyDeleted: true });
+    }
+    if (error.code === '42501') {
       return res.status(404).json({ error: 'Scholar file not found' });
     }
     if (error.code === '22023')

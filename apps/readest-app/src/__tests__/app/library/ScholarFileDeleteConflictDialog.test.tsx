@@ -103,4 +103,19 @@ describe('Scholar file delete conflict dialog', () => {
     );
     expect(keepCloud).not.toHaveBeenCalled();
   });
+
+  it('still deletes when the cloud version cannot be loaded', async () => {
+    fetchWithAuth.mockReset().mockRejectedValue(new Error('Scholar file not found'));
+    render(<ScholarFileDeleteConflictDialog transfer={transfer} book={book} onClose={vi.fn()} />);
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toBe('Scholar file not found');
+    const deleteButton = screen.getByRole('button', { name: 'Delete current cloud version' });
+    expect(deleteButton.hasAttribute('disabled')).toBe(false);
+    expect(screen.getByRole('button', { name: 'Keep cloud file' }).hasAttribute('disabled')).toBe(
+      true,
+    );
+    fireEvent.click(deleteButton);
+    await waitFor(() => expect(requeueDelete).toHaveBeenCalledWith(transfer.id, null, null));
+    expect(keepCloud).not.toHaveBeenCalled();
+  });
 });

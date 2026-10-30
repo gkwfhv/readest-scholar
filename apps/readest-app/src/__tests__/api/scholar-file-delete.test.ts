@@ -74,6 +74,24 @@ describe('Scholar file delete API', () => {
     });
   });
 
+  it('treats an already-deleted file as idempotent success', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: null, error: { code: 'PT410' } });
+    createSupabaseClient.mockReturnValue({ rpc });
+    const { req, res } = request('POST');
+    await removeScholarFile(req, res);
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({ fileId: null, alreadyDeleted: true });
+  });
+
+  it('treats a vanished file as idempotent success instead of a dead queue row', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: null, error: { code: 'PT404' } });
+    createSupabaseClient.mockReturnValue({ rpc });
+    const { req, res } = request('POST');
+    await removeScholarFile(req, res);
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({ fileId: null, alreadyDeleted: true });
+  });
+
   it('rejects an anonymous or malformed request before database access', async () => {
     const malformed = request('POST', { ...body, fileName: 'Readest/Books/hash/other/deep.pdf' });
     await removeScholarFile(malformed.req, malformed.res);

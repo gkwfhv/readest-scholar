@@ -247,24 +247,27 @@ export default function ScholarTranslationPanel({ book }: { book: Book }) {
       )}
       {status?.activeVersionId && (
         <div className='flex flex-wrap items-center gap-2'>
-          <label className='text-xs' htmlFor='scholar-translation-mode'>
-            {_('Output')}
-          </label>
-          <select
-            id='scholar-translation-mode'
-            className='select select-bordered select-sm eink-bordered'
-            value={mode}
-            onChange={(event) => setMode(event.target.value as Mode)}
-            disabled={busy}
-          >
-            <option value='dual'>{_('Bilingual')}</option>
-            <option value='mono'>{_('Chinese')}</option>
-            <option value='both'>{_('Both')}</option>
-          </select>
-          <label className='text-xs'>
-            {_('Glossary CSV')}
+          <div className='grid w-full max-w-sm grid-cols-[auto_1fr] items-center gap-x-2 gap-y-2'>
+            <label className='text-xs' htmlFor='scholar-translation-mode'>
+              {_('Output')}
+            </label>
+            <select
+              id='scholar-translation-mode'
+              className='select select-bordered select-sm eink-bordered w-full'
+              value={mode}
+              onChange={(event) => setMode(event.target.value as Mode)}
+              disabled={busy}
+            >
+              <option value='dual'>{_('Bilingual')}</option>
+              <option value='mono'>{_('Chinese')}</option>
+              <option value='both'>{_('Both')}</option>
+            </select>
+            <label className='text-xs' htmlFor='scholar-translation-glossary'>
+              {_('Glossary CSV')}
+            </label>
             <input
-              className='file-input file-input-bordered file-input-xs eink-bordered mt-1 block max-w-48'
+              id='scholar-translation-glossary'
+              className='file-input file-input-bordered file-input-xs eink-bordered w-full'
               type='file'
               accept='.csv,text/csv'
               disabled={busy}
@@ -273,7 +276,7 @@ export default function ScholarTranslationPanel({ book }: { book: Book }) {
                 if (file) void uploadGlossary(file);
               }}
             />
-          </label>
+          </div>
           {glossarySha && <span className='text-xs text-success'>{_('Glossary ready')}</span>}
           <label className='eink-bordered flex w-full items-start gap-2 rounded-md border border-base-300 p-2 text-xs'>
             <input

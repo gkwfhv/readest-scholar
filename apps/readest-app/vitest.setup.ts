@@ -72,3 +72,40 @@ if (typeof globalThis.fetch === 'function') {
       ? Promise.resolve(Response.json({ error: 'NOT_CONFIGURED' }, { status: 503 }))
       : realFetch(input, init);
 }
+
+// Node 22+ ships an experimental `localStorage` getter on globalThis that
+// returns undefined unless --localstorage-file is passed. vitest's jsdom
+// environment leaves it in place (its populateGlobal skips keys that already
+// exist on the global and localStorage is not in its key list), so jsdom's
+// real Storage never reaches globalThis. Re-expose it through the JSDOM
+// instance vitest attaches as window.jsdom: the real Storage keeps
+// Storage.prototype spies and StorageEvent `storageArea` semantics working.
+if (typeof globalThis.localStorage === 'undefined') {
+  const jsdomWindow = (globalThis as { jsdom?: { window?: (Window & typeof globalThis) | null } })
+    .jsdom?.window;
+  if (jsdomWindow?.localStorage) {
+    const realStorage = jsdomWindow.localStorage;
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      get: () => realStorage,
+      set: () => {},
+    });
+  } else {
+    // Non-jsdom environments: in-memory fallback.
+    const store = new Map<string, string>();
+    const storage: Storage = {
+      getItem: (key) => (store.has(key) ? store.get(key)! : null),
+      setItem: (key, value) => void store.set(key, String(value)),
+      removeItem: (key) => void store.delete(key),
+      clear: () => void store.clear(),
+      key: (index) => Array.from(store.keys())[index] ?? null,
+      get length() {
+        return store.size;
+      },
+    };
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: storage,
+    });
+  }
+}

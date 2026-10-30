@@ -6,6 +6,10 @@ import { Thread } from '@/components/assistant/Thread';
 
 const messageContext = vi.hoisted(() => ({ id: 'answer-1' }));
 
+vi.mock('@/components/assistant/ModelSwitcher', () => ({
+  ModelSwitcher: () => null,
+}));
+
 vi.mock('@assistant-ui/react', () => {
   const Container = ({ children }: PropsWithChildren) => <div>{children}</div>;
   const MessageRoot = ({ children }: PropsWithChildren) => (
@@ -36,8 +40,14 @@ vi.mock('@assistant-ui/react', () => {
       Input: ({ placeholder }: { placeholder: string }) => <textarea placeholder={placeholder} />,
       Send: Container,
       Cancel: Container,
+      Attachments: () => null,
     },
     AssistantIf: Container,
+    useComposerRuntime: () => ({
+      addAttachment: vi.fn(),
+      getState: () => ({ attachments: [] }),
+      getAttachmentByIndex: () => ({ remove: vi.fn(async () => {}) }),
+    }),
     useThread: (select: (state: unknown) => unknown) =>
       select({
         messages: [
