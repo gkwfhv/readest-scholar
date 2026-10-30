@@ -13,10 +13,8 @@ import { useEnv } from '@/context/EnvContext';
 import { useSwipeToDismiss } from '@/hooks/useSwipeToDismiss';
 import { usePanelResize } from '@/hooks/usePanelResize';
 import { eventDispatcher } from '@/utils/event';
-import { BookNote } from '@/types/book';
 import { getBookDirFromLanguage } from '@/utils/book';
 import { getPanelHorizontalInsetStyle, getPanelTopInset } from '@/utils/insets';
-import { nextBooknoteStamp } from '@/utils/booknoteStamp';
 import { Overlay } from '@/components/Overlay';
 import { saveSysSettings } from '@/helpers/settings';
 import useShortcuts from '@/hooks/useShortcuts';
@@ -26,8 +24,6 @@ import {
 } from '../../hooks/useNotebookDocumentCoordinator';
 import AIAssistant from './AIAssistant';
 import NotebookHeader from './Header';
-import NotebookEditor from './NotebookEditor';
-import NotebookTabNavigation from './NotebookTabNavigation';
 
 const MIN_NOTEBOOK_WIDTH = 0.15;
 const MAX_NOTEBOOK_WIDTH = 0.45;
@@ -38,21 +34,18 @@ const Notebook: React.FC = () => {
   const { settings } = useSettingsStore();
   const { updateAppTheme, safeAreaInsets, systemUIVisible, statusBarHeight, isIPhoneDuo } =
     useThemeStore();
-  const { sideBarBookKey, setSideBarVisible, setSearchBarVisible, clearBooknotesNav } =
-    useSidebarStore();
+  const { sideBarBookKey } = useSidebarStore();
   const {
     notebookWidth,
     isNotebookVisible,
     isNotebookPinned,
-    notebookActiveTab,
     getNotebookWidth,
     setNotebookWidth,
     setNotebookVisible,
     setNotebookPin,
     toggleNotebookPin,
-    setNotebookActiveTab,
   } = useNotebookStore();
-  const { getBookData, getConfig, setConfig, updateBooknotes, saveConfig } = useBookDataStore();
+  const { getBookData } = useBookDataStore();
   const { getViewSettings } = useReaderStore();
   const { activeConversationId } = useAIChatStore();
 
@@ -97,9 +90,6 @@ const Notebook: React.FC = () => {
     setNotebookWidth(settings.globalReadSettings.notebookWidth);
     setNotebookPin(settings.globalReadSettings.isNotebookPinned);
     setNotebookVisible(settings.globalReadSettings.isNotebookPinned);
-    if (settings.globalReadSettings.notebookActiveTab) {
-      setNotebookActiveTab(settings.globalReadSettings.notebookActiveTab);
-    }
     // The settings store only hydrates the Notebook store when this panel mounts.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -126,44 +116,6 @@ const Notebook: React.FC = () => {
     });
   };
 
-  const handleTabChange = (tab: 'notes' | 'ai') => {
-    setNotebookActiveTab(tab);
-    saveSysSettings(envConfig, 'globalReadSettings', {
-      ...settings.globalReadSettings,
-      notebookActiveTab: tab,
-    });
-  };
-
-  const handleOpenAnnotations = () => {
-    if (!sideBarBookKey) return;
-    setSearchBarVisible(false);
-    clearBooknotesNav(sideBarBookKey);
-    const config = getConfig(sideBarBookKey);
-    if (config) {
-      setConfig(sideBarBookKey, {
-        viewSettings: { ...config.viewSettings, sideBarTab: 'annotations' },
-      });
-    }
-    setSideBarVisible(true);
-    if (isMobile) hideNotebook();
-    requestAnimationFrame(() => {
-      document.querySelector<HTMLElement>('[data-annotations-heading]')?.focus();
-    });
-  };
-
-  const handleDeleteExcerpt = (excerpt: BookNote) => {
-    if (!sideBarBookKey) return;
-    const config = getConfig(sideBarBookKey);
-    if (!config?.booknotes) return;
-    const booknotes = config.booknotes.map((note) =>
-      note.id === excerpt.id && note.type === 'excerpt'
-        ? { ...note, deletedAt: nextBooknoteStamp(note) }
-        : note,
-    );
-    const updatedConfig = updateBooknotes(sideBarBookKey, booknotes);
-    if (updatedConfig) void saveConfig(envConfig, sideBarBookKey, updatedConfig, settings);
-  };
-
   const { handleResizeStart: handleDragStart, handleResizeKeyDown: handleDragKeyDown } =
     usePanelResize({
       side: 'end',
@@ -175,9 +127,6 @@ const Notebook: React.FC = () => {
 
   if (!sideBarBookKey) return null;
   const bookData = getBookData(sideBarBookKey);
-  const excerptNotes = (getConfig(sideBarBookKey)?.booknotes ?? [])
-    .filter((note) => note.type === 'excerpt' && note.text && !note.deletedAt)
-    .sort((a, b) => a.createdAt - b.createdAt);
   const viewSettings = getViewSettings(sideBarBookKey);
   if (!bookData?.bookDoc) return null;
   const languageDir = getBookDirFromLanguage(bookData.bookDoc.metadata.language);
@@ -201,7 +150,7 @@ const Notebook: React.FC = () => {
           !isNotebookPinned && viewSettings?.isEink && 'border-base-content border-s',
         )}
         role='group'
-        aria-label={_('Notebook')}
+        aria-label={_('AI Assistant')}
         dir={viewSettings?.rtl && languageDir === 'rtl' ? 'rtl' : 'ltr'}
         style={{
           width: isMobile ? '100%' : notebookWidth,
@@ -234,7 +183,7 @@ const Notebook: React.FC = () => {
           )}
           role='slider'
           tabIndex={0}
-          aria-label={_('Resize Notebook')}
+          aria-label={_('Resize Chat Panel')}
           aria-orientation='horizontal'
           aria-valuenow={parseFloat(notebookWidth)}
           onMouseDown={handleDragStart}
@@ -246,7 +195,7 @@ const Notebook: React.FC = () => {
             <div
               role='slider'
               tabIndex={0}
-              aria-label={_('Resize Notebook')}
+              aria-label={_('Resize Chat Panel')}
               aria-orientation='vertical'
               aria-valuenow={notebookHeight.current}
               className='drag-handle flex h-6 max-h-6 min-h-6 w-full cursor-row-resize items-center justify-center'
@@ -263,22 +212,8 @@ const Notebook: React.FC = () => {
             handleTogglePin={handleTogglePin}
           />
         </div>
-        <div className='flex min-h-0 flex-1 flex-col' hidden={notebookActiveTab !== 'ai'}>
+        <div className='flex min-h-0 flex-1 flex-col'>
           <AIAssistant key={activeConversationId ?? 'new'} bookKey={sideBarBookKey} />
-        </div>
-        <div className='flex min-h-0 flex-1 flex-col' hidden={notebookActiveTab !== 'notes'}>
-          <NotebookEditor
-            bookKey={sideBarBookKey}
-            handleOpenAnnotations={handleOpenAnnotations}
-            excerpts={excerptNotes}
-            onDeleteExcerpt={handleDeleteExcerpt}
-          />
-        </div>
-        <div
-          className='shrink-0'
-          style={{ paddingBottom: `${(safeAreaInsets?.bottom || 0) / 2}px` }}
-        >
-          <NotebookTabNavigation activeTab={notebookActiveTab} onTabChange={handleTabChange} />
         </div>
       </div>
     </>

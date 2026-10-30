@@ -2,11 +2,10 @@ import clsx from 'clsx';
 import React from 'react';
 import { MdBookmarkBorder } from 'react-icons/md';
 import { IoIosList } from 'react-icons/io';
-import { PiBrain, PiNotePencil } from 'react-icons/pi';
+import { PiNotePencil } from 'react-icons/pi';
 
 import { useEnv } from '@/context/EnvContext';
 import { useTranslation } from '@/hooks/useTranslation';
-import { useSettingsStore } from '@/store/settingsStore';
 import { useThemeStore } from '@/store/themeStore';
 import { isForcedMobileLayout } from '../../utils/mobileLayout';
 
@@ -16,13 +15,11 @@ const TabNavigation: React.FC<{
 }> = ({ activeTab, onTabChange }) => {
   const _ = useTranslation();
   const { appService } = useEnv();
-  const { settings } = useSettingsStore();
   const isIPhoneDuo = useThemeStore((s) => s.isIPhoneDuo);
-  const aiEnabled = settings?.aiSettings?.enabled ?? false;
 
   const forceMobileLayout = isForcedMobileLayout(appService?.isMobile, isIPhoneDuo);
   const isMobile = forceMobileLayout || window.innerWidth < 640 || window.innerHeight < 640;
-  const tabs = ['toc', 'annotations', 'bookmarks', ...(aiEnabled ? ['history'] : [])];
+  const tabs = ['toc', 'annotations', 'bookmarks'];
 
   const getTabLabel = (tab: string) => {
     switch (tab) {
@@ -32,8 +29,6 @@ const TabNavigation: React.FC<{
         return _('Annotate');
       case 'bookmarks':
         return _('Bookmark');
-      case 'history':
-        return _('Chat');
       default:
         return '';
     }
@@ -43,7 +38,7 @@ const TabNavigation: React.FC<{
     <div
       className={clsx(
         'bottom-tab border-base-300/50 bg-base-200 grid w-full min-w-0 max-w-full border-t',
-        tabs.length === 4 ? 'grid-cols-4' : 'grid-cols-3',
+        'grid-cols-3',
         appService?.hasRoundedWindow && 'rounded-window-bottom-left',
         isMobile && 'h-[65px]',
       )}
@@ -74,10 +69,8 @@ const TabNavigation: React.FC<{
               <IoIosList className='mx-auto' />
             ) : tab === 'annotations' ? (
               <PiNotePencil className='mx-auto' />
-            ) : tab === 'bookmarks' ? (
-              <MdBookmarkBorder className='mx-auto' />
             ) : (
-              <PiBrain className='mx-auto' />
+              <MdBookmarkBorder className='mx-auto' />
             )}
           </div>
         </div>

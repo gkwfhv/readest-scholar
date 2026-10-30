@@ -76,6 +76,10 @@ async function* asyncIter<T>(items: T[]): AsyncGenerator<T> {
   for (const item of items) yield item;
 }
 
+function textDeltas(texts: string[]) {
+  return asyncIter(texts.map((text) => ({ type: 'text-delta' as const, id: 'test', text })));
+}
+
 interface RunCall {
   model: unknown;
   system: string;
@@ -97,13 +101,13 @@ beforeEach(() => {
   stepCountIsMock.mockClear();
   searchWebMock.mockReset();
   searchWebMock.mockImplementation(async () => []);
-  // Default: streamText returns an empty text stream so the for-await loop
+  // Default: streamText returns an empty event stream so the for-await loop
   // in the adapter completes immediately.
   streamTextMock.mockImplementation(
     (args: RunCall) =>
       ({
         ...args,
-        textStream: asyncIter<string>([]),
+        fullStream: textDeltas([]),
       }) as unknown,
   );
 });
@@ -294,7 +298,7 @@ describe('TauriChatAdapter wiring (M1.11)', () => {
 
   it('PDF without retrieved evidence still calls the model with a general-question prompt', async () => {
     streamTextMock.mockImplementationOnce(() => ({
-      textStream: asyncIter(['That is not in the document; it is 42.']),
+      fullStream: textDeltas(['That is not in the document; it is 42.']),
     }));
     const adapter = createTauriAdapter(() => ({
       settings: { ...baseSettings, reedy: { enabled: false }, spoilerProtection: false },
@@ -317,8 +321,7 @@ describe('TauriChatAdapter wiring (M1.11)', () => {
       output.push(event.content[0]!.text);
     }
     expect(streamTextMock).toHaveBeenCalledTimes(1);
-    expect(output).toHaveLength(1);
-    expect(output[0]).toBe('That is not in the document; it is 42.');
+    expect(output.at(-1)).toBe('That is not in the document; it is 42.');
     const call = streamTextMock.mock.calls[0]![0] as RunCall;
     expect(call.system).toMatch(/NOT about the document/);
     expect(call.system).not.toContain('I cannot verify that from this PDF.');
@@ -364,7 +367,7 @@ describe('TauriChatAdapter wiring (M1.11)', () => {
   });
   it('Reedy PDF without evidence still calls the model', async () => {
     streamTextMock.mockImplementationOnce(() => ({
-      textStream: asyncIter(['Not in the document; answering from general knowledge.']),
+      fullStream: textDeltas(['Not in the document; answering from general knowledge.']),
     }));
     const searchPdfEvidence = vi.fn(async () => ({ passages: [], status: 'ok' }));
     const backend = Object.assign(fakeReedy(), { searchPdfEvidence });
@@ -390,8 +393,7 @@ describe('TauriChatAdapter wiring (M1.11)', () => {
     }
     expect(searchPdfEvidence).toHaveBeenCalled();
     expect(streamTextMock).toHaveBeenCalledTimes(1);
-    expect(output).toHaveLength(1);
-    expect(output[0]).toBe('Not in the document; answering from general knowledge.');
+    expect(output.at(-1)).toBe('Not in the document; answering from general knowledge.');
   });
 
   it('Reedy PDF retrieves page evidence before generation and exposes its source', async () => {
@@ -443,7 +445,7 @@ describe('TauriChatAdapter wiring (M1.11)', () => {
   });
   it('streams the model answer even when a numeric claim cites a different page', async () => {
     streamTextMock.mockImplementationOnce(() => ({
-      textStream: asyncIter(['The replacement rate is 80% [p. 1].']),
+      fullStream: textDeltas(['The replacement rate is 80% [p. 1].']),
     }));
     const backend = fakeLegacy({
       searchResult: [
@@ -489,13 +491,12 @@ describe('TauriChatAdapter wiring (M1.11)', () => {
     }>) {
       output.push(event.content[0]!.text);
     }
-    expect(output).toHaveLength(1);
-    expect(output[0]).toBe('The replacement rate is 80% [p. 1].');
+    expect(output.at(-1)).toBe('The replacement rate is 80% [p. 1].');
   });
 
   it('streams an uncited PDF answer from the model', async () => {
     streamTextMock.mockImplementationOnce(() => ({
-      textStream: asyncIter(['The value', ' was 42.']),
+      fullStream: textDeltas(['The value', ' was 42.']),
     }));
     const backend = fakeLegacy({
       searchResult: [
@@ -531,8 +532,8 @@ describe('TauriChatAdapter wiring (M1.11)', () => {
     }>) {
       output.push(event.content[0]!.text);
     }
-    expect(output).toHaveLength(1);
-    expect(output[0]).toBe('The value was 42.');
+    expect(output[0]).toBe('The value');
+    expect(output.at(-1)).toBe('The value was 42.');
   });
 
   it('PDF index lookup errors fail closed before generation', async () => {

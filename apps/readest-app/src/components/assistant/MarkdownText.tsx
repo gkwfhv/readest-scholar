@@ -9,16 +9,22 @@ import {
   useIsMarkdownCodeBlock,
 } from '@assistant-ui/react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import { type FC, memo, useState } from 'react';
 import { CheckIcon, CopyIcon } from 'lucide-react';
 
 import { TooltipIconButton } from './TooltipIconButton';
 import { cn } from '@/utils/tailwind';
+import { repairMathDelimiters } from '@/utils/mathDelimiters';
 
 const MarkdownTextImpl = () => {
   return (
     <MarkdownTextPrimitive
-      remarkPlugins={[remarkGfm]}
+      preprocess={repairMathDelimiters}
+      remarkPlugins={[remarkGfm, remarkMath]}
+      rehypePlugins={[rehypeKatex]}
       className='aui-md'
       components={defaultComponents}
     />

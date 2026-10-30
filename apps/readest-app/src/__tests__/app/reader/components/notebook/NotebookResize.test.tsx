@@ -88,10 +88,6 @@ vi.mock('@/app/reader/hooks/useNotebookDocumentCoordinator', () => ({
 }));
 vi.mock('@/components/Overlay', () => ({ Overlay: () => null }));
 vi.mock('@/hooks/useResponsiveSize', () => ({ useResponsiveSize: (size: number) => size }));
-vi.mock('@/app/reader/components/notebook/NotebookEditor', () => ({ default: () => null }));
-vi.mock('@/app/reader/components/notebook/NotebookTabNavigation', () => ({
-  default: () => null,
-}));
 vi.mock('@/app/reader/components/notebook/AIAssistant', () => ({ default: () => null }));
 
 import { flushNotebookDocument } from '@/app/reader/hooks/useNotebookDocumentCoordinator';
@@ -125,18 +121,18 @@ describe('Notebook resizing', () => {
 
     expect(flushNotebookDocument).toHaveBeenCalledWith('book-1');
     expect(useNotebookStore.getState().isNotebookVisible).toBe(false);
-    expect(screen.queryByRole('group', { name: 'Notebook' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'AI Assistant' })).toBeNull();
   });
 
   test('keeps an unpinned Notebook open while its width changes', () => {
     render(<Notebook />);
 
     act(() => useNotebookStore.getState().setNotebookVisible(true));
-    expect(screen.getByRole('group', { name: 'Notebook' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'AI Assistant' })).toBeTruthy();
 
     act(() => h.resize?.('35%'));
 
-    expect(screen.getByRole('group', { name: 'Notebook' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'AI Assistant' })).toBeTruthy();
     expect(useNotebookStore.getState().notebookWidth).toBe('35%');
   });
 });

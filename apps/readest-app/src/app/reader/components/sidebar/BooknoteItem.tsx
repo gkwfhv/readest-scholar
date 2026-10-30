@@ -7,7 +7,6 @@ import { useEnv } from '@/context/EnvContext';
 import { BookNote, HighlightColor } from '@/types/book';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useReaderStore } from '@/store/readerStore';
-import { useNotebookStore } from '@/store/notebookStore';
 import { useBookDataStore } from '@/store/bookDataStore';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useResponsiveSize } from '@/hooks/useResponsiveSize';
@@ -55,7 +54,6 @@ const BooknoteItem: React.FC<BooknoteItemProps> = ({
   const { settings } = useSettingsStore();
   const { getConfig, saveConfig, updateBooknotes } = useBookDataStore();
   const { getProgress, getView, getViewsById, getViewSettings } = useReaderStore();
-  const { setNotebookEditAnnotation, setNotebookVisible } = useNotebookStore();
 
   const globalReadSettings = settings.globalReadSettings;
   const customColors = globalReadSettings.customHighlightColors;
@@ -146,11 +144,6 @@ const BooknoteItem: React.FC<BooknoteItemProps> = ({
     if (updatedConfig) {
       saveConfig(envConfig, bookKey, updatedConfig, settings);
     }
-  };
-
-  const editNote = (note: BookNote) => {
-    setNotebookVisible(true);
-    setNotebookEditAnnotation(note);
   };
 
   const buildSourceMarkdown = () => {
@@ -387,13 +380,7 @@ const BooknoteItem: React.FC<BooknoteItemProps> = ({
 
             {isEditable && (
               <button
-                onClick={
-                  item.type === 'bookmark'
-                    ? editBookmark
-                    : inlineNoteEditing
-                      ? editNoteInline
-                      : editNote.bind(null, item)
-                }
+                onClick={item.type === 'bookmark' ? editBookmark : editNoteInline}
                 className={clsx(
                   'btn btn-ghost btn-xs p-0 text-blue-500 opacity-0 transition duration-300 ease-in-out hover:border-transparent hover:bg-transparent',
                   actionButtonReveal,

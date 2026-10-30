@@ -3,6 +3,11 @@
 import { memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
+
+import { repairMathDelimiters } from '@/utils/mathDelimiters';
 
 /**
  * User-message text rendering. Bare react-markdown with GFM but no
@@ -40,9 +45,10 @@ export const UserTextPart = memo(function UserTextPart({ text }: { text: string 
 });
 
 /**
- * Assistant-message text rendering — same react-markdown stack as
- * UserTextPart, slightly richer block styling (paragraphs render as
- * `<p>` instead of inline spans). The original plan called for
+ * Assistant-message text rendering. Unlike UserTextPart this runs the full math
+ * pipeline (remark-math + rehype-katex) after `repairMathDelimiters` normalises
+ * the `\[ ... \]` / `\( ... \)` / bare-bracket forms LLMs emit, so formulas
+ * render as KaTeX instead of raw source. The original plan called for
  * Streamdown's streaming-aware fade-in spans, but Streamdown statically
  * depends on Shiki whose TextMate grammars contain lookbehind regex
  * `(?<=...)` / `(?<!...)` patterns — the repo's `check:lookbehind-regex`
@@ -59,7 +65,8 @@ export const AssistantTextPart = memo(function AssistantTextPart({ text }: { tex
   return (
     <div className='prose prose-sm dark:prose-invert max-w-none break-words'>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeKatex]}
         components={{
           a: ({ href, children }) => (
             <a href={href} target='_blank' rel='noopener noreferrer'>
@@ -84,7 +91,7 @@ export const AssistantTextPart = memo(function AssistantTextPart({ text }: { tex
           ),
         }}
       >
-        {text}
+        {repairMathDelimiters(text)}
       </ReactMarkdown>
     </div>
   );

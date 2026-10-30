@@ -165,7 +165,7 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets; gridInsets?:
   const getView = useReaderStore((s) => s.getView);
   const getViewsById = useReaderStore((s) => s.getViewsById);
   const getViewSettings = useReaderStore((s) => s.getViewSettings);
-  const { setNotebookVisible, setNotebookActiveTab, setAiSelectionPrompt } = useNotebookStore();
+  const { setNotebookVisible, setAiSelectionPrompt } = useNotebookStore();
   const { clearBooknotesNav, isSideBarVisible } = useSidebarStore();
   const { listenToNativeTouchEvents } = useDeviceControlStore();
   const { loadCustomDictionaries } = useCustomDictionaryStore();
@@ -1541,10 +1541,6 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets; gridInsets?:
       className: 'whitespace-nowrap',
       timeout: 2000,
     });
-    if (!appService?.isMobile) {
-      setNotebookActiveTab('notes');
-      setNotebookVisible(true);
-    }
   };
 
   // Copy a permanent link to what is under the selection, so a highlight can be
@@ -1975,7 +1971,6 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets; gridInsets?:
     });
     setShowAnnotPopup(false);
     setNotebookVisible(true);
-    setNotebookActiveTab('ai');
   };
 
   // `oneTime` is required rather than defaulted: it decides whether this reads

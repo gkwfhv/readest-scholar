@@ -44,10 +44,6 @@ vi.mock('@/app/reader/components/sidebar/BooknoteView', () => ({
   default: ({ type }: { type: string }) => <div>{type} content</div>,
 }));
 
-vi.mock('@/app/reader/components/sidebar/ChatHistoryView', () => ({
-  default: () => <div>history content</div>,
-}));
-
 vi.mock('@/app/reader/components/sidebar/TabNavigation', () => ({
   default: ({
     activeTab,

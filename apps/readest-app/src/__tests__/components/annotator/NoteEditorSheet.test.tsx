@@ -26,6 +26,32 @@ vi.mock('@/store/deviceStore', () => ({
 }));
 vi.mock('@tauri-apps/plugin-haptics', () => ({ impactFeedback: vi.fn() }));
 
+// The sheet hosts AnnotationNoteEditor, now a WYSIWYG Markdown (Milkdown)
+// editor that cannot mount in jsdom. Stand in with a plain textarea.
+vi.mock('@/components/MarkdownTextEditor', () => ({
+  default: ({
+    value,
+    onChange,
+    placeholder,
+    className,
+    autoFocus,
+  }: {
+    value: string;
+    onChange: (value: string) => void;
+    placeholder?: string;
+    className?: string;
+    autoFocus?: boolean;
+  }) => (
+    <textarea
+      className={className}
+      placeholder={placeholder}
+      value={value}
+      autoFocus={autoFocus}
+      onChange={(e) => onChange(e.target.value)}
+    />
+  ),
+}));
+
 const { default: NoteEditorSheet } = await import(
   '@/app/reader/components/annotator/NoteEditorSheet'
 );

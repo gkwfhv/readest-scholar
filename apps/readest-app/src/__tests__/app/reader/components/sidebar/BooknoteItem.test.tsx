@@ -269,13 +269,15 @@ describe('BooknoteItem', () => {
     expect(mocks.saveConfig).not.toHaveBeenCalled();
   });
 
-  it('routes Edit to the notebook editor without inlineNoteEditing', () => {
+  it('edits a noted item inline even without inlineNoteEditing', () => {
     const item = makeItem({ note: 'my note' });
+    mocks.state.booknotes = [item];
     renderItem(item);
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    expect(mocks.setNotebookEditAnnotation).toHaveBeenCalledWith(item);
-    expect(mocks.setNotebookVisible).toHaveBeenCalledWith(true);
+    expect(screen.getByRole('textbox')).toBeTruthy();
+    expect(mocks.setNotebookEditAnnotation).not.toHaveBeenCalled();
+    expect(mocks.setNotebookVisible).not.toHaveBeenCalled();
   });
 
   it('hides the edit affordance for bare highlights without inlineNoteEditing', () => {

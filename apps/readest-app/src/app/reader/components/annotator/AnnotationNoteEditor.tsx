@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 
 import { useTranslation } from '@/hooks/useTranslation';
 import TextButton from '@/components/TextButton';
-import TextEditor from '@/components/TextEditor';
+import MarkdownTextEditor from '@/components/MarkdownTextEditor';
 
 interface AnnotationNoteEditorProps {
   value: string;
@@ -45,7 +45,7 @@ const AnnotationNoteEditor: React.FC<AnnotationNoteEditorProps> = ({
           stays pinned to the bottom edge instead of floating under a
           content-sized textarea. */}
       <div className={clsx('flex h-full min-h-0 gap-2 p-4', isVertical ? 'flex-row' : 'flex-col')}>
-        <TextEditor
+        <MarkdownTextEditor
           value={draftText}
           onChange={setDraftText}
           onSave={save}

@@ -5,14 +5,16 @@ import { BookDoc } from '@/libs/document';
 import { useReaderStore } from '@/store/readerStore';
 import { useSidebarStore } from '@/store/sidebarStore';
 import { useBookDataStore } from '@/store/bookDataStore';
-import { useSettingsStore } from '@/store/settingsStore';
 import { OverlayScrollbarsComponent } from 'overlayscrollbars-react';
 import 'overlayscrollbars/overlayscrollbars.css';
 
 import TOCView from './TOCView';
 import BooknoteView from './BooknoteView';
 import TabNavigation from './TabNavigation';
-import ChatHistoryView from './ChatHistoryView';
+
+// Older configs may still persist sideBarTab === 'history' from when the
+// sidebar hosted a chat-history tab; fold that (and any unset value) to 'toc'.
+const normalizeSideBarTab = (tab?: string): string => (!tab || tab === 'history' ? 'toc' : tab);
 
 const SidebarContent: React.FC<{
   bookDoc: BookDoc;
@@ -21,16 +23,14 @@ const SidebarContent: React.FC<{
   const { setHoveredBookKey } = useReaderStore();
   const { setSideBarVisible, setSearchBarVisible } = useSidebarStore();
   const { getConfig, setConfig } = useBookDataStore();
-  const { settings } = useSettingsStore();
   const config = getConfig(sideBarBookKey);
-  const [activeTab, setActiveTab] = useState(config?.viewSettings?.sideBarTab || 'toc');
+  const [activeTab, setActiveTab] = useState(normalizeSideBarTab(config?.viewSettings?.sideBarTab));
   const [fade, setFade] = useState(false);
   const [targetTab, setTargetTab] = useState(activeTab);
   const transitionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMobile = window.innerWidth < 640 || window.innerHeight < 640;
-  const aiEnabled = settings?.aiSettings?.enabled ?? false;
 
-  const configuredTab = config?.viewSettings?.sideBarTab || 'toc';
+  const configuredTab = normalizeSideBarTab(config?.viewSettings?.sideBarTab);
   useEffect(() => {
     if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
     transitionTimeoutRef.current = null;
@@ -41,17 +41,6 @@ const SidebarContent: React.FC<{
       if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
     };
   }, [sideBarBookKey, configuredTab]);
-
-  // reset to toc if history tab was active but AI is now disabled
-  useEffect(() => {
-    if ((activeTab === 'history' || targetTab === 'history') && !aiEnabled) {
-      if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
-      transitionTimeoutRef.current = null;
-      setActiveTab('toc');
-      setTargetTab('toc');
-      setFade(false);
-    }
-  }, [aiEnabled, activeTab, targetTab]);
 
   const handleTabChange = (tab: string) => {
     if (activeTab === tab) {
@@ -89,42 +78,35 @@ const SidebarContent: React.FC<{
           'font-sans text-base font-normal sm:text-sm',
         )}
       >
-        {targetTab === 'history' ? (
-          <ChatHistoryView bookKey={sideBarBookKey} />
-        ) : (
-          <OverlayScrollbarsComponent
-            className='min-h-0 flex-1'
-            options={{
-              // The tab content is width-bound; x stays hidden so oversized
-              // touch-target halos (e.g. the toolbar's dropdown toggle) can't
-              // turn into a horizontal scrollbar.
-              overflow: { x: 'hidden' },
-              scrollbars: { autoHide: 'scroll', clickScroll: true },
-              showNativeOverlaidScrollbars: false,
-            }}
-            defer
+        <OverlayScrollbarsComponent
+          className='min-h-0 flex-1'
+          options={{
+            // The tab content is width-bound; x stays hidden so oversized
+            // touch-target halos (e.g. the toolbar's dropdown toggle) can't
+            // turn into a horizontal scrollbar.
+            overflow: { x: 'hidden' },
+            scrollbars: { autoHide: 'scroll', clickScroll: true },
+            showNativeOverlaidScrollbars: false,
+          }}
+          defer
+        >
+          <div
+            className={clsx('scroll-container h-full transition-opacity duration-300 ease-in-out', {
+              'opacity-0': fade,
+              'opacity-100': !fade,
+            })}
           >
-            <div
-              className={clsx(
-                'scroll-container h-full transition-opacity duration-300 ease-in-out',
-                {
-                  'opacity-0': fade,
-                  'opacity-100': !fade,
-                },
-              )}
-            >
-              {targetTab === 'toc' && (bookDoc.toc || bookDoc.getPageThumbnail) && (
-                <TOCView toc={bookDoc.toc ?? []} bookDoc={bookDoc} bookKey={sideBarBookKey} />
-              )}
-              {targetTab === 'annotations' && (
-                <BooknoteView type='annotation' toc={bookDoc.toc ?? []} bookKey={sideBarBookKey} />
-              )}
-              {targetTab === 'bookmarks' && (
-                <BooknoteView type='bookmark' toc={bookDoc.toc ?? []} bookKey={sideBarBookKey} />
-              )}
-            </div>
-          </OverlayScrollbarsComponent>
-        )}
+            {targetTab === 'toc' && (bookDoc.toc || bookDoc.getPageThumbnail) && (
+              <TOCView toc={bookDoc.toc ?? []} bookDoc={bookDoc} bookKey={sideBarBookKey} />
+            )}
+            {targetTab === 'annotations' && (
+              <BooknoteView type='annotation' toc={bookDoc.toc ?? []} bookKey={sideBarBookKey} />
+            )}
+            {targetTab === 'bookmarks' && (
+              <BooknoteView type='bookmark' toc={bookDoc.toc ?? []} bookKey={sideBarBookKey} />
+            )}
+          </div>
+        </OverlayScrollbarsComponent>
       </div>
       <div
         className='w-full min-w-0 max-w-full shrink-0 overflow-hidden'

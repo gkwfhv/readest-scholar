@@ -43,5 +43,5 @@ it('preserves the desktop header controls', async () => {
   await page.viewport(1024, 768);
   render(<NotebookHeader isPinned={false} handleClose={vi.fn()} handleTogglePin={vi.fn()} />);
   expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
-  expect(screen.getByRole('button', { name: 'Pin Notebook' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Pin Chat Panel' })).toBeTruthy();
 });

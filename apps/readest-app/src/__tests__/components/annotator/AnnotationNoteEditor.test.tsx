@@ -5,6 +5,41 @@ vi.mock('@/hooks/useTranslation', () => ({
   useTranslation: () => (value: string) => value,
 }));
 
+// The note editor is WYSIWYG Markdown (Milkdown/Crepe), which cannot mount in
+// jsdom. Stand in with a plain textarea that wires the same props so the
+// textbox-based assertions below keep exercising the real AnnotationNoteEditor.
+vi.mock('@/components/MarkdownTextEditor', () => ({
+  default: ({
+    value,
+    onChange,
+    onSave,
+    onEscape,
+    placeholder,
+    className,
+    autoFocus,
+  }: {
+    value: string;
+    onChange: (value: string) => void;
+    onSave?: () => void;
+    onEscape?: () => void;
+    placeholder?: string;
+    className?: string;
+    autoFocus?: boolean;
+  }) => (
+    <textarea
+      className={className}
+      placeholder={placeholder}
+      value={value}
+      autoFocus={autoFocus}
+      onChange={(e) => onChange(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') onEscape?.();
+        else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) onSave?.();
+      }}
+    />
+  ),
+}));
+
 const { default: AnnotationNoteEditor } = await import(
   '@/app/reader/components/annotator/AnnotationNoteEditor'
 );

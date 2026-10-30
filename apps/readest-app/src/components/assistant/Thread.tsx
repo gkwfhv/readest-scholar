@@ -12,6 +12,8 @@ import {
   useThreadViewport,
   useThread,
   useComposerRuntime,
+  useMessagePartImage,
+  useMessagePartReasoning,
 } from '@assistant-ui/react';
 import {
   ArrowUpIcon,
@@ -384,7 +386,7 @@ const Composer: FC<ComposerProps> = ({ onClear, onResetIndex, toggles, onToggle 
         aria-label={label}
         aria-pressed={active}
         className={cn(
-          'mb-0.5 flex size-7 shrink-0 items-center justify-center rounded-full transition-colors',
+          'flex size-7 shrink-0 items-center justify-center rounded-full transition-colors',
           active
             ? 'bg-primary/15 text-primary'
             : 'text-base-content/60 hover:bg-base-300 hover:text-base-content',
@@ -406,7 +408,17 @@ const Composer: FC<ComposerProps> = ({ onClear, onResetIndex, toggles, onToggle 
         onPaste={onPaste}
       >
         <ComposerPrimitive.Attachments components={{ Attachment: AttachmentPreview }} />
-        <div className='flex items-end gap-0.5 p-1.5'>
+        {/* Trilium-style: the message box owns the top row, the toolbar
+            (model + context toggles left, attachments and send right) sits
+            below it instead of crowding the input onto one line. */}
+        <div className='px-3 pt-2'>
+          <ComposerPrimitive.Input
+            placeholder='Ask about this book...'
+            rows={1}
+            className='text-base-content placeholder:text-base-content/40 max-h-[200px] w-full resize-none bg-transparent py-1 text-sm leading-5 outline-hidden'
+          />
+        </div>
+        <div className='flex items-center gap-0.5 p-1.5'>
           <ModelSwitcher />
 
           {toggleButton('webSearch', <GlobeIcon className='size-3.5' />, _('Web search'))}
@@ -417,69 +429,65 @@ const Composer: FC<ComposerProps> = ({ onClear, onResetIndex, toggles, onToggle 
           )}
           {toggleButton('thinking', <BrainIcon className='size-3.5' />, _('Deep thinking'))}
 
-          <input
-            ref={fileInputRef}
-            type='file'
-            multiple
-            accept='image/*,text/plain,text/markdown,text/csv,.md,.txt,.csv,.json'
-            className='hidden'
-            onChange={(event) => {
-              const files = Array.from(event.target.files ?? []);
-              event.target.value = '';
-              void Promise.all(files.map((file) => addFile(file)));
-            }}
-          />
-          <button
-            type='button'
-            onClick={() => fileInputRef.current?.click()}
-            className='text-base-content/60 hover:bg-base-300 hover:text-base-content mb-0.5 flex size-7 shrink-0 items-center justify-center rounded-full transition-colors'
-            aria-label={_('Attach file')}
-            title={_('Attach file')}
-          >
-            <PaperclipIcon className='size-3.5' />
-          </button>
-
-          {onClear && (
+          <div className='ms-auto flex items-center gap-0.5'>
+            <input
+              ref={fileInputRef}
+              type='file'
+              multiple
+              accept='image/*,text/plain,text/markdown,text/csv,.md,.txt,.csv,.json'
+              className='hidden'
+              onChange={(event) => {
+                const files = Array.from(event.target.files ?? []);
+                event.target.value = '';
+                void Promise.all(files.map((file) => addFile(file)));
+              }}
+            />
             <button
               type='button'
-              onClick={onClear}
-              className='text-base-content hover:bg-base-300 mb-0.5 flex size-7 shrink-0 items-center justify-center rounded-full transition-colors'
-              aria-label='Clear chat'
+              onClick={() => fileInputRef.current?.click()}
+              className='text-base-content/60 hover:bg-base-300 hover:text-base-content flex size-7 shrink-0 items-center justify-center rounded-full transition-colors'
+              aria-label={_('Attach file')}
+              title={_('Attach file')}
             >
-              <Trash2Icon className='size-3.5' />
+              <PaperclipIcon className='size-3.5' />
             </button>
-          )}
 
-          {onResetIndex && (
-            <button
-              type='button'
-              onClick={onResetIndex}
-              className='text-base-content hover:bg-base-300 mb-0.5 flex size-7 shrink-0 items-center justify-center rounded-full transition-colors'
-              title='Re-index book'
-              aria-label='Re-index book'
-            >
-              <RefreshCwIcon className='size-3.5' />
-            </button>
-          )}
+            {onClear && (
+              <button
+                type='button'
+                onClick={onClear}
+                className='text-base-content hover:bg-base-300 flex size-7 shrink-0 items-center justify-center rounded-full transition-colors'
+                aria-label='Clear chat'
+              >
+                <Trash2Icon className='size-3.5' />
+              </button>
+            )}
 
-          <ComposerPrimitive.Input
-            placeholder='Ask about this book...'
-            rows={1}
-            className='text-base-content placeholder:text-base-content/40 my-1 h-5 max-h-[200px] min-w-0 flex-1 resize-none bg-transparent text-sm leading-5 outline-hidden'
-          />
+            {onResetIndex && (
+              <button
+                type='button'
+                onClick={onResetIndex}
+                className='text-base-content hover:bg-base-300 flex size-7 shrink-0 items-center justify-center rounded-full transition-colors'
+                title='Re-index book'
+                aria-label='Re-index book'
+              >
+                <RefreshCwIcon className='size-3.5' />
+              </button>
+            )}
 
-          <div className='bg-base-content text-base-100 relative mb-0.5 size-7 shrink-0 rounded-full'>
-            <ComposerPrimitive.Send className='absolute inset-0 flex items-center justify-center transition-all duration-300 ease-out group-data-[empty=true]/composer:scale-0 group-data-[running=true]/composer:scale-0 group-data-[empty=true]/composer:opacity-0 group-data-[running=true]/composer:opacity-0'>
-              <ArrowUpIcon className='size-3.5' />
-            </ComposerPrimitive.Send>
+            <div className='bg-base-content text-base-100 relative size-7 shrink-0 rounded-full'>
+              <ComposerPrimitive.Send className='absolute inset-0 flex items-center justify-center transition-all duration-300 ease-out group-data-[empty=true]/composer:scale-0 group-data-[running=true]/composer:scale-0 group-data-[empty=true]/composer:opacity-0 group-data-[running=true]/composer:opacity-0'>
+                <ArrowUpIcon className='size-3.5' />
+              </ComposerPrimitive.Send>
 
-            <ComposerPrimitive.Cancel className='absolute inset-0 flex items-center justify-center transition-all duration-300 ease-out group-data-[running=false]/composer:scale-0 group-data-[running=false]/composer:opacity-0'>
-              <SquareIcon className='size-3' fill='currentColor' />
-            </ComposerPrimitive.Cancel>
+              <ComposerPrimitive.Cancel className='absolute inset-0 flex items-center justify-center transition-all duration-300 ease-out group-data-[running=false]/composer:scale-0 group-data-[running=false]/composer:opacity-0'>
+                <SquareIcon className='size-3' fill='currentColor' />
+              </ComposerPrimitive.Cancel>
 
-            {/* Placeholder when empty and not running */}
-            <div className='absolute inset-0 flex items-center justify-center transition-all duration-300 ease-out group-data-[empty=false]/composer:scale-0 group-data-[running=true]/composer:scale-0 group-data-[empty=false]/composer:opacity-0 group-data-[running=true]/composer:opacity-0'>
-              <ArrowUpIcon className='size-3.5 opacity-40' />
+              {/* Placeholder when empty and not running */}
+              <div className='absolute inset-0 flex items-center justify-center transition-all duration-300 ease-out group-data-[empty=false]/composer:scale-0 group-data-[running=true]/composer:scale-0 group-data-[empty=false]/composer:opacity-0 group-data-[running=true]/composer:opacity-0'>
+                <ArrowUpIcon className='size-3.5 opacity-40' />
+              </div>
             </div>
           </div>
         </div>
@@ -490,6 +498,67 @@ const Composer: FC<ComposerProps> = ({ onClear, onResetIndex, toggles, onToggle 
         )}
       </div>
     </ComposerPrimitive.Root>
+  );
+};
+
+const MessageImage: FC = () => {
+  const part = useMessagePartImage();
+  return (
+    <img
+      src={part.image}
+      alt={part.filename || 'Attached image'}
+      className='border-base-content/10 my-1 max-h-72 max-w-full rounded-lg border object-contain'
+    />
+  );
+};
+
+// The local runtime keeps sent attachments on message.attachments instead of
+// merging them into message.content, so the Parts Image renderer never sees
+// them; render the attachment image parts here instead.
+const UserAttachments: FC = () => {
+  const attachments = useAssistantState((s) => s.message.attachments);
+  const images = (attachments ?? [])
+    .flatMap((attachment) => attachment.content ?? [])
+    .filter(
+      (part): part is { type: 'image'; image: string } =>
+        part.type === 'image' && typeof (part as { image?: unknown }).image === 'string',
+    );
+  if (images.length === 0) return null;
+  return (
+    <>
+      {images.map((part, index) => (
+        <img
+          key={index}
+          src={part.image}
+          alt=''
+          className='border-base-content/10 mb-1 max-h-72 max-w-full rounded-lg border object-contain'
+        />
+      ))}
+    </>
+  );
+};
+
+const ReasoningText: FC = () => {
+  const part = useMessagePartReasoning();
+  const [open, setOpen] = useState(false);
+  const _ = useTranslation();
+  return (
+    <div className='mb-1 w-full'>
+      <button
+        type='button'
+        onClick={() => setOpen((wasOpen) => !wasOpen)}
+        aria-expanded={open}
+        className='text-base-content/50 hover:text-base-content flex items-center gap-1 text-xs'
+      >
+        <ChevronRightIcon className={cn('size-3 transition-transform', open && 'rotate-90')} />
+        {_('Thinking')}
+      </button>
+      {open && (
+        <div className='text-base-content/60 mt-1 max-h-64 overflow-y-auto whitespace-pre-wrap text-xs'>
+          {part.text}
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -514,7 +583,9 @@ const AssistantMessage: FC<AssistantMessageProps> = ({
       <div className='flex flex-col items-start'>
         <div className='w-full max-w-none'>
           <div className='prose prose-xs text-base-content [&_*]:text-base-content! [&_a]:text-primary! [&_code]:text-base-content! select-text text-sm'>
-            <MessagePrimitive.Parts components={{ Text: MarkdownText }} />
+            <MessagePrimitive.Parts
+              components={{ Text: MarkdownText, Image: MessageImage, Reasoning: ReasoningText }}
+            />
           </div>
         </div>
 
@@ -609,8 +680,9 @@ const UserMessage: FC = () => {
     >
       <div className='flex flex-col items-end'>
         <div className='border-base-content/10 bg-base-200 text-base-content relative max-w-[90%] rounded-2xl rounded-br-md border px-3 py-2'>
+          <UserAttachments />
           <div className='prose prose-xs text-base-content [&_*]:text-base-content! select-text text-sm'>
-            <MessagePrimitive.Parts components={{ Text: MarkdownText }} />
+            <MessagePrimitive.Parts components={{ Text: MarkdownText, Image: MessageImage }} />
           </div>
         </div>
         <div className='mt-0.5 flex h-6 items-center justify-end gap-0.5'>

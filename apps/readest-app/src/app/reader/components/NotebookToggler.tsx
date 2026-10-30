@@ -1,5 +1,5 @@
 import React from 'react';
-import { RiQuillPenLine } from 'react-icons/ri';
+import { TbLayoutSidebar, TbLayoutSidebarFilled } from 'react-icons/tb';
 
 import { useEnv } from '@/context/EnvContext';
 import { useReaderStore } from '@/store/readerStore';
@@ -36,13 +36,13 @@ const NotebookToggler: React.FC<NotebookTogglerProps> = ({ bookKey }) => {
     <Button
       icon={
         sideBarBookKey == bookKey && isNotebookVisible ? (
-          <RiQuillPenLine size={iconSize18} className='text-base-content' />
+          <TbLayoutSidebarFilled size={iconSize18} className='text-base-content' />
         ) : (
-          <RiQuillPenLine size={iconSize18} className='text-base-content' />
+          <TbLayoutSidebar size={iconSize18} className='text-base-content' />
         )
       }
       onClick={handleToggleSidebar}
-      label={_('Notebook')}
+      label={_('Chat')}
     ></Button>
   );
 };

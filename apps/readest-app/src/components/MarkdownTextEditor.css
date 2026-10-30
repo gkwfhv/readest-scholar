@@ -11,3 +11,16 @@
   overflow-y: auto;
   outline: none;
 }
+
+/* Crepe ships 120px side gutters for full-page docs; in the narrow note
+   panel that wastes a third of the width. Keep the text where the block
+   handle icon used to sit. */
+.markdown-text-editor .milkdown .ProseMirror {
+  padding-inline: 0.75em 3em;
+}
+
+/* The block handle is hidden entirely: its grip icon had no drag logic and
+   the slash menu is reachable by typing "/". */
+.markdown-text-editor .milkdown .milkdown-block-handle {
+  display: none;
+}
