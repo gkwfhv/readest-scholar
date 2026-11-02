@@ -11,6 +11,26 @@ from pathlib import Path
 UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
+ACADEMIC_TRANSLATION_PROMPT = (
+    "Translate English academic PDFs into natural, publication-quality Simplified Chinese. "
+    "Understand each complete paragraph, then rewrite it in idiomatic Chinese instead of "
+    "following English word order. Preserve meaning, certainty, numbers, units, citations, "
+    "equation and figure/table references, symbols, URLs, code, and LaTeX exactly. Preserve "
+    "the original structure; translate headings, table text, and figure captions, but never "
+    "alter formulas. Use concise Chinese sentences, natural Chinese syntax, and active voice; "
+    "split long sentences when needed. Keep terminology consistent: at the first meaningful "
+    "occurrence, use Chinese (English), then use the Chinese term when unambiguous. Do not add, "
+    "omit, summarize, explain, or editorialize. Avoid literal translationese such as 使得, "
+    "值得注意的是, 具体来说, 通过……来……, 由……组成, 让……成为可能, 被……所……, and "
+    "chains of modifiers. Return only the translation."
+)
+
+
+def academic_translation_prompt(model: str) -> str:
+    """Return the shared academic style prompt, with Qwen3 thinking disabled."""
+    prefix = "/no_think " if model.lower().startswith("qwen3") else ""
+    return prefix + ACADEMIC_TRANSLATION_PROMPT
+
 
 def build_cli_command(
     source: Path, destination: Path, mode: str, glossary: Path | None = None,
@@ -444,12 +464,10 @@ def run_engine(
         source, output_dir, job["mode"], glossary,
         white_background_compat=white_background_compat, pages=pages,
     )
-    if job["model"].lower().startswith("qwen3"):
-        command.extend([
-            "--custom-system-prompt",
-            "/no_think Translate English academic prose into fluent Chinese. "
-            "Preserve equations, citations, symbols and terminology. Return only the translation.",
-        ])
+    command.extend([
+        "--custom-system-prompt",
+        academic_translation_prompt(job["model"]),
+    ])
     if __import__("os").geteuid() == 0:
         # The workspace owns the source, output, cache and optional glossary.
         _grant_engine_access(source.parent)

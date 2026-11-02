@@ -10,10 +10,52 @@ from unittest.mock import patch
 from io import BytesIO
 from pathlib import Path
 
-from worker import JobFailure, _validate_model_profile, inspect_output, build_cli_command, merge_page_outputs, parse_page_selection, child_environment, engine_progress, find_output, output_key, prepare_asset_links, process_job, run_engine, verify_glossary_text, verify_source_bytes
+from worker import ACADEMIC_TRANSLATION_PROMPT, JobFailure, _validate_model_profile, academic_translation_prompt, inspect_output, build_cli_command, merge_page_outputs, parse_page_selection, child_environment, engine_progress, find_output, output_key, prepare_asset_links, process_job, run_engine, verify_glossary_text, verify_source_bytes
 
 
 class WorkerContractTests(unittest.TestCase):
+    def test_academic_prompt_requires_natural_chinese_and_preserves_source_fidelity(self):
+        prompt = academic_translation_prompt("provider/academic-model")
+        self.assertEqual(prompt, ACADEMIC_TRANSLATION_PROMPT)
+        for required in (
+            "idiomatic Chinese", "English word order", "numbers, units, citations",
+            "LaTeX exactly", "terminology consistent", "Do not add, omit",
+            "使得", "值得注意的是", "通过……来……",
+        ):
+            self.assertIn(required, prompt)
+        self.assertFalse(prompt.startswith("/no_think"))
+        self.assertEqual(
+            academic_translation_prompt("Qwen3-Next-80B").removeprefix("/no_think "),
+            ACADEMIC_TRANSLATION_PROMPT,
+        )
+
+    def test_every_model_receives_the_academic_style_prompt(self):
+        class CompletedProcess:
+            returncode = 0
+
+            def poll(self):
+                return 0
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            source = root / "source.pdf"
+            source.write_bytes(b"%PDF-1.7\nsynthetic")
+            output = root / "output"
+            output.mkdir()
+            with patch("subprocess.Popen", return_value=CompletedProcess()) as start, patch(
+                "worker._grant_engine_access"
+            ):
+                run_engine(
+                    {"mode": "dual", "model": "provider/academic-model"},
+                    source, output, object(), "https://models.example.test/v1",
+                    "synthetic-key", str(root / "cache"), 60,
+                )
+        command = start.call_args.args[0]
+        self.assertEqual(
+            command[command.index("--custom-system-prompt") + 1],
+            ACADEMIC_TRANSLATION_PROMPT,
+        )
+
     def test_model_profile_rejects_loopback_and_mismatched_models(self):
         job = {"model": "provider/model"}
         with self.assertRaisesRegex(JobFailure, "model_config_unavailable"):
