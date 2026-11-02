@@ -1,0 +1,70 @@
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -205,9 +205,22 @@
+ 	group: "Strong"
+ });
+ var strongInputRule = $inputRule((ctx) => {
+-	return markRule(/(?<![\w:/])(?:\*\*|__)([^*_]+?)(?:\*\*|__)(?![\w/])$/, strongSchema.type(ctx), { getAttr: (match) => {
+-		return { marker: match[0].startsWith("*") ? "*" : "_" };
+-	} });
++	return markRule(/(^|[^\w:/])(?:\*\*|__)([^*_]+?)(?:\*\*|__)(?![\w/])$/, strongSchema.type(ctx), {
++		updateCaptured: (captured) => {
++			const fullMatch = captured.fullMatch ?? "";
++			const groupLength = captured.group?.length ?? 0;
++			const prefixLength = Math.max(0, fullMatch.length - groupLength - 4);
++			if (prefixLength === 0) return;
++			return {
++				fullMatch: fullMatch.slice(prefixLength),
++				start: captured.start + prefixLength
++			};
++		},
++		getAttr: (match) => {
++			const prefixLength = match[1]?.length ?? 0;
++			return { marker: match[0].slice(prefixLength).startsWith("*") ? "*" : "_" };
++		}
++	});
+ });
+ withMeta(strongInputRule, {
+ 	displayName: "InputRule<strong>",
+@@ -1819,25 +1832,32 @@
+ //#endregion
+ //#region src/plugin/remark-line-break.ts
+ var remarkLineBreak = $remark("remarkLineBreak", () => () => (tree) => {
+-	const find = /(?<![\t ])[\t ]*(?:\r?\n|\r)/g;
+ 	visit(tree, "text", (node, index, parent) => {
+ 		if (!node.value || typeof node.value !== "string") return;
+ 		const result = [];
+ 		let start = 0;
+-		find.lastIndex = 0;
+-		let match = find.exec(node.value);
+-		while (match) {
+-			const position = match.index;
+-			if (start !== position) result.push({
++		let scan = 0;
++		while (scan < node.value.length) {
++			const nextLineBreak = node.value.slice(scan).search(/[\r\n]/);
++			if (nextLineBreak < 0) break;
++			const lineBreakStart = scan + nextLineBreak;
++			let whitespaceStart = lineBreakStart;
++			while (
++				whitespaceStart > 0 &&
++				(node.value[whitespaceStart - 1] === "\t" || node.value[whitespaceStart - 1] === " ")
++			)
++				whitespaceStart -= 1;
++			if (start !== whitespaceStart) result.push({
+ 				type: "text",
+-				value: node.value.slice(start, position)
++				value: node.value.slice(start, whitespaceStart)
+ 			});
+ 			result.push({
+ 				type: "break",
+ 				data: { isInline: true }
+ 			});
+-			start = position + match[0].length;
+-			match = find.exec(node.value);
++			const lineBreakLength = node.value[lineBreakStart] === "\r" && node.value[lineBreakStart + 1] === "\n" ? 2 : 1;
++			start = lineBreakStart + lineBreakLength;
++			scan = start;
+ 		}
+ 		if (!(result.length > 0 && parent && typeof index === "number")) return;
+ 		if (start < node.value.length) result.push({

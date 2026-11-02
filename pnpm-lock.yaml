@@ -68,6 +68,8 @@ patchedDependencies:
   '@ai-sdk/provider-utils@4.0.57': d133f4100de3ea1efe5738900131161d41615fb3e9747933a01106420c5997e5
   '@assistant-ui/react@0.11.58': 3b35cb2796570c642ae5f2e40524454992e3065310310e0aad7addfc64eb0fd6
   mdast-util-gfm-autolink-literal@2.0.1: a119b196bac546b8f07e1a9600ced6f526b0676e2b959914868e393ecffbaff8
+  '@milkdown/preset-commonmark@7.23.0': 221ff94936b1b7b77952f368f9080b1ebf3fc7fddaa517c833876aff7daa7a25
+  '@milkdown/preset-gfm@7.23.0': feb2906111cccf82e42a437ab25a95bc3f7b2397108c43d39da94b24d116cf8f
 
 importers:
 

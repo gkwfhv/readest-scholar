@@ -22,6 +22,8 @@ patchedDependencies:
   '@assistant-ui/react@0.11.58': patches/@assistant-ui__react@0.11.58.patch
   '@ai-sdk/provider-utils@4.0.57': patches/@ai-sdk__provider-utils@4.0.57.patch
   mdast-util-gfm-autolink-literal@2.0.1: patches/mdast-util-gfm-autolink-literal@2.0.1.patch
+  '@milkdown/preset-commonmark@7.23.0': patches/@milkdown__preset-commonmark@7.23.0.patch
+  '@milkdown/preset-gfm@7.23.0': patches/@milkdown__preset-gfm@7.23.0.patch
 
 overrides:
   deepmerge-ts: '>=8.0.1 <9'
