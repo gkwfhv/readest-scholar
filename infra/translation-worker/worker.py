@@ -313,20 +313,17 @@ def _grant_engine_access(path: Path) -> None:
 
     if os.geteuid() != 0 or path.is_symlink():
         return
-    for root, directories, files in os.walk(path, followlinks=False):
+    # Process leaves before parents. The PDF process owns the workspace while
+    # root's private group keeps the parent able to read results and clean up.
+    for root, _, files in os.walk(path, topdown=False, followlinks=False):
         current = Path(root)
-        os.chown(current, 1000, 1000)
-        os.chmod(current, 0o700)
-        for name in directories:
-            candidate = current / name
-            if not candidate.is_symlink():
-                os.chown(candidate, 1000, 1000)
-                os.chmod(candidate, 0o700)
         for name in files:
             candidate = current / name
             if not candidate.is_symlink():
-                os.chown(candidate, 1000, 1000)
-                os.chmod(candidate, 0o600)
+                os.chown(candidate, 1000, 0)
+                os.chmod(candidate, 0o640)
+        os.chown(current, 1000, 0)
+        os.chmod(current, 0o770)
 
 
 def _drop_engine_privileges() -> None:
@@ -454,11 +451,9 @@ def run_engine(
             "Preserve equations, citations, symbols and terminology. Return only the translation.",
         ])
     if __import__("os").geteuid() == 0:
+        # The workspace owns the source, output, cache and optional glossary.
         _grant_engine_access(source.parent)
-        _grant_engine_access(Path(cache_dir))
-        _grant_engine_access(output_dir)
         if glossary is not None:
-            _grant_engine_access(glossary)
             __import__("os").chmod(glossary, 0o400)
         __import__("os").chmod(source, 0o400)
     log_path = output_dir.parent / ("engine-pages.log" if pages else "engine.log")
