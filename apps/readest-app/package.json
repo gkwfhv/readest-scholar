@@ -1,6 +1,6 @@
 {
   "name": "@readest/readest-app",
-  "version": "0.12.21",
+  "version": "0.12.22",
   "private": true,
   "type": "module",
   "scripts": {
@@ -89,9 +89,9 @@
     "wordlens:preview": "node scripts/preview-wordlens.mjs",
     "wordlens:sync": "node scripts/sync-wordlens-r2.mjs",
     "dictionary:yomitan:convert": "tsx scripts/convert-yomitan-dictionary.ts",
-    "check:optional-chaining": "count=$(grep -rno '\\?\\.[a-zA-Z_$]' .next/static/chunks/* out/_next/static/chunks/* | wc -l); if [ \"$count\" -gt 0 ]; then echo '❌ Optional chaining found in output!'; exit 1; else echo '✅ No optional chaining found.'; fi",
+    "check:optional-chaining": "matches=$(find .next/static/chunks out/_next/static/chunks -type f -print0 2>/dev/null | xargs -0 -r grep -n '\\?\\.[a-zA-Z_$]' || true); if [ -n \"$matches\" ]; then printf '%s\\n' \"$matches\"; echo 'Optional chaining found in output!'; exit 1; else echo 'No optional chaining found.'; fi",
     "check:translations": "count=$(grep -rno '__STRING_NOT_TRANSLATED__' public/locales/* | wc -l); if [ \"$count\" -gt 0 ]; then echo '❌ Untranslated strings found!'; exit 1; else echo '✅ All strings translated.'; fi",
-    "check:lookbehind-regex": "count=$(grep -rnoE '\\(\\?<[!=]' .next/static/chunks/* out/_next/static/chunks/* | wc -l); if [ \"$count\" -gt 0 ]; then echo '❌ Lookbehind regex found in output!'; exit 1; else echo '✅ No lookbehind regex found.'; fi",
+    "check:lookbehind-regex": "matches=$(find .next/static/chunks out/_next/static/chunks -type f -print0 2>/dev/null | xargs -0 -r grep -nE '\\(\\?<[!=]' || true); if [ -n \"$matches\" ]; then printf '%s\\n' \"$matches\"; echo 'Lookbehind regex found in output!'; exit 1; else echo 'No lookbehind regex found.'; fi",
     "check:all": "pnpm check:translations && pnpm check:lookbehind-regex",
     "build-check": "pnpm build && pnpm build-web && pnpm check:all",
     "worktree:new": "pnpm exec tsx scripts/worktree-new.ts",
