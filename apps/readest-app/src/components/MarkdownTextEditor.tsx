@@ -1,46 +1,142 @@
 import clsx from 'clsx';
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { useTranslation as useI18next } from 'react-i18next';
+import {
+  TbCode,
+  TbH1,
+  TbH2,
+  TbH3,
+  TbH4,
+  TbH5,
+  TbH6,
+  TbLetterT,
+  TbList,
+  TbListCheck,
+  TbListNumbers,
+  TbMathFunction,
+  TbPhoto,
+  TbQuote,
+  TbSeparatorHorizontal,
+  TbTable,
+} from 'react-icons/tb';
+import type { IconType } from 'react-icons';
 import { Crepe, CrepeFeature } from '@milkdown/crepe';
-import { editorViewCtx, editorViewOptionsCtx } from '@milkdown/kit/core';
+import type { Ctx } from '@milkdown/kit/ctx';
+import { commandsCtx, editorViewCtx, editorViewOptionsCtx } from '@milkdown/kit/core';
+import {
+  addBlockTypeCommand,
+  blockquoteSchema,
+  bulletListSchema,
+  codeBlockSchema,
+  headingSchema,
+  hrSchema,
+  listItemSchema,
+  orderedListSchema,
+  paragraphSchema,
+  selectTextNearPosCommand,
+  setBlockTypeCommand,
+  wrapInBlockTypeCommand,
+} from '@milkdown/kit/preset/commonmark';
+import { createTable } from '@milkdown/kit/preset/gfm';
+import { imageBlockSchema } from '@milkdown/kit/component/image-block';
 import { replaceAll } from '@milkdown/kit/utils';
-import { useTranslation, type TranslationFunc } from '@/hooks/useTranslation';
+import { useTranslation } from '@/hooks/useTranslation';
 import '@milkdown/crepe/theme/common/style.css';
 import '@milkdown/crepe/theme/frame.css';
 import 'katex/dist/katex.min.css';
 import './MarkdownTextEditor.css';
 
-// Crepe's slash menu ships English-only labels; mirror every group and item
-// through the app's i18n so the menu follows the UI language.
-function slashMenuConfig(_: TranslationFunc) {
-  return {
-    textGroup: {
-      label: _('Text'),
-      text: { label: _('Text') },
-      h1: { label: _('Heading 1') },
-      h2: { label: _('Heading 2') },
-      h3: { label: _('Heading 3') },
-      h4: { label: _('Heading 4') },
-      h5: { label: _('Heading 5') },
-      h6: { label: _('Heading 6') },
-      quote: { label: _('Quote') },
-      divider: { label: _('Divider') },
-    },
-    listGroup: {
-      label: _('List'),
-      bulletList: { label: _('Bullet List') },
-      orderedList: { label: _('Ordered List') },
-      taskList: { label: _('Task List') },
-    },
-    advancedGroup: {
-      label: _('Advanced'),
-      image: { label: _('Image') },
-      codeBlock: { label: _('Code') },
-      table: { label: _('Table') },
-      math: { label: _('Math') },
-    },
-  };
+// Each toolbar button dispatches the same Milkdown command Crepe's own slash
+// menu used, minus the slash-specific "clear the typed /filter text" step — a
+// toolbar click has no trigger text to clear, so it must preserve the block's
+// content and only change its type / insert a node.
+interface ToolbarItem {
+  labelKey: string;
+  Icon: IconType;
+  run: (ctx: Ctx) => void;
 }
+
+const call = (ctx: Ctx, command: { key: unknown }, payload?: unknown) =>
+  ctx.get(commandsCtx).call(command.key as never, payload as never);
+
+const HEADING_ICONS: IconType[] = [TbH1, TbH2, TbH3, TbH4, TbH5, TbH6];
+
+const TOOLBAR: ToolbarItem[] = [
+  {
+    labelKey: 'Text',
+    Icon: TbLetterT,
+    run: (ctx) => call(ctx, setBlockTypeCommand, { nodeType: paragraphSchema.type(ctx) }),
+  },
+  ...HEADING_ICONS.map((Icon, index): ToolbarItem => {
+    const level = index + 1;
+    return {
+      labelKey: `Heading ${level}`,
+      Icon,
+      run: (ctx) =>
+        call(ctx, setBlockTypeCommand, {
+          nodeType: headingSchema.type(ctx),
+          attrs: { level },
+        }),
+    };
+  }),
+  {
+    labelKey: 'Quote',
+    Icon: TbQuote,
+    run: (ctx) => call(ctx, wrapInBlockTypeCommand, { nodeType: blockquoteSchema.type(ctx) }),
+  },
+  {
+    labelKey: 'Divider',
+    Icon: TbSeparatorHorizontal,
+    run: (ctx) => call(ctx, addBlockTypeCommand, { nodeType: hrSchema.type(ctx) }),
+  },
+  {
+    labelKey: 'Bullet List',
+    Icon: TbList,
+    run: (ctx) => call(ctx, wrapInBlockTypeCommand, { nodeType: bulletListSchema.type(ctx) }),
+  },
+  {
+    labelKey: 'Ordered List',
+    Icon: TbListNumbers,
+    run: (ctx) => call(ctx, wrapInBlockTypeCommand, { nodeType: orderedListSchema.type(ctx) }),
+  },
+  {
+    labelKey: 'Task List',
+    Icon: TbListCheck,
+    run: (ctx) =>
+      call(ctx, wrapInBlockTypeCommand, {
+        nodeType: listItemSchema.type(ctx),
+        attrs: { checked: false },
+      }),
+  },
+  {
+    labelKey: 'Image',
+    Icon: TbPhoto,
+    run: (ctx) => call(ctx, addBlockTypeCommand, { nodeType: imageBlockSchema.type(ctx) }),
+  },
+  {
+    labelKey: 'Code',
+    Icon: TbCode,
+    run: (ctx) => call(ctx, setBlockTypeCommand, { nodeType: codeBlockSchema.type(ctx) }),
+  },
+  {
+    labelKey: 'Table',
+    Icon: TbTable,
+    run: (ctx) => {
+      const { from } = ctx.get(editorViewCtx).state.selection;
+      call(ctx, addBlockTypeCommand, { nodeType: createTable(ctx, 3, 3) });
+      call(ctx, selectTextNearPosCommand, { pos: from });
+    },
+  },
+  {
+    labelKey: 'Math',
+    Icon: TbMathFunction,
+    run: (ctx) =>
+      call(ctx, addBlockTypeCommand, {
+        nodeType: codeBlockSchema.type(ctx),
+        attrs: { language: 'LaTeX' },
+      }),
+  },
+];
 
 interface MarkdownTextEditorProps {
   value: string;
@@ -54,6 +150,7 @@ interface MarkdownTextEditorProps {
   spellCheck?: boolean;
   disabled?: boolean;
   autoResize?: boolean;
+  toolbar?: boolean;
   ariaLabel?: string;
   onSelect?: (start: number, end: number) => void;
   onCompositionStart?: () => void;
@@ -81,6 +178,7 @@ const MarkdownTextEditor = forwardRef<MarkdownTextEditorRef, MarkdownTextEditorP
       autoFocus = false,
       spellCheck = false,
       disabled = false,
+      toolbar = false,
       ariaLabel,
       onSelect,
       onCompositionStart,
@@ -150,10 +248,16 @@ const MarkdownTextEditor = forwardRef<MarkdownTextEditorRef, MarkdownTextEditorP
       const crepe = new Crepe({
         root,
         defaultValue: contentRef.current,
-        features: { [CrepeFeature.TopBar]: false, [CrepeFeature.AI]: false },
+        // BlockEdit powers both the "/" slash menu and the drag "+" handle;
+        // the annotation editor exposes a fixed top toolbar instead, so "/"
+        // must not activate anything.
+        features: {
+          [CrepeFeature.TopBar]: false,
+          [CrepeFeature.AI]: false,
+          [CrepeFeature.BlockEdit]: false,
+        },
         featureConfigs: {
           [CrepeFeature.Placeholder]: { text: placeholder ?? '', mode: 'doc' },
-          [CrepeFeature.BlockEdit]: slashMenuConfig(_),
         },
       });
       crepeRef.current = crepe;
@@ -283,13 +387,39 @@ const MarkdownTextEditor = forwardRef<MarkdownTextEditorRef, MarkdownTextEditorP
       }
     }, [value]);
 
+    const runToolbarItem = (item: ToolbarItem) => {
+      const crepe = crepeRef.current;
+      if (!crepe || !readyRef.current) return;
+      crepe.editor.action((ctx) => item.run(ctx));
+    };
+
     return (
-      <div
-        ref={rootRef}
-        className={clsx('markdown-text-editor', 'content font-size-sm', className)}
-        data-note-editor=''
-        dir='auto'
-      />
+      <div className={clsx('markdown-text-editor', 'flex min-h-0 flex-col', className)} dir='auto'>
+        {toolbar && (
+          <div className='md-editor-toolbar' role='toolbar' aria-label={_('Text')}>
+            {TOOLBAR.map((item) => (
+              <button
+                key={item.labelKey}
+                type='button'
+                title={_(item.labelKey)}
+                aria-label={_(item.labelKey)}
+                // Default mousedown would blur the editor and drop the caret;
+                // preventDefault keeps the selection so the command converts
+                // the block the user is actually in.
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => runToolbarItem(item)}
+              >
+                <item.Icon />
+              </button>
+            ))}
+          </div>
+        )}
+        <div
+          ref={rootRef}
+          className='md-editor-body content font-size-sm min-h-0 flex-1 overflow-y-auto'
+          data-note-editor=''
+        />
+      </div>
     );
   },
 );

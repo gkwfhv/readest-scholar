@@ -1,26 +1,96 @@
+/* Crepe declares its colour variables on `.milkdown`, but the wrapper and the
+   toolbar sit outside it, so they fell back to the host card's grey and the
+   white surface only covered the content-sized `.milkdown`. Hoist the frame
+   (light) theme variables onto the wrapper and paint it with the editor
+   background so the white surface fills the whole card — full width and the
+   full remaining height — instead of hugging the typed text. */
 .markdown-text-editor {
+  --crepe-color-background: #ffffff;
+  --crepe-color-surface: #f7f7f7;
+  --crepe-color-on-surface: #1c1c1c;
+  --crepe-color-outline: #a8a8a8;
+  --crepe-color-hover: #e0e0e0;
+  background: var(--crepe-color-background);
   height: 100%;
   min-height: 0;
   display: flex;
   flex-direction: column;
 }
 
+.markdown-text-editor .md-editor-body {
+  display: flex;
+  flex-direction: column;
+}
+
 .markdown-text-editor .milkdown {
-  flex: 1 1 auto;
+  flex: 1 0 auto;
   min-height: 0;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
   outline: none;
 }
 
-/* Crepe ships 120px side gutters for full-page docs; in the narrow note
-   panel that wastes a third of the width. Keep the text where the block
-   handle icon used to sit. */
 .markdown-text-editor .milkdown .ProseMirror {
+  flex: 1 0 auto;
+  min-height: 0;
   padding-inline: 0.75em 3em;
+  padding-block: 0.5em;
 }
 
-/* The block handle is hidden entirely: its grip icon had no drag logic and
-   the slash menu is reachable by typing "/". */
-.markdown-text-editor .milkdown .milkdown-block-handle {
-  display: none;
+/* Fixed toolbar above the editor body, replacing the old "/" slash menu: a
+   wrapping row of icon buttons. Colours come from Crepe's theme variables so
+   it tracks the editor's light/dark surface. */
+.markdown-text-editor .md-editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+  padding: 4px 6px;
+  border-bottom: 1px solid color-mix(in srgb, var(--crepe-color-outline), transparent 80%);
+  background: transparent;
+}
+.markdown-text-editor .md-editor-toolbar button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 4px;
+  border-radius: 6px;
+  color: var(--crepe-color-on-surface);
+  cursor: pointer;
+}
+.markdown-text-editor .md-editor-toolbar button:hover {
+  background: var(--crepe-color-hover);
+}
+.markdown-text-editor .md-editor-toolbar button svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Crepe sizes headings for full-page docs (H1 2.625em … H6 1.125em), which
+   dwarfs the narrow note card. Rescale to a ladder off the old H1 (1.3125em)
+   as the shared base: H1 140%, H2 120%, H3 110%, H4 100%, H5 90%; H6 drops
+   to body size (1em) and leans on bold weight to stay distinct. Selectors
+   carry `.milkdown .ProseMirror` to out-specify the theme. */
+.markdown-text-editor .milkdown .ProseMirror h1 {
+  font-size: 1.8375em;
+}
+.markdown-text-editor .milkdown .ProseMirror h2 {
+  font-size: 1.575em;
+}
+.markdown-text-editor .milkdown .ProseMirror h3 {
+  font-size: 1.44375em;
+}
+.markdown-text-editor .milkdown .ProseMirror h4 {
+  font-size: 1.3125em;
+}
+.markdown-text-editor .milkdown .ProseMirror h5 {
+  font-size: 1.18125em;
+}
+.markdown-text-editor .milkdown .ProseMirror h6 {
+  font-size: 1em;
+  font-weight: 700;
 }

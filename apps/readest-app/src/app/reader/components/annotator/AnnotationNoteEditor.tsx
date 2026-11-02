@@ -44,7 +44,7 @@ const AnnotationNoteEditor: React.FC<AnnotationNoteEditorProps> = ({
           in the sheet), so the text area takes the slack and the action row
           stays pinned to the bottom edge instead of floating under a
           content-sized textarea. */}
-      <div className={clsx('flex h-full min-h-0 gap-2 p-4', isVertical ? 'flex-row' : 'flex-col')}>
+      <div className={clsx('flex h-full min-h-0 gap-2', isVertical ? 'flex-row' : 'flex-col')}>
         <MarkdownTextEditor
           value={draftText}
           onChange={setDraftText}
@@ -54,10 +54,11 @@ const AnnotationNoteEditor: React.FC<AnnotationNoteEditorProps> = ({
           placeholder={_('Add Note')}
           autoResize={false}
           spellCheck={false}
+          toolbar
           autoFocus
         />
         <div
-          className={clsx('flex shrink-0 justify-end gap-3', isVertical && 'flex-col')}
+          className={clsx('flex shrink-0 justify-end gap-3 p-4', isVertical && 'flex-col')}
           dir='ltr'
         >
           <TextButton onClick={onCancel}>{_('Cancel')}</TextButton>

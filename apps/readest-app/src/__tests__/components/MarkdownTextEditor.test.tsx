@@ -20,7 +20,12 @@ let selectionUpdatedCb: ((ctx: unknown, selection: { from: number; to: number })
 const replaceAllMock = vi.fn((md: string) => () => ({ __replaceAll: md }));
 
 vi.mock('@milkdown/crepe', () => {
-  const CrepeFeature = { TopBar: 'top-bar', AI: 'ai', Placeholder: 'placeholder' };
+  const CrepeFeature = {
+    TopBar: 'top-bar',
+    AI: 'ai',
+    Placeholder: 'placeholder',
+    BlockEdit: 'block-edit',
+  };
   return {
     CrepeFeature,
     Crepe: class {
@@ -58,6 +63,7 @@ vi.mock('@milkdown/crepe', () => {
 });
 
 vi.mock('@milkdown/kit/core', () => ({
+  commandsCtx: { __ctx: 'commands' },
   editorViewCtx: { __ctx: 'editorView' },
   editorViewOptionsCtx: { __ctx: 'editorViewOptions' },
 }));
@@ -103,7 +109,7 @@ describe('MarkdownTextEditor', () => {
       />,
     );
     await waitFor(() => expect(constructedConfig).not.toBeNull());
-    const root = utils.container.querySelector('.markdown-text-editor') as HTMLDivElement;
+    const root = utils.container.querySelector('.md-editor-body') as HTMLDivElement;
     return { ...utils, root, ref, onChange, onBlur, onSave, onEscape, onSelect };
   };
 
@@ -112,7 +118,7 @@ describe('MarkdownTextEditor', () => {
 
     expect(constructedConfig).toMatchObject({
       defaultValue: 'hello',
-      features: { 'top-bar': false, ai: false },
+      features: { 'top-bar': false, ai: false, 'block-edit': false },
       featureConfigs: { placeholder: { text: 'Start writing…', mode: 'doc' } },
     });
     expect(editorOptions.attributes).toMatchObject({
@@ -187,5 +193,41 @@ describe('MarkdownTextEditor', () => {
       <MarkdownTextEditor ref={ref as never} value='world' onChange={vi.fn()} onBlur={vi.fn()} />,
     );
     expect(replaceAllMock).toHaveBeenCalledWith('world');
+  });
+
+  it('renders no toolbar unless the toolbar prop is set', async () => {
+    const { container } = await renderEditor();
+    expect(container.querySelector('[role="toolbar"]')).toBeNull();
+  });
+
+  it('renders a labelled icon toolbar with one button per tool when toolbar is set', async () => {
+    const { container } = await renderEditor({ toolbar: true });
+    const toolbar = container.querySelector('[role="toolbar"]');
+    expect(toolbar).not.toBeNull();
+    const buttons = Array.from(toolbar!.querySelectorAll('button'));
+    expect(buttons).toHaveLength(16);
+    const labels = buttons.map((button) => button.getAttribute('aria-label'));
+    expect(labels).toEqual([
+      'Text',
+      'Heading 1',
+      'Heading 2',
+      'Heading 3',
+      'Heading 4',
+      'Heading 5',
+      'Heading 6',
+      'Quote',
+      'Divider',
+      'Bullet List',
+      'Ordered List',
+      'Task List',
+      'Image',
+      'Code',
+      'Table',
+      'Math',
+    ]);
+    // The hover name mirrors the aria-label so cursor-hover shows the tool.
+    for (const button of buttons) {
+      expect(button.getAttribute('title')).toBe(button.getAttribute('aria-label'));
+    }
   });
 });

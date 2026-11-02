@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import React from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import { Position } from '@/utils/sel';
 import { useResponsiveSize } from '@/hooks/useResponsiveSize';
 import { BookNote, HighlightColor, HighlightStyle } from '@/types/book';
@@ -70,13 +70,46 @@ const AnnotationPopup: React.FC<AnnotationPopupProps> = ({
   onHighlight,
   onDismiss,
 }) => {
-  // Tall enough for a few lines plus the Cancel/Save row, so the editor opens
-  // at a usable size instead of the 44px toolbar height it replaces.
-  const noteEditorSize = useResponsiveSize(180);
+  // The note card replaces the 44px toolbar body; 1.5× the doubled toolbar
+  // footprint (the size users first asked for) leaves room to write a note.
+  const noteEditorSize = useResponsiveSize(540);
   // The popup's own box, with the vertical-writing swap already applied — the
   // same values AnnotationNotes and HighlightOptions are handed.
   const boxWidth = isVertical ? popupHeight : popupWidth;
   const boxHeight = isVertical ? popupWidth : popupHeight;
+  // The card overgrows the toolbar box towards the free side of the selection,
+  // so measure the reader cell to keep it on screen: the growth axis is capped
+  // by the room between the toolbar and the cell edge, the cross axis by the
+  // cell extent, flipping the card's anchored edge when it would overflow.
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [cell, setCell] = useState({ width: 0, height: 0 });
+  useLayoutEffect(() => {
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    const measure = () => setCell({ width: wrap.clientWidth, height: wrap.clientHeight });
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(wrap);
+    return () => observer.disconnect();
+  }, []);
+  const pad = useResponsiveSize(10);
+  const cellWidth = cell.width || Number.POSITIVE_INFINITY;
+  const cellHeight = cell.height || Number.POSITIVE_INFINITY;
+  const growthRoom =
+    trianglePosition.dir === 'up'
+      ? position.point.y + boxHeight - pad
+      : trianglePosition.dir === 'down'
+        ? cellHeight - position.point.y - pad
+        : trianglePosition.dir === 'left'
+          ? position.point.x + boxWidth - pad
+          : cellWidth - position.point.x - pad;
+  const shortSide = Math.min(noteEditorSize, growthRoom);
+  const crossSide = isVertical
+    ? Math.min(3 * boxHeight, cellHeight - 2 * pad)
+    : Math.min(3 * boxWidth, cellWidth - 2 * pad);
+  const crossAnchoredAtStart = isVertical
+    ? position.point.y + crossSide <= cellHeight - pad
+    : position.point.x + crossSide <= cellWidth - pad;
   return (
     // The toolbar opens against the selection, which is where the range
     // editors' handles hang: the two overlap by design, and whichever layer
@@ -97,7 +130,7 @@ const AnnotationPopup: React.FC<AnnotationPopupProps> = ({
     // still makes the stacking context without moving anything.
     // `pointer-events-none` keeps the cell-covering wrapper from swallowing
     // the taps outside the popup that dismiss it.
-    <div dir={dir} className='pointer-events-none absolute inset-0 z-[43]'>
+    <div dir={dir} ref={wrapRef} className='pointer-events-none absolute inset-0 z-[43]'>
       <Popup
         width={boxWidth}
         height={boxHeight}
@@ -153,14 +186,18 @@ const AnnotationPopup: React.FC<AnnotationPopupProps> = ({
                   ? {
                       right: trianglePosition.dir === 'left' ? 0 : undefined,
                       left: trianglePosition.dir === 'right' ? 0 : undefined,
-                      height: `${boxHeight}px`,
-                      width: `${noteEditorSize}px`,
+                      top: crossAnchoredAtStart ? 0 : undefined,
+                      bottom: crossAnchoredAtStart ? undefined : 0,
+                      height: `${crossSide}px`,
+                      width: `${shortSide}px`,
                     }
                   : {
                       top: trianglePosition.dir === 'down' ? 0 : undefined,
                       bottom: trianglePosition.dir === 'up' ? 0 : undefined,
-                      width: `${boxWidth}px`,
-                      height: `${noteEditorSize}px`,
+                      left: crossAnchoredAtStart ? 0 : undefined,
+                      right: crossAnchoredAtStart ? undefined : 0,
+                      width: `${crossSide}px`,
+                      height: `${shortSide}px`,
                     }
               }
               onSave={noteEditor.onSave}
