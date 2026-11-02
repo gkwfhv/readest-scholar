@@ -1,0 +1,22 @@
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -62,7 +62,18 @@
+ 	group: "Strikethrough"
+ });
+ var strikethroughInputRule = $inputRule((ctx) => {
+-	return markRule(/(?<![\w:/])(~{1,2})(.+?)\1(?!\w|\/)$/, strikethroughSchema.type(ctx));
++	return markRule(/(^|[^\w:/])(~{1,2})(.+?)\2(?!\w|\/)$/, strikethroughSchema.type(ctx), {
++		updateCaptured: (captured) => {
++			const fullMatch = captured.fullMatch ?? "";
++			const groupLength = captured.group?.length ?? 0;
++			const prefixLength = (fullMatch.length - groupLength) % 2;
++			if (prefixLength === 0) return;
++			return {
++				fullMatch: fullMatch.slice(prefixLength),
++				start: captured.start + prefixLength
++			};
++		}
++	});
+ });
+ withMeta(strikethroughInputRule, {
+ 	displayName: "InputRule<strikethrough>",

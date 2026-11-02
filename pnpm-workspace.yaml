@@ -22,6 +22,8 @@ patchedDependencies:
   '@assistant-ui/react@0.11.58': patches/@assistant-ui__react@0.11.58.patch
   '@ai-sdk/provider-utils@4.0.57': patches/@ai-sdk__provider-utils@4.0.57.patch
   mdast-util-gfm-autolink-literal@2.0.1: patches/mdast-util-gfm-autolink-literal@2.0.1.patch
+  '@milkdown/preset-commonmark@7.23.0': patches/@milkdown__preset-commonmark@7.23.0.patch
+  '@milkdown/preset-gfm@7.23.0': patches/@milkdown__preset-gfm@7.23.0.patch
 
 overrides:
   deepmerge-ts: '>=8.0.1 <9'
@@ -30,7 +32,8 @@ overrides:
   '@puppeteer/browsers': '3.2.1'
   pdfjs-dist: '>=6.2.108 <7'
   mermaid: '>=11.16.1 <12'
-  glob: '>=11.1.0'
+  glob: '>=14.0.2 <15'
+  minimatch: '>=11.0.1 <12'
   jws: '>=4.0.1'
   vite: '>=7.3.5 <8'
   esbuild: '>=0.28.1 <0.29'
