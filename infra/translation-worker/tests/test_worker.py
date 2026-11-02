@@ -436,5 +436,38 @@ class WorkerContractTests(unittest.TestCase):
             verify_source_bytes(content, "0" * 64, len(content))
 
 
+    def test_root_hands_off_the_full_workspace_once(self):
+        class CompletedProcess:
+            returncode = 0
+
+            def poll(self):
+                return 0
+
+        class IdleDb:
+            def canceled(self, _job):
+                return False
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            source = root / "source.pdf"
+            source.write_bytes(b"%PDF-1.4\nsource")
+            output = root / "output"
+            output.mkdir()
+            with patch("os.geteuid", return_value=0), patch(
+                "worker._grant_engine_access"
+            ) as handoff, patch("subprocess.Popen", return_value=CompletedProcess()):
+                run_engine(
+                    {"mode": "dual", "model": "local-model"},
+                    source, output, IdleDb(), "http://model.internal:3168/v1",
+                    "synthetic-key", str(root / "cache"), 60,
+                )
+            handoff.assert_called_once_with(root)
+
+        handoff_source = inspect.getsource(__import__("worker")._grant_engine_access)
+        self.assertIn("topdown=False", handoff_source)
+        self.assertIn("os.chown(current, 1000, 0)", handoff_source)
+        self.assertIn("os.chmod(current, 0o770)", handoff_source)
+
+
 if __name__ == "__main__":
     unittest.main()
