@@ -10,7 +10,7 @@ from unittest.mock import patch
 from io import BytesIO
 from pathlib import Path
 
-from worker import ACADEMIC_TRANSLATION_PROMPT, JobFailure, _validate_model_profile, academic_translation_prompt, inspect_output, build_cli_command, merge_page_outputs, parse_page_selection, child_environment, engine_progress, find_output, output_key, prepare_asset_links, process_job, run_engine, verify_glossary_text, verify_source_bytes
+from worker import ACADEMIC_TRANSLATION_PROMPT, JobFailure, _validate_model_profile, academic_translation_prompt, inspect_output, build_cli_command, merge_page_outputs, parse_page_selection, child_environment, engine_progress, find_output, invalid_model_response_count, model_response_is_stalled, output_key, prepare_asset_links, process_job, run_engine, verify_glossary_text, verify_source_bytes
 
 
 class WorkerContractTests(unittest.TestCase):
@@ -215,6 +215,36 @@ class WorkerContractTests(unittest.TestCase):
             self.assertEqual(engine_progress(log), 38)
             log.write_bytes(log.read_bytes() + b"@@SCHOLAR_PROGRESS:100\n")
             self.assertEqual(engine_progress(log), 75)
+
+    def test_invalid_model_response_guard_requires_a_stall_and_repeated_errors(self):
+        with tempfile.TemporaryDirectory() as folder:
+            log = Path(folder) / "engine.log"
+            log.write_bytes(
+                b"Error Expecting value: line 1 column 1 (char 0) during translation. try fallback\n"
+                b"Error Unterminated string starting at: line 4 column 15 (char 33) during translation. try fallback\n"
+                b"Error Expecting value: line 1 column 1 (char 0) during translation. try fallback\n"
+            )
+            self.assertEqual(invalid_model_response_count(log), 3)
+        self.assertFalse(
+            model_response_is_stalled(
+                elapsed_seconds=119, progress_advanced=False, invalid_responses_since_progress=3,
+            )
+        )
+        self.assertFalse(
+            model_response_is_stalled(
+                elapsed_seconds=120, progress_advanced=True, invalid_responses_since_progress=3,
+            )
+        )
+        self.assertFalse(
+            model_response_is_stalled(
+                elapsed_seconds=120, progress_advanced=False, invalid_responses_since_progress=2,
+            )
+        )
+        self.assertTrue(
+            model_response_is_stalled(
+                elapsed_seconds=120, progress_advanced=False, invalid_responses_since_progress=3,
+            )
+        )
 
     def test_finds_only_one_translation_output_under_own_directory(self):
         with tempfile.TemporaryDirectory() as folder:

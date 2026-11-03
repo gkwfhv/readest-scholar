@@ -315,6 +315,34 @@ def find_output(directory: Path, kind: str) -> Path:
     return candidates[0]
 
 
+MODEL_RESPONSE_INVALID_RE = re.compile(
+    rb"Error (?:Expecting value:|Unterminated string|Translation results length mismatch)"
+)
+MODEL_RESPONSE_STALL_SECONDS = 120
+MODEL_RESPONSE_STALL_EVENTS = 3
+
+
+def invalid_model_response_count(log_path: Path) -> int:
+    """Count malformed model replies in the current engine log tail."""
+    if not log_path.exists():
+        return 0
+    with log_path.open("rb") as log:
+        log.seek(0, 2)
+        log.seek(max(0, log.tell() - 32768))
+        return len(MODEL_RESPONSE_INVALID_RE.findall(log.read()))
+
+
+def model_response_is_stalled(
+    *, elapsed_seconds: float, progress_advanced: bool, invalid_responses_since_progress: int,
+) -> bool:
+    """Stop retries that cannot recover from repeatedly malformed model output."""
+    return (
+        not progress_advanced
+        and elapsed_seconds >= MODEL_RESPONSE_STALL_SECONDS
+        and invalid_responses_since_progress >= MODEL_RESPONSE_STALL_EVENTS
+    )
+
+
 def engine_progress(log_path: Path) -> int:
     """Map the CLI's tqdm percentage to the queue's processing range."""
     if not log_path.exists():
@@ -491,21 +519,38 @@ def run_engine(
         )
         started = time.monotonic()
         last_renewal = started
+        last_progress_at = started
+        last_stage_progress = engine_progress(log_path)
+        invalid_responses_at_last_progress = invalid_model_response_count(log_path)
         try:
             while process.poll() is None:
                 time.sleep(3)
                 if db.canceled(job):
                     raise JobFailure("canceled")
-                if time.monotonic() - started > timeout_seconds:
+                now = time.monotonic()
+                if now - started > timeout_seconds:
                     raise JobFailure("engine_timeout")
-                if time.monotonic() - last_renewal >= 25:
+                if now - last_renewal >= 25:
                     stage_progress = engine_progress(log_path)
+                    invalid_responses = invalid_model_response_count(log_path)
+                    if stage_progress > last_stage_progress:
+                        last_stage_progress = stage_progress
+                        last_progress_at = now
+                        invalid_responses_at_last_progress = invalid_responses
+                    elif model_response_is_stalled(
+                        elapsed_seconds=now - last_progress_at,
+                        progress_advanced=False,
+                        invalid_responses_since_progress=(
+                            invalid_responses - invalid_responses_at_last_progress
+                        ),
+                    ):
+                        raise JobFailure("model_response_invalid")
                     scaled = progress_start + round(
                         (stage_progress - 20) * (progress_end - progress_start) / 55
                     )
                     if not db.renew(job, scaled):
                         raise JobFailure("lease_lost")
-                    last_renewal = time.monotonic()
+                    last_renewal = now
             if process.returncode != 0:
                 raise JobFailure("engine_failed")
         finally:
