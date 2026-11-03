@@ -1612,3 +1612,19 @@
     animation: none;
   }
 }
+
+/* Assistant chat code blocks sit on a fixed dark surface (bg-zinc-900) in every
+   app theme, so their base text must stay light. highlight.js' GitHub-dark theme
+   also paints its own surface and padding on `.hljs`; the <pre> already provides
+   both, so neutralise them to keep one block. Kept in @layer base so it wins
+   over any utility `!important` colour overrides. */
+@layer base {
+  .aui-md pre,
+  .aui-md pre code {
+    color: #f4f4f5 !important;
+  }
+  .aui-md pre code.hljs {
+    background: transparent !important;
+    padding: 0 !important;
+  }
+}

@@ -1,5 +1,5 @@
 import { Dispatch, SetStateAction, useCallback } from 'react';
-import { Book } from '@/types/book';
+import { Book, type TranslationOutputKind } from '@/types/book';
 import { useEnv } from '@/context/EnvContext';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -32,7 +32,11 @@ export const useOpenBook = ({ setLoading, handleBookDownload }: UseOpenBookOptio
   const makeBookAvailable = useMakeBookAvailable({ setLoading, handleBookDownload });
 
   const openBook = useCallback(
-    async (book: Book, cfi?: string, options?: { highlightSearchResult?: boolean }) => {
+    async (
+      book: Book,
+      cfi?: string,
+      options?: { highlightSearchResult?: boolean; translation?: TranslationOutputKind },
+    ) => {
       // A streaming audiobook has no local file and no document loader path -
       // it opens in the full-screen player instead of the reader. Short-circuit
       // before any of the file-availability logic below, which assumes a real
@@ -78,6 +82,7 @@ export const useOpenBook = ({ setLoading, handleBookDownload }: UseOpenBookOptio
       const params = new URLSearchParams();
       if (cfi) params.set('cfi', cfi);
       if (cfi && options?.highlightSearchResult) params.set('highlight', 'search');
+      if (options?.translation) params.set('translation', options.translation);
       const queryParams = params.size ? params.toString() : undefined;
       if (appService?.hasWindow && settings.openBookInNewWindow) {
         showReaderWindow(appService, [book.hash], queryParams);

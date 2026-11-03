@@ -144,6 +144,7 @@ describe('SelectModeActions download', () => {
       'Open',
       'Group',
       'Tag',
+      'Translate',
       'Status',
       'Details',
       'Download',

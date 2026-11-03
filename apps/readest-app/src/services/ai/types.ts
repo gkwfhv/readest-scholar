@@ -34,6 +34,13 @@ export interface AISettings {
   openrouterModel?: string;
   openrouterEmbeddingModel?: string;
 
+  /**
+   * OpenAI-compatible endpoint used ONLY for server-side PDF translation.
+   * The chat endpoint above may be a LAN HTTP URL the translation worker
+   * cannot reach, and the job API requires HTTPS, so it can be overridden.
+   */
+  pdfTranslationBaseUrl?: string;
+
   /** In-memory owner of native keychain values; never persisted. */
   credentialScope?: string;
 

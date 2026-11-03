@@ -25,12 +25,12 @@ afterEach(() => {
 });
 
 describe('Scholar view menu', () => {
-  it('offers the three-pane layout only when the available screen is wide', () => {
+  it('no longer offers the Research Library layout, even on a wide screen', () => {
     const view = render(<ViewMenu />);
     expect(screen.queryByText('Research Library')).toBeNull();
 
     viewport.wide = true;
     view.rerender(<ViewMenu />);
-    expect(screen.getByText('Research Library')).toBeTruthy();
+    expect(screen.queryByText('Research Library')).toBeNull();
   });
 });

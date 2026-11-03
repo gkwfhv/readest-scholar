@@ -77,6 +77,59 @@ vi.mock('@/hooks/useResponsiveSize', () => ({
   useResponsiveSize: (size: number) => size,
 }));
 
+// The note editor now opens in a Dialog (portalled to body), which reads these
+// stores; stand them up so the dialog can mount in jsdom.
+vi.mock('@/store/themeStore', () => ({
+  useThemeStore: () => ({
+    systemUIVisible: false,
+    statusBarHeight: 0,
+    safeAreaInsets: { top: 0, right: 0, bottom: 0, left: 0 },
+    isIPhoneDuo: false,
+  }),
+}));
+vi.mock('@/store/deviceStore', () => ({
+  useDeviceControlStore: () => ({
+    acquireBackKeyInterception: vi.fn(),
+    releaseBackKeyInterception: vi.fn(),
+  }),
+}));
+vi.mock('@tauri-apps/plugin-haptics', () => ({ impactFeedback: vi.fn() }));
+
+// The dialog hosts AnnotationNoteEditor, now a WYSIWYG Markdown (Milkdown)
+// editor that cannot mount in jsdom. Stand in with a plain textarea so the
+// textbox-based assertions below keep exercising the real save flow.
+vi.mock('@/components/MarkdownTextEditor', () => ({
+  default: ({
+    value,
+    onChange,
+    onSave,
+    onEscape,
+    placeholder,
+    className,
+    autoFocus,
+  }: {
+    value: string;
+    onChange: (value: string) => void;
+    onSave?: () => void;
+    onEscape?: () => void;
+    placeholder?: string;
+    className?: string;
+    autoFocus?: boolean;
+  }) => (
+    <textarea
+      className={className}
+      placeholder={placeholder}
+      value={value}
+      autoFocus={autoFocus}
+      onChange={(e) => onChange(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') onEscape?.();
+        else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) onSave?.();
+      }}
+    />
+  ),
+}));
+
 dayjs.extend(relativeTime);
 
 const makeItem = (overrides: Partial<BookNote> = {}): BookNote => ({
@@ -192,7 +245,7 @@ describe('BooknoteItem', () => {
     expect(mocks.setNotebookVisible).not.toHaveBeenCalled();
   });
 
-  it('shows Add Note on a bare highlight and saves a new note inline', async () => {
+  it('shows Add Note on a bare highlight and saves a new note', async () => {
     const item = makeItem();
     mocks.state.booknotes = [item];
     renderItem(item, true);
@@ -233,7 +286,7 @@ describe('BooknoteItem', () => {
     expect(mocks.addAnnotation).not.toHaveBeenCalled();
   });
 
-  it('clearing a note inline keeps the highlight and removes the bubble', async () => {
+  it('clearing a note keeps the highlight and removes the bubble', async () => {
     const item = makeItem({ note: 'old note' });
     mocks.state.booknotes = [item];
     renderItem(item, true);
@@ -253,7 +306,7 @@ describe('BooknoteItem', () => {
     );
   });
 
-  it('aborts the inline save when the record is gone (deleted by sync)', async () => {
+  it('aborts the save when the record is gone (deleted by sync)', async () => {
     const item = makeItem({ note: 'old note' });
     mocks.state.booknotes = [];
     renderItem(item, true);
@@ -269,7 +322,7 @@ describe('BooknoteItem', () => {
     expect(mocks.saveConfig).not.toHaveBeenCalled();
   });
 
-  it('edits a noted item inline even without inlineNoteEditing', () => {
+  it('opens the note editor dialog even without inlineNoteEditing', () => {
     const item = makeItem({ note: 'my note' });
     mocks.state.booknotes = [item];
     renderItem(item);
@@ -278,6 +331,22 @@ describe('BooknoteItem', () => {
     expect(screen.getByRole('textbox')).toBeTruthy();
     expect(mocks.setNotebookEditAnnotation).not.toHaveBeenCalled();
     expect(mocks.setNotebookVisible).not.toHaveBeenCalled();
+  });
+
+  it('clamps the note preview to a three-line thumbnail', () => {
+    renderItem(makeItem({ note: 'a long note body' }));
+
+    const preview = document.querySelector('.prose.line-clamp-3')!;
+    expect(preview).toBeTruthy();
+  });
+
+  it('opens the note editor when the note preview is double-clicked', () => {
+    const item = makeItem({ note: 'my note' });
+    mocks.state.booknotes = [item];
+    renderItem(item);
+
+    fireEvent.doubleClick(document.querySelector('.prose.line-clamp-3')!);
+    expect(screen.getByRole('textbox')).toBeTruthy();
   });
 
   it('hides the edit affordance for bare highlights without inlineNoteEditing', () => {
@@ -340,7 +409,7 @@ describe('BooknoteItem', () => {
   });
 });
 
-it('keeps the inline draft through a failed save and closes only after retry succeeds (#6123)', async () => {
+it('keeps the draft through a failed save and closes only after retry succeeds (#6123)', async () => {
   const item = makeItem({ note: 'old note' });
   mocks.state.booknotes = [item];
   renderItem(item, true);

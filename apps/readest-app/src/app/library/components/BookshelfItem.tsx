@@ -21,6 +21,7 @@ import {
   type BookContextMenuItemId,
 } from '@/app/library/utils/libraryUtils';
 import { isTauriAppPlatform } from '@/services/environment';
+import { isTranslationInFlight } from '@/services/scholarTranslation';
 import { isLocalSendEnabled } from '@/services/localsend/devicePrefs';
 import { MdDeleteOutline } from 'react-icons/md';
 import BookItem from './BookItem';
@@ -147,6 +148,11 @@ const BookshelfItem: React.FC<BookshelfItemProps> = ({
         toggleSelection(book.hash);
         return;
       }
+      // The shelf owns the dialog (this row can be unmounted by virtualization).
+      if (book.translation?.state === 'succeeded' || isTranslationInFlight(book)) {
+        eventDispatcher.dispatch('open-book-translation', { book });
+        return;
+      }
       await openBook(book);
     },
     [isSelectMode, openBook, toggleSelection],
@@ -218,6 +224,14 @@ const BookshelfItem: React.FC<BookshelfItemProps> = ({
         text: _('Show Book Details'),
         action: async () => {
           showBookDetailsModal(book);
+        },
+      },
+      translate: {
+        text: _('Translate Document'),
+        action: async () => {
+          // The shelf hosts the dialog: it owns login/upload state and the
+          // dialog must survive this (virtualized) row unmounting.
+          eventDispatcher.dispatch('translate-book', { book });
         },
       },
       showInFinder: {

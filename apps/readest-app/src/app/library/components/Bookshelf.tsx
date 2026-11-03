@@ -8,7 +8,13 @@ import { PiPlus } from 'react-icons/pi';
 import { useOverlayScrollbars } from 'overlayscrollbars-react';
 import { useMediaQuery } from 'react-responsive';
 import 'overlayscrollbars/overlayscrollbars.css';
-import { Book, BooksGroup, type LibrarySearchConfig, ReadingStatus } from '@/types/book';
+import {
+  Book,
+  BooksGroup,
+  type LibrarySearchConfig,
+  ReadingStatus,
+  type TranslationOutputKind,
+} from '@/types/book';
 import { LibraryGroupByType, LibrarySortByType, LibraryViewModeType } from '@/types/settings';
 import { useEnv } from '@/context/EnvContext';
 import { useThemeStore } from '@/store/themeStore';
@@ -31,6 +37,7 @@ import {
   resolveCurrentShelfBooks,
   selectAbsOfflineBooks,
   selectDownloadableBooks,
+  selectTranslatableBooks,
   withReadingStatus,
 } from '../utils/libraryUtils';
 import { readBookshelves } from '@/services/bookshelves/state';
@@ -67,6 +74,21 @@ import SetStatusAlert from './SetStatusAlert';
 import { useOpenBook } from '../hooks/useOpenBook';
 import LibrarySearchResults from './LibrarySearchResults';
 import ScholarThreePane from './ScholarThreePane';
+import TranslationOptionsDialog from './TranslationOptionsDialog';
+import TranslationOpenDialog from './TranslationOpenDialog';
+import BatchTranslationSummaryDialog, {
+  type BatchTranslationOutcome,
+} from './BatchTranslationSummaryDialog';
+import { useLibraryTranslationPolling } from '@/hooks/useLibraryTranslationPolling';
+import {
+  availableTranslationKinds,
+  describeTranslationError,
+  ensureTranslatedFiles,
+  isTranslationInFlight,
+  startTranslation,
+  uploadGlossary,
+  type TranslationOptions,
+} from '@/services/scholarTranslation';
 
 export interface ContentSearchRequest {
   query: string;
@@ -198,6 +220,17 @@ const Bookshelf: React.FC<BookshelfProps> = ({
   const [showStatusAlert, setShowStatusAlert] = useState(false);
   const [showGroupingModal, setShowGroupingModal] = useState(false);
   const [tagBookHashes, setTagBookHashes] = useState<string[] | null>(null);
+  const [translationTargets, setTranslationTargets] = useState<Book[] | null>(null);
+  const [translationBusy, setTranslationBusy] = useState(false);
+  const [translationError, setTranslationError] = useState('');
+  const [translationOutcomes, setTranslationOutcomes] = useState<BatchTranslationOutcome[] | null>(
+    null,
+  );
+  const [translationOpen, setTranslationOpen] = useState<{
+    book: Book;
+    kinds: TranslationOutputKind[];
+  } | null>(null);
+  const [translationDownloading, setTranslationDownloading] = useState(false);
   const [importBookUrl] = useState(searchParams?.get('url') || '');
 
   const abortDeletionRef = useRef(false);
@@ -805,6 +838,36 @@ const Bookshelf: React.FC<BookshelfProps> = ({
 
   const selectedBooks = getSelectedBooks();
 
+  const translatableBooks = isSelectMode
+    ? selectTranslatableBooks(selectedBooks, sortedBookshelfItems, filteredBooks)
+    : [];
+
+  const translateSelectedBooks = () => {
+    if (!user) {
+      eventDispatcher.dispatch('toast', {
+        type: 'info',
+        message: _('Sign in to translate this PDF'),
+        timeout: 2500,
+      });
+      return;
+    }
+    const expanded = expandBookshelfSelection(selectedBooks, sortedBookshelfItems);
+    const ineligible = expanded
+      .map((id) => filteredBooks.find((book) => book.hash === id))
+      .filter((book): book is Book => !!book && !book.deletedAt && book.format !== 'PDF');
+    setTranslationError('');
+    if (translatableBooks.length === 0) {
+      if (ineligible.length > 0) {
+        setTranslationOutcomes(
+          ineligible.map((book) => ({ book, status: 'failed', reason: 'not-pdf' })),
+        );
+      }
+      return;
+    }
+    setShowSelectModeActions(false);
+    setTranslationTargets(translatableBooks);
+  };
+
   // Bulk download (#5244): a selected group stands in for every book it shows,
   // which is how a 300-book folder gets onto a new device in one action. Only
   // worth computing while the select-mode bar is up.
@@ -860,6 +923,136 @@ const Bookshelf: React.FC<BookshelfProps> = ({
     (book: Book, cfi: string) => openBook(book, cfi, { highlightSearchResult: true }),
     [openBook],
   );
+
+  const openTranslationChoice = useCallback(
+    (book: Book) => {
+      if (isTranslationInFlight(book)) {
+        eventDispatcher.dispatch('toast', {
+          type: 'info',
+          message: _('Translation is still running'),
+          timeout: 2500,
+        });
+        void openBook(book);
+        return;
+      }
+      const kinds = availableTranslationKinds(book);
+      if (kinds.length === 0) {
+        void openBook(book);
+        return;
+      }
+      setTranslationOpen({ book, kinds });
+    },
+    [openBook, _],
+  );
+
+  useEffect(() => {
+    const handleTranslateIntent = (event: CustomEvent) => {
+      const book = (event.detail as { book?: Book } | undefined)?.book;
+      if (!book) return;
+      if (!user) {
+        eventDispatcher.dispatch('toast', {
+          type: 'info',
+          message: _('Sign in to translate this PDF'),
+          timeout: 2500,
+        });
+        return;
+      }
+      if (book.format !== 'PDF') {
+        eventDispatcher.dispatch('toast', {
+          type: 'info',
+          message: _('This book is not a PDF'),
+          timeout: 2500,
+        });
+        return;
+      }
+      setTranslationError('');
+      setTranslationTargets([book]);
+    };
+    const handleOpenIntent = (event: CustomEvent) => {
+      const book = (event.detail as { book?: Book } | undefined)?.book;
+      if (book) openTranslationChoice(book);
+    };
+    eventDispatcher.on('translate-book', handleTranslateIntent);
+    eventDispatcher.on('open-book-translation', handleOpenIntent);
+    return () => {
+      eventDispatcher.off('translate-book', handleTranslateIntent);
+      eventDispatcher.off('open-book-translation', handleOpenIntent);
+    };
+  }, [user, _, openTranslationChoice]);
+
+  const submitTranslation = async (options: TranslationOptions) => {
+    const books = translationTargets ?? [];
+    if (books.length === 0 || !appService) return;
+    setTranslationBusy(true);
+    setTranslationError('');
+    let glossarySha256: string | null = null;
+    try {
+      if (options.glossaryCsv) glossarySha256 = await uploadGlossary(options.glossaryCsv);
+    } catch (cause) {
+      setTranslationBusy(false);
+      setTranslationError(cause instanceof Error ? cause.message : _('Translation failed'));
+      return;
+    }
+    const resolved: TranslationOptions = { ...options, glossarySha256 };
+    const outcomes: BatchTranslationOutcome[] = [];
+    // Sequential: one upload/job at a time, and a failure is collected instead
+    // of aborting the rest of the batch.
+    for (const book of books) {
+      const result = await startTranslation(envConfig, appService, book, resolved);
+      outcomes.push(
+        result.ok
+          ? { book: result.book, status: 'started' }
+          : {
+              book: result.book,
+              status: 'failed',
+              reason: result.reason,
+              message: result.message,
+            },
+      );
+    }
+    setTranslationBusy(false);
+    setTranslationTargets(null);
+    const [first] = outcomes;
+    if (outcomes.length === 1 && first && first.status !== 'started') {
+      // A single-book failure keeps the dialog open with the reason.
+      const reason = describeTranslationError(first.reason, _);
+      setTranslationError(first.message ? `${reason}\n${first.message}` : reason);
+      setTranslationTargets(books);
+      return;
+    }
+    if (outcomes.some((outcome) => outcome.status !== 'started')) {
+      setTranslationOutcomes(outcomes);
+    }
+  };
+
+  const handleTranslationChoice = async (choice: 'original' | TranslationOutputKind) => {
+    const target = translationOpen;
+    if (!target || !appService) return;
+    const { book } = target;
+    if (choice === 'original') {
+      setTranslationOpen(null);
+      await openBook(book);
+      return;
+    }
+    setTranslationDownloading(true);
+    try {
+      const files = await ensureTranslatedFiles(envConfig, appService, book);
+      if (!files.some((ref) => ref.kind === choice)) throw new Error('missing');
+      setTranslationOpen(null);
+      await openBook(book, undefined, { translation: choice });
+    } catch {
+      eventDispatcher.dispatch('toast', {
+        type: 'error',
+        message: _('Could not download the translated PDF. Opening the original.'),
+      });
+      setTranslationOpen(null);
+      await openBook(book);
+    } finally {
+      setTranslationDownloading(false);
+    }
+  };
+
+  useLibraryTranslationPolling(visibleBooks, { envConfig, appService });
 
   // Cover transfer overlay progress for every book on screen, from both
   // sources: queued downloads live in the transfer store, direct ones in
@@ -1061,6 +1254,8 @@ const Bookshelf: React.FC<BookshelfProps> = ({
           onOpen={openSelectedBooks}
           onGroup={groupSelectedBooks}
           onTag={tagSelectedBooks}
+          onTranslate={translateSelectedBooks}
+          canTranslate={translatableBooks.length > 0}
           onDetails={openBookDetails}
           onStatus={showStatusSelection}
           onDownload={downloadSelectedBooks}
@@ -1141,6 +1336,34 @@ const Bookshelf: React.FC<BookshelfProps> = ({
         book={shareDialogBook}
         onClose={() => setShareDialogBook(null)}
       />
+      {translationTargets && (
+        <TranslationOptionsDialog
+          books={translationTargets}
+          busy={translationBusy}
+          error={translationError}
+          onCancel={() => {
+            setTranslationTargets(null);
+            setTranslationError('');
+            setShowSelectModeActions(true);
+          }}
+          onSubmit={(options) => void submitTranslation(options)}
+        />
+      )}
+      {translationOpen && (
+        <TranslationOpenDialog
+          book={translationOpen.book}
+          kinds={translationOpen.kinds}
+          downloading={translationDownloading}
+          onChoose={(choice) => void handleTranslationChoice(choice)}
+          onCancel={() => void handleTranslationChoice('original')}
+        />
+      )}
+      {translationOutcomes && (
+        <BatchTranslationSummaryDialog
+          outcomes={translationOutcomes}
+          onClose={() => setTranslationOutcomes(null)}
+        />
+      )}
     </div>
   );
 };

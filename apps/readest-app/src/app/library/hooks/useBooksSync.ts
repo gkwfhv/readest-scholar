@@ -24,6 +24,7 @@ import {
   needsCoverRefresh,
   pickFresherCover,
   pickFresherMetadata,
+  pickFresherTranslation,
 } from '@/app/library/utils/libraryUtils';
 import { getBookChangedAt, getPrimaryLanguage, pickFresherGroup } from '@/utils/book';
 import { isAudiobook, parseAbsFilePath } from '@/utils/audiobook';
@@ -265,6 +266,11 @@ export const useBooksSync = () => {
         const cover = pickFresherCover(oldBook, matchingBook);
         mergedBook.coverHash = cover.coverHash;
         mergedBook.coverUpdatedAt = cover.coverUpdatedAt;
+        // PDF-translation state merges on its own translationUpdatedAt clock so
+        // a page turn cannot clobber a finished translation (or resurrect one).
+        const translation = pickFresherTranslation(oldBook, matchingBook);
+        mergedBook.translation = translation.translation;
+        mergedBook.translationUpdatedAt = translation.translationUpdatedAt;
         // The metadata group merges on its own metadataUpdatedAt clock so a
         // metadata edit survives losing whole-row LWW to page-turn progress
         // (issue #5438). Null means neither side is fresher — the row-level

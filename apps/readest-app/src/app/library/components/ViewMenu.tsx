@@ -103,14 +103,6 @@ const ViewMenu: React.FC<ViewMenuProps> = ({ setIsDropdownOpen }) => {
     navigateToLibrary(router, `${params.toString()}`);
   };
 
-  const handleSetResearchLayout = () => {
-    const params = new URLSearchParams(window.location.search);
-    params.set('layout', 'research');
-    params.delete('group');
-    params.delete('shelf');
-    navigateToLibrary(router, params.toString());
-  };
-
   const handleToggleAutoColumns = async () => {
     const newValue = !settings.libraryAutoColumns;
     await saveSysSettings(envConfig, 'libraryAutoColumns', newValue);
@@ -202,16 +194,6 @@ const ViewMenu: React.FC<ViewMenuProps> = ({ setIsDropdownOpen }) => {
           transient
         />
       ))}
-      {isScholarReleaseBundle() && isWideLibrary && (
-        <MenuItem
-          label={_('Research Library')}
-          buttonClass='min-h-8 py-1!'
-          toggled={researchLayout}
-          onClick={handleSetResearchLayout}
-          transient
-        />
-      )}
-
       {/* Columns */}
       <hr aria-hidden='true' className='border-base-200 my-1' />
       <MenuItem

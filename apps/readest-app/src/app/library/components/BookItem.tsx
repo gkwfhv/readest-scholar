@@ -23,7 +23,7 @@ import { isAudiobook } from '@/utils/audiobook';
 import { formatAuthors, formatDescription, formatSeries } from '@/utils/book';
 import { splitDuration } from '@/utils/time';
 import { INDETERMINATE_PROGRESS } from '@/utils/transfer';
-import { getBookTags } from '../utils/libraryUtils';
+import { getBookTags, getTranslationBadge } from '../utils/libraryUtils';
 import ReadingProgress from './ReadingProgress';
 import BookCover from '@/components/BookCover';
 
@@ -64,6 +64,7 @@ const BookItem: React.FC<BookItemProps> = ({
   const { settings } = useSettingsStore();
   const showSpine = skeuomorphicCovers ?? settings.librarySkeuomorphicCovers;
   const iconSize15 = useResponsiveSize(15);
+  const translationBadge = getTranslationBadge(book, _);
 
   // Reset during render, not in an effect: a cached cover reports its size
   // before a mount effect runs, and the effect would then drop it, leaving the
@@ -182,6 +183,23 @@ const BookItem: React.FC<BookItemProps> = ({
         )}
         {bookSelected && (
           <div className='absolute inset-0 bg-black opacity-30 transition-opacity duration-300'></div>
+        )}
+        {translationBadge && (
+          <span
+            role='status'
+            aria-label={translationBadge.label}
+            className={clsx(
+              'eink-bordered bg-base-100/90 absolute bottom-1 rounded-sm px-1 text-[10px] font-semibold leading-4 shadow-sm',
+              // The select-mode check owns bottom-right; mirror to the other
+              // corner so both stay visible while selecting.
+              isSelectMode ? 'left-1' : 'right-1',
+              translationBadge.tone === 'failed' && 'text-red-500',
+              translationBadge.tone === 'done' && 'text-green-600 dark:text-green-400',
+              translationBadge.tone === 'busy' && 'text-base-content tabular-nums',
+            )}
+          >
+            {translationBadge.text}
+          </span>
         )}
         {isSelectMode && (
           <div className='absolute bottom-1 right-1'>

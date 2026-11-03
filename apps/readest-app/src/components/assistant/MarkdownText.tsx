@@ -12,12 +12,15 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
+import 'highlight.js/styles/github-dark.css';
 import { type FC, memo, useState } from 'react';
 import { CheckIcon, CopyIcon } from 'lucide-react';
 
 import { TooltipIconButton } from './TooltipIconButton';
 import { cn } from '@/utils/tailwind';
 import { repairMathDelimiters } from '@/utils/mathDelimiters';
+import { openExternalLink } from '@/utils/open';
+import { highlightCode } from '@/utils/highlight';
 
 const MarkdownTextImpl = () => {
   return (
@@ -97,12 +100,18 @@ const defaultComponents = memoizeMarkdownComponents({
   p: ({ className, ...props }) => (
     <p className={cn('mb-3 leading-7 first:mt-0 last:mb-0', className)} {...props} />
   ),
-  a: ({ className, ...props }) => (
+  a: ({ className, href, children, ...props }) => (
     // eslint-disable-next-line jsx-a11y/anchor-has-content
     <a
-      className={cn('text-primary font-medium underline underline-offset-4', className)}
       {...props}
-    />
+      href={href}
+      target='_blank'
+      rel='noopener noreferrer'
+      className={cn('text-primary font-medium underline underline-offset-4', className)}
+      onClick={(event) => openExternalLink(event, href)}
+    >
+      {children}
+    </a>
   ),
   blockquote: ({ className, ...props }) => (
     <blockquote className={cn('border-l-2 pl-4 italic', className)} {...props} />
@@ -123,15 +132,32 @@ const defaultComponents = memoizeMarkdownComponents({
       {...props}
     />
   ),
-  code: function Code({ className, ...props }) {
+  code: function Code({ className, children, ...props }) {
     const isCodeBlock = useIsMarkdownCodeBlock();
+    if (!isCodeBlock) {
+      return (
+        <code
+          className={cn('bg-muted rounded-sm border px-1 py-0.5 font-mono text-sm', className)}
+          {...props}
+        >
+          {children}
+        </code>
+      );
+    }
+    const language = /language-([\w+#.-]+)/.exec(className || '')?.[1];
+    const html = typeof children === 'string' ? highlightCode(children, language) : null;
+    if (html === null) {
+      return (
+        <code className={className} {...props}>
+          {children}
+        </code>
+      );
+    }
     return (
       <code
-        className={cn(
-          !isCodeBlock && 'bg-muted rounded-sm border px-1 py-0.5 font-mono text-sm',
-          className,
-        )}
+        className={cn('hljs', className)}
         {...props}
+        dangerouslySetInnerHTML={{ __html: html }}
       />
     );
   },

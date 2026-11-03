@@ -9,6 +9,7 @@ import {
   MdOutlineCloudDownload,
   MdWifiTethering,
   MdLabelOutline,
+  MdTranslate,
 } from 'react-icons/md';
 import { IoShareSocialOutline } from 'react-icons/io5';
 import { LuFolderPlus } from 'react-icons/lu';
@@ -31,6 +32,9 @@ interface SelectModeActionsProps {
   onOpen: () => void;
   onGroup: () => void;
   onTag: () => void;
+  onTranslate?: () => void;
+  /** False when the selection holds no translatable PDF. */
+  canTranslate?: boolean;
   onDetails: () => void;
   onStatus: () => void;
   // Queues every cloud-only book in the selection, groups included (#5244).
@@ -61,6 +65,8 @@ const SelectModeActions: React.FC<SelectModeActionsProps> = ({
   onOpen,
   onGroup,
   onTag,
+  onTranslate,
+  canTranslate = false,
   onDetails,
   onStatus,
   onDownload,
@@ -110,7 +116,7 @@ const SelectModeActions: React.FC<SelectModeActionsProps> = ({
           'not-eink:bg-base-300 eink:bg-base-100 eink:border eink:border-base-content',
           'mx-auto w-fit max-w-[calc(100vw-1rem)] rounded-lg p-4',
           'flex items-center justify-center gap-x-6',
-          'max-[500px]:grid max-[500px]:grid-cols-4 max-[500px]:gap-x-6 max-[500px]:gap-y-3',
+          'max-[500px]:grid max-[500px]:grid-cols-5 max-[500px]:gap-x-6 max-[500px]:gap-y-3',
         )}
       >
         <button
@@ -143,6 +149,16 @@ const SelectModeActions: React.FC<SelectModeActionsProps> = ({
         >
           <MdLabelOutline />
           <div>{_('Tag')}</div>
+        </button>
+        <button
+          onClick={onTranslate}
+          className={clsx(
+            'flex flex-col items-center justify-center gap-1',
+            !canTranslate && 'btn-disabled opacity-50',
+          )}
+        >
+          <MdTranslate />
+          <div>{_('Translate')}</div>
         </button>
         <button
           onClick={onStatus}

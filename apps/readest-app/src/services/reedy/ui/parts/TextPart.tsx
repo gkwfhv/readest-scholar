@@ -8,6 +8,7 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 
 import { repairMathDelimiters } from '@/utils/mathDelimiters';
+import { openExternalLink } from '@/utils/open';
 
 /**
  * User-message text rendering. Bare react-markdown with GFM but no
@@ -27,7 +28,12 @@ export const UserTextPart = memo(function UserTextPart({ text }: { text: string 
         components={{
           p: ({ children }) => <span className='inline'>{children}</span>,
           a: ({ href, children }) => (
-            <a href={href} target='_blank' rel='noopener noreferrer'>
+            <a
+              href={href}
+              target='_blank'
+              rel='noopener noreferrer'
+              onClick={(event) => openExternalLink(event, href)}
+            >
               {children}
             </a>
           ),
@@ -69,7 +75,12 @@ export const AssistantTextPart = memo(function AssistantTextPart({ text }: { tex
         rehypePlugins={[rehypeKatex]}
         components={{
           a: ({ href, children }) => (
-            <a href={href} target='_blank' rel='noopener noreferrer'>
+            <a
+              href={href}
+              target='_blank'
+              rel='noopener noreferrer'
+              onClick={(event) => openExternalLink(event, href)}
+            >
               {children}
             </a>
           ),

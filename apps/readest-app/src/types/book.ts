@@ -182,6 +182,49 @@ export interface Book {
   // metadata), so a page-turn that wins whole-row LWW on updatedAt cannot
   // clobber a metadata edit (mirrors readingStatusUpdatedAt / coverUpdatedAt).
   metadataUpdatedAt?: number | null;
+  // Server-side PDF translation state. SYNCED: it describes the book plus the
+  // account's server job, not this device's bytes. Resolved field-level by
+  // `translationUpdatedAt`, because `updatedAt` is dominated by page turns and
+  // by cloudService.uploadBook's upload stamp.
+  translation?: BookTranslation | null;
+  translationUpdatedAt?: number | null;
+  // Device-local record of translated PDFs downloaded to
+  // `Books/<hash>/translation-<jobId>-<kind>.pdf` on THIS device. Never
+  // published to peers and stripped on adopt — same contract as `altFilePaths`
+  // above and DEVICE_LOCAL_BOOK_FIELDS (services/sync/file/wire.ts).
+  translationFiles?: TranslationFileRef[] | null;
+}
+
+/** Server job lifecycle, as returned by /api/scholar/translation-jobs. */
+export type TranslationJobState = 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled';
+/** Requested output form. `both` produces one `mono` and one `dual` output. */
+export type TranslationMode = 'mono' | 'dual' | 'both';
+/** Which PDF a translation output is: `mono` = Chinese only, `dual` = bilingual. */
+export type TranslationOutputKind = 'mono' | 'dual';
+
+export interface BookTranslation {
+  jobId: string;
+  state: TranslationJobState;
+  /** 0..100, from the job detail route. */
+  progress: number;
+  /** The mode the user asked for; `both` makes the open dialog offer three ways. */
+  mode: TranslationMode;
+  /** Output kinds the succeeded job produced. Empty until state === 'succeeded'. */
+  outputs: TranslationOutputKind[];
+  /** Server error_code, e.g. 'invalid_translation_markup'. */
+  errorCode?: string | null;
+  updatedAt: number;
+}
+
+export interface TranslationFileRef {
+  jobId: string;
+  kind: TranslationOutputKind;
+  /** Device-local path under Books/<hash>/. Never synced. */
+  path: string;
+  /** Lowercase hex sha256 from the job output. */
+  sha256: string;
+  fileSize: number;
+  downloadedAt: number;
 }
 
 export interface BookGroupType {

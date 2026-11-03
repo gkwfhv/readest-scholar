@@ -225,6 +225,54 @@ export const selectDownloadableBooks = (
 };
 
 /**
+ * The books a bulk Translate should start: the selection expanded through
+ * {@link expandBookshelfSelection}, narrowed to PDFs (the only format the
+ * translation worker accepts) that are not feed articles. Non-PDF selections
+ * are reported by the caller's batch summary rather than silently dropped.
+ */
+export const selectTranslatableBooks = (
+  ids: string[],
+  items: (Book | BooksGroup)[],
+  books: Book[],
+): Book[] => {
+  const hashes = new Set(expandBookshelfSelection(ids, items));
+  return books.filter(
+    (book) =>
+      hashes.has(book.hash) && !book.deletedAt && !isFeedBook(book) && book.format === 'PDF',
+  );
+};
+
+export type TranslationBadgeTone = 'busy' | 'failed' | 'done';
+
+/**
+ * The small badge on the cover's bottom-right corner: live progress while a job
+ * runs, a failure mark, or a green "译" once the translation exists. Null when
+ * the book was never translated. Kept pure so the state matrix is unit-tested.
+ */
+export const getTranslationBadge = (
+  book: Book,
+  _: (key: string) => string,
+): { text: string; tone: TranslationBadgeTone; label: string } | null => {
+  const translation = book.translation;
+  if (!translation) return null;
+  switch (translation.state) {
+    case 'queued':
+      return { text: '…', tone: 'busy', label: _('Waiting') };
+    case 'running': {
+      const percent = Math.max(0, Math.min(100, Math.round(translation.progress)));
+      return { text: `${percent}%`, tone: 'busy', label: _('Translating') };
+    }
+    case 'succeeded':
+      return { text: '译', tone: 'done', label: _('Translated') };
+    case 'failed':
+    case 'canceled':
+      return { text: '!', tone: 'failed', label: _('Translation failed') };
+    default:
+      return null;
+  }
+};
+
+/**
  * The Audiobookshelf audiobooks a bulk Download should keep on the device
  * (#6256): the expanded selection narrowed to the books the per-book
  * "Download for Offline" action applies to and that aren't offline yet.
@@ -1047,6 +1095,7 @@ export type BookContextMenuItemId =
   | 'markAbandoned'
   | 'clearStatus'
   | 'showDetails'
+  | 'translate'
   | 'showInFinder'
   | 'searchGoodreads'
   | 'download'
@@ -1085,6 +1134,26 @@ export const pickFresherReadingStatus = (
   return {
     readingStatus: winner.readingStatus,
     readingStatusUpdatedAt: winner.readingStatusUpdatedAt,
+  };
+};
+
+type TranslationFields = Pick<Book, 'translation' | 'translationUpdatedAt'>;
+
+/**
+ * Field-level last-writer-wins for the synced PDF-translation state: return
+ * whichever side was stamped more recently (ties -> `a`). Missing timestamp =
+ * epoch 0. Kept separate from the row's `updatedAt` for the same reason as
+ * readingStatus — page turns and uploads stamp updatedAt far more often.
+ */
+export const pickFresherTranslation = (
+  a: TranslationFields,
+  b: TranslationFields,
+): TranslationFields => {
+  const at = (x: TranslationFields) => x.translationUpdatedAt ?? 0;
+  const winner = at(a) >= at(b) ? a : b;
+  return {
+    translation: winner.translation,
+    translationUpdatedAt: winner.translationUpdatedAt,
   };
 };
 
@@ -1181,7 +1250,11 @@ export const getBookContextMenuItemIds = (
   ) {
     ids.push('clearStatus');
   }
-  ids.push('showDetails', 'showInFinder', 'searchGoodreads');
+  ids.push('showDetails');
+  // Only PDFs: the translation worker accepts PDFs only, and feed articles have
+  // no uploadable file.
+  if (book.format === 'PDF' && !isFeedBook(book)) ids.push('translate');
+  ids.push('showInFinder', 'searchGoodreads');
   // A feed book has no file to move: every transfer action would fail, and the
   // share dialog uploads before it can hand out a link (issue #5307).
   if (!isFeedBook(book)) {

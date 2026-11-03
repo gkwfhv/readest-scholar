@@ -168,6 +168,9 @@ const DEVICE_LOCAL_BOOK_FIELDS = [
   'downloadedAt',
   'coverDownloadedAt',
   'absDownloadedAt',
+  // Translated PDFs live only on the device that downloaded them; the synced
+  // `translation` state tells peers a translation exists, not which bytes.
+  'translationFiles',
 ] as const satisfies readonly (keyof Book)[];
 
 /** A copy of `book` safe to publish to — or adopt from — the shared index. */

@@ -1,5 +1,6 @@
 import clsx from 'clsx';
-import React, { useMemo, useRef } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { MdEdit, MdDelete, MdContentCopy } from 'react-icons/md';
 import { PiBookmarkSimple, PiHighlighter, PiNotePencil, PiScribbleLoop } from 'react-icons/pi';
 
@@ -24,6 +25,8 @@ import { useSaveBooknoteNoteText } from '../../hooks/useSaveBooknoteNoteText';
 import { useInlineTextEditor } from '../../hooks/useInlineTextEditor';
 import TextButton from '@/components/TextButton';
 import TextEditor from '@/components/TextEditor';
+import Dialog from '@/components/Dialog';
+import AnnotationNoteEditor from '../annotator/AnnotationNoteEditor';
 import { BooknoteTimeLabel } from './BooknoteTime';
 
 /** The icon and name that lead an item, by what it is. */
@@ -81,6 +84,11 @@ const BooknoteItem: React.FC<BooknoteItemProps> = ({
       if (isBookmark) return saveBookmarkText(draftText);
       else return saveBooknoteNoteText(item.id, draftText);
     });
+  // Notes edit in an enlarged dialog hosting the WYSIWYG editor: the sidebar row
+  // is a thumbnail, so editing — or double-clicking the note — opens the full
+  // note the same way the Annotate popup does. Bookmarks keep the inline plain
+  // editor (their text is a short label, not Markdown).
+  const [noteEditorOpen, setNoteEditorOpen] = useState(false);
   const separatorWidth = useResponsiveSize(3);
   const size18 = useResponsiveSize(18);
 
@@ -179,7 +187,7 @@ const BooknoteItem: React.FC<BooknoteItemProps> = ({
 
   const editBookmark = () => startEdit(text || '');
 
-  const editNoteInline = () => startEdit(item.note || '');
+  const openNoteEditor = () => setNoteEditorOpen(true);
 
   if (inlineEditMode) {
     return (
@@ -277,8 +285,12 @@ const BooknoteItem: React.FC<BooknoteItemProps> = ({
         >
           {item.note && (
             <div
-              className='content prose prose-sm font-size-sm'
+              className='content prose prose-sm font-size-sm line-clamp-3'
               dir='auto'
+              onDoubleClick={(event) => {
+                event.stopPropagation();
+                openNoteEditor();
+              }}
               dangerouslySetInnerHTML={{ __html: noteHtml }}
             ></div>
           )}
@@ -380,7 +392,7 @@ const BooknoteItem: React.FC<BooknoteItemProps> = ({
 
             {isEditable && (
               <button
-                onClick={item.type === 'bookmark' ? editBookmark : editNoteInline}
+                onClick={item.type === 'bookmark' ? editBookmark : openNoteEditor}
                 className={clsx(
                   'btn btn-ghost btn-xs p-0 text-blue-500 opacity-0 transition duration-300 ease-in-out hover:border-transparent hover:bg-transparent',
                   actionButtonReveal,
@@ -393,6 +405,28 @@ const BooknoteItem: React.FC<BooknoteItemProps> = ({
           </div>
         </div>
       </div>
+      {noteEditorOpen &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <Dialog
+            isOpen
+            title={_('Note')}
+            contentClassName='px-0! mt-0! flex-1 min-h-0'
+            onClose={() => setNoteEditorOpen(false)}
+          >
+            <AnnotationNoteEditor
+              className='h-full'
+              value={item.note || ''}
+              onSave={(noteText) => {
+                void saveBooknoteNoteText(item.id, noteText).then((saved) => {
+                  if (saved) setNoteEditorOpen(false);
+                });
+              }}
+              onCancel={() => setNoteEditorOpen(false)}
+            />
+          </Dialog>,
+          document.body,
+        )}
     </li>
   );
 };

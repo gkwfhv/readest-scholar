@@ -15,6 +15,7 @@ export interface PdfTranslationModelRequest {
  */
 export function getPdfTranslationModel(
   settings: AISettings | undefined,
+  baseUrlOverride?: string,
 ): PdfTranslationModelRequest | null {
   const ai = settings ?? DEFAULT_AI_SETTINGS;
   if (!ai.enabled) return null;
@@ -27,7 +28,17 @@ export function getPdfTranslationModel(
   if (ai.provider === 'openrouter') {
     const model = ai.openrouterModel || 'openai/gpt-4o-mini';
     const apiKey = ai.openrouterApiKey;
-    const baseUrl = ai.openrouterBaseUrl || DEFAULT_AI_SETTINGS.openrouterBaseUrl;
+    const chatBaseUrl = ai.openrouterBaseUrl;
+    // The translation worker runs server-side and the job API requires HTTPS,
+    // while the chat endpoint is often a LAN HTTP URL. Prefer an explicit
+    // setting, then a build-time translation endpoint, then an HTTPS chat URL.
+    const baseUrl =
+      baseUrlOverride?.trim() ||
+      ai.pdfTranslationBaseUrl?.trim() ||
+      process.env['NEXT_PUBLIC_PDF_TRANSLATION_BASE_URL'] ||
+      (chatBaseUrl?.startsWith('https://') ? chatBaseUrl : '') ||
+      chatBaseUrl ||
+      DEFAULT_AI_SETTINGS.openrouterBaseUrl;
     return model && apiKey && baseUrl ? { provider: 'openrouter', model, apiKey, baseUrl } : null;
   }
   return null;

@@ -34,6 +34,7 @@ import { SUPPORTED_LANGNAMES } from '@/services/constants';
 import { useSettingsStore } from './settingsStore';
 import { BookData, useBookDataStore } from './bookDataStore';
 import { useLibraryStore } from './libraryStore';
+import { useTranslationStore } from './translationStore';
 import { clearBookProgress, getBookProgress, setBookProgress } from './readerProgressStore';
 import { uniqueId } from '@/utils/misc';
 import { getWidePages, type WidePagesOptions } from '@/utils/spread';
@@ -165,7 +166,9 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
     const id = key.split('-')[0]!;
     if (Object.keys(get().viewStates).some((k) => k.split('-')[0] === id)) return;
     const book = useLibraryStore.getState().getBookByHash(id);
-    if (book && isAbsEbook(book)) useBookDataStore.getState().clearBookData(id);
+    if (book && (isAbsEbook(book) || book.translationFiles?.length)) {
+      useBookDataStore.getState().clearBookData(id);
+    }
   },
   getViewState: (key: string) => get().viewStates[key] || null,
   // Closed books keep their keys but drop their view states; failed ones load again.
@@ -219,6 +222,9 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
         );
         throw new Error('Book not found');
       }
+      // Consume the one-shot translated-open request up front, even when a cached
+      // document lets the load branch below be skipped.
+      const translationKind = useTranslationStore.getState().takeOpenMode(id);
       const isPseStream = !!book.url && isPseStreamFileName(book.url);
       const isFeed = !!book.url && isFeedBookUrl(book.url);
       let bookDoc = bookData?.bookDoc;
@@ -258,15 +264,30 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
           bookDoc = await openFeedBookDoc(fs, book.hash, feedUrl, book.title);
           file = null;
         } else {
+          // A translated PDF opens under the SAME book hash/config; only the
+          // file changes. The mode was consumed once, so every open asks again.
+          const translationRef = translationKind
+            ? (book.translationFiles ?? []).find((ref) => ref.kind === translationKind)
+            : undefined;
+          const translationPath = translationRef
+            ? await appService.resolveFilePath(translationRef.path, 'Books').catch(() => null)
+            : null;
+          const translationFile = translationPath
+            ? await appService.openFile(translationPath, 'None').catch(() => null)
+            : null;
           // resolveNativeBookFilePath only reads `book` (it feeds the Rust
           // EPUB prefetch), so it can race the content load instead of
           // queueing behind it.
           const [content, nativeFilePath] = await Promise.all([
-            appService.loadBookContent(book) as Promise<BookContent>,
-            appService.resolveNativeBookFilePath(book).catch((err: unknown) => {
-              console.warn('resolveNativeBookFilePath failed', err);
-              return null;
-            }),
+            translationFile
+              ? Promise.resolve({ book, file: translationFile })
+              : (appService.loadBookContent(book) as Promise<BookContent>),
+            translationFile
+              ? Promise.resolve(translationPath)
+              : appService.resolveNativeBookFilePath(book).catch((err: unknown) => {
+                  console.warn('resolveNativeBookFilePath failed', err);
+                  return null;
+                }),
           ]);
           file = content.file;
           const config = await configPromise;

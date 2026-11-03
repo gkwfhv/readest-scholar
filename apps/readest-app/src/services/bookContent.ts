@@ -41,7 +41,18 @@ async function resolveLegacyManagedSource(
   try {
     const bookDir = getDir(book);
     const files = await fs.readDir(bookDir, 'Books');
-    const bookFile = files.find((f) => f.path.endsWith(`.${EXTS[book.format]}`));
+    const managed = getLocalBookFilename(book);
+    const exactPath = managed.startsWith(`${bookDir}/`)
+      ? managed.slice(bookDir.length + 1)
+      : managed;
+    // A translated PDF also lives under Books/<hash>/. Prefer the exact managed
+    // filename, then any non-translation file with the book's extension, so a
+    // translated copy is never mistaken for the book itself.
+    const bookFile =
+      files.find((f) => f.path === exactPath) ??
+      files.find(
+        (f) => f.path.endsWith(`.${EXTS[book.format]}`) && !f.path.startsWith('translation-'),
+      );
     if (!bookFile) return null;
     return { kind: 'managed', path: `${bookDir}/${bookFile.path}`, base: 'Books', legacy: true };
   } catch {

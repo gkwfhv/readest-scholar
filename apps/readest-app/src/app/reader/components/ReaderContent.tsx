@@ -9,6 +9,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { flushPendingLibrarySave, useBookDataStore } from '@/store/bookDataStore';
 import { useLibraryStore } from '@/store/libraryStore';
 import { useReaderStore } from '@/store/readerStore';
+import { useTranslationStore } from '@/store/translationStore';
 import { useSidebarStore } from '@/store/sidebarStore';
 import { useAndroidGamepadConnection } from '@/hooks/useAndroidGamepadConnection';
 import { useGamepad } from '@/hooks/useGamepad';
@@ -135,6 +136,12 @@ const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ i
     // Back from a page opened over the reader, e.g. the account page (#6607):
     // the books are still open, so show them again instead of loading anew.
     if (useReaderStore.getState().areBooksOpen(initialIds)) return;
+    const translation = searchParams?.get('translation');
+    if (translation === 'mono' || translation === 'dual') {
+      for (const id of initialIds) {
+        useTranslationStore.getState().setOpenMode(id, translation);
+      }
+    }
     const initialBookKeys = initialIds.map((id) => `${id}-${uniqueId()}`);
     setBookKeys(initialBookKeys);
     const uniqueIds = new Set<string>();

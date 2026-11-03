@@ -15,6 +15,23 @@ export const openExternalUrl = (url: string) => {
   }
 };
 
+const EXTERNAL_URL = /^(https?:|mailto:)/i;
+
+/**
+ * Click handler for rendered markdown links: send external URLs to the system
+ * browser and stop the webview from navigating to (or opening an in-app window
+ * for) the page. Relative/anchor/invalid links keep their default behaviour.
+ */
+export const openExternalLink = (
+  event: { preventDefault: () => void; stopPropagation: () => void },
+  href?: string | null,
+) => {
+  if (!href || !EXTERNAL_URL.test(href)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  openExternalUrl(href);
+};
+
 export const interceptWindowOpen = () => {
   const windowOpen = window.open;
   globalThis.open = function (

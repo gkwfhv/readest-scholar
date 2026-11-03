@@ -23,9 +23,37 @@ const INLINE_BRACKET = /\[([^\[\]]*\\[a-zA-Z][^\[\]]*)\]/g;
 const INLINE_LATEX = /\\\(([\s\S]+?)\\\)/g;
 const CODE_FENCE = /(```[\s\S]*?```|~~~[\s\S]*?~~~)/g;
 
+// Models sometimes put LaTeX's `\(` / `\)` (or `\[` / `\]`, or a literal `$`)
+// where the bare delimiter of `\left` / `\right` belongs: `\left\(`,
+// `\right\)`, `\left($`, `\right$`. Those are invalid in math mode, and —
+// worse — the `\(...\)` / `$...$` rules below would read the stray delimiter as
+// the start or end of inline math and split the formula in two, so it renders
+// as raw `\left($...\right$` source instead of KaTeX. Normalise the delimiter
+// first. The group pass also drops a redundant `\(` / `\)` nested just inside
+// `\left...\right`, which is likewise invalid there.
+const normalizeLeftRight = (text: string) =>
+  text
+    .replace(/\\left\\\(/g, '\\left(')
+    .replace(/\\left\\\[/g, '\\left[')
+    .replace(/\\right\\\)/g, '\\right)')
+    .replace(/\\right\\\]/g, '\\right]')
+    .replace(/\\left\(\$/g, '\\left(')
+    .replace(/\\left\[\$/g, '\\left[')
+    // A bare `$` right after \left (`\left${\frac...}`) means the same thing:
+    // the delimiter went missing and the model wrote the math toggle instead.
+    .replace(/\\left\$\(/g, '\\left(')
+    .replace(/\\left\$/g, '\\left(')
+    .replace(/\$\\right/g, '\\right')
+    .replace(/\\right\$/g, '\\right)')
+    // `[^$]` keeps this inside one math region instead of spanning two.
+    .replace(
+      /\\left([^$]*?)\\right/g,
+      (_m, inner: string) => `\\left${inner.replace(/\\\(|\\\)/g, '')}\\right`,
+    );
+
 function repairSegment(text: string): string {
   return (
-    text
+    normalizeLeftRight(text)
       .replace(DISPLAY_LATEX, (_m, inner: string) => `$$${stripInlineDelims(inner)}$$`)
       // Bare-bracket rules run before inline so a nested `\( ... \)` is stripped
       // rather than turned into `$ ... $` inside the new display block.
