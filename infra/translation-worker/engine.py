@@ -16,6 +16,30 @@ JSON_RESPONSE_SUFFIX = (
     "Return only the JSON array required by Output Format. Keep every requested id and "
     "include its translated output. Do not return prose, explanations, or Markdown."
 )
+SCHOLAR_MAX_COMPLETION_TOKENS = 4096
+
+
+def apply_completion_token_limit(options: dict) -> dict:
+    """Set a bounded, JSON-safe completion budget unless a provider already set one."""
+    options.setdefault("max_tokens", SCHOLAR_MAX_COMPLETION_TOKENS)
+    return options
+
+
+def configure_openai_completion_limit() -> None:
+    """Teach pdf2zh Next's pinned OpenAI client to avoid truncating long JSON batches."""
+    from pdf2zh_next.translator.translator_impl.openai import OpenAITranslator
+
+    if getattr(OpenAITranslator, "_scholar_completion_limit", False):
+        return
+    original_init = OpenAITranslator.__init__
+
+    def limited_init(self, *args, **kwargs):
+        original_init(self, *args, **kwargs)
+        apply_completion_token_limit(self.options)
+        self.add_cache_impact_parameters("max_tokens", self.options["max_tokens"])
+
+    OpenAITranslator.__init__ = limited_init
+    OpenAITranslator._scholar_completion_limit = True
 
 
 def append_json_response_constraint(template: str) -> str:
@@ -36,6 +60,7 @@ def strengthen_pdf2zh_json_contract() -> None:
 
 async def main() -> int:
     logging.basicConfig(level=logging.WARNING)
+    configure_openai_completion_limit()
     strengthen_pdf2zh_json_contract()
     settings = ConfigManager().initialize_config()
     files = list(settings.basic.input_files)
