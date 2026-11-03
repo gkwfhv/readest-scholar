@@ -27,7 +27,7 @@ class WorkerContractTests(unittest.TestCase):
         self.assertNotIn("Return only the translation", prompt)
         self.assertFalse(prompt.startswith("/no_think"))
         self.assertEqual(
-            academic_translation_prompt("Qwen3-Next-80B").removeprefix("/no_think "),
+            academic_translation_prompt("Qwen3-Next-80B"),
             ACADEMIC_TRANSLATION_PROMPT,
         )
 
