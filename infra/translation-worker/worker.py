@@ -44,6 +44,7 @@ def build_cli_command(
         sys.executable, "/app/engine.py", str(source), "--output", str(destination),
         "--openaicompatible", "--lang-in", "en", "--lang-out", "zh-CN",
         "--openai-compatible-timeout", "60",
+        "--openai-compatible-send-temperature", "--openai-compatible-temperature", "0",
         "--qps", "1", "--pool-max-workers", "1", "--report-interval", "5",
         "--no-auto-extract-glossary",
     ]
