@@ -85,6 +85,8 @@ class WorkerContractTests(unittest.TestCase):
         self.assertIn("--no-mono", args)
         self.assertIn("--qps", args)
         self.assertIn("--no-auto-extract-glossary", args)
+        self.assertIn("--openai-compatible-timeout", args)
+        self.assertEqual(args[args.index("--openai-compatible-timeout") + 1], "60")
         self.assertEqual(args[args.index("--qps") + 1], "1")
         self.assertNotIn("--openai-compatible-api-key", args)
         self.assertNotIn("--openai-compatible-base-url", args)
