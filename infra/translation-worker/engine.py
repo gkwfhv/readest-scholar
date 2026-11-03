@@ -25,21 +25,23 @@ def apply_completion_token_limit(options: dict) -> dict:
     return options
 
 
-def configure_openai_completion_limit() -> None:
+def configure_openai_completion_limit(translator_cls=None) -> None:
     """Teach pdf2zh Next's pinned OpenAI client to avoid truncating long JSON batches."""
-    from pdf2zh_next.translator.translator_impl.openai import OpenAITranslator
+    if translator_cls is None:
+        from pdf2zh_next.translator.translator_impl.openai import OpenAITranslator
+        translator_cls = OpenAITranslator
 
-    if getattr(OpenAITranslator, "_scholar_completion_limit", False):
+    if getattr(translator_cls, "_scholar_completion_limit", False):
         return
-    original_init = OpenAITranslator.__init__
+    original_init = translator_cls.__init__
 
     def limited_init(self, *args, **kwargs):
         original_init(self, *args, **kwargs)
         apply_completion_token_limit(self.options)
         self.add_cache_impact_parameters("max_tokens", self.options["max_tokens"])
 
-    OpenAITranslator.__init__ = limited_init
-    OpenAITranslator._scholar_completion_limit = True
+    translator_cls.__init__ = limited_init
+    translator_cls._scholar_completion_limit = True
 
 
 def append_json_response_constraint(template: str) -> str:
