@@ -20,9 +20,11 @@ class WorkerContractTests(unittest.TestCase):
         for required in (
             "idiomatic Chinese", "English word order", "numbers, units, citations",
             "LaTeX exactly", "terminology consistent", "Do not add, omit",
-            "使得", "值得注意的是", "通过……来……",
+            "使得", "值得注意的是", "通过……来……", "required JSON array",
+            "every requested id", "Do not return prose or Markdown",
         ):
             self.assertIn(required, prompt)
+        self.assertNotIn("Return only the translation", prompt)
         self.assertFalse(prompt.startswith("/no_think"))
         self.assertEqual(
             academic_translation_prompt("Qwen3-Next-80B").removeprefix("/no_think "),
