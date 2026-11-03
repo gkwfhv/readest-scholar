@@ -89,6 +89,7 @@ services:
     cap_add:
       - CHOWN
       - FOWNER
+      - KILL
       - SETGID
       - SETUID
     security_opt:
