@@ -356,7 +356,11 @@ export default function ScholarTranslationPanel({ book }: { book: Book }) {
                 ? _(
                     'The translated PDF contains invalid formatting. Contact your server administrator.',
                   )
-                : job.errorCode}
+                : job.errorCode === 'model_response_invalid'
+                  ? _(
+                      'The configured AI model returned an empty or incomplete result. Check the model service and retry.',
+                    )
+                  : job.errorCode}
             </p>
           )}
           {(job.state === 'queued' || job.state === 'running') && (
