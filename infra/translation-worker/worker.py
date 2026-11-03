@@ -29,9 +29,12 @@ ACADEMIC_TRANSLATION_PROMPT = (
 
 
 def academic_translation_prompt(model: str) -> str:
-    """Return the shared academic style prompt, with Qwen3 thinking disabled."""
-    prefix = "/no_think " if model.lower().startswith("qwen3") else ""
-    return prefix + ACADEMIC_TRANSLATION_PROMPT
+    """Return the shared academic style prompt for every OpenAI-compatible model."""
+    _ = model
+    # pdf2zh removes a provider's <think> block itself. Sending Qwen's
+    # chat-template control token through a generic compatibility endpoint can
+    # yield an empty content field, so keep the request provider-neutral.
+    return ACADEMIC_TRANSLATION_PROMPT
 
 
 def build_cli_command(
