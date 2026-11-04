@@ -41,6 +41,7 @@ const {
   downloadOutputs,
   ensureUploaded,
   pruneTranslationFiles,
+  describeJobFailure,
   TranslationError,
 } = await import('@/services/scholarTranslation');
 
@@ -312,5 +313,19 @@ describe('downloadOutputs', () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(mocks.writeFile).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
+  });
+});
+
+describe('describeJobFailure', () => {
+  const _ = (key: string) => key;
+
+  it('explains the page cap instead of a generic failure', () => {
+    expect(describeJobFailure('pdf_page_limit', _)).toBe(
+      'This PDF has too many pages to translate.',
+    );
+  });
+
+  it('falls back to the generic message for unknown codes', () => {
+    expect(describeJobFailure('something_new', _)).toBe('Translation failed');
   });
 });

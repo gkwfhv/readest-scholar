@@ -271,6 +271,10 @@ class JobFailure(Exception):
         super().__init__(code)
 
 
+MAX_PDF_PAGES = 1200
+MAX_TIMEOUT_SECONDS = 10800
+
+
 def pdf_page_count(content: bytes, *, limit: int) -> int:
     from io import BytesIO
     from pypdf import PdfReader
@@ -679,7 +683,7 @@ def process_job(job, db: Database, s3, *, bucket: str, base_url: str,
             verify_source_bytes(content, job["source_sha256"], job["source_size"])
         except ValueError as exc:
             raise JobFailure("source_integrity_failed") from exc
-        pages = pdf_page_count(content, limit=500)
+        pages = pdf_page_count(content, limit=MAX_PDF_PAGES)
         if not db.renew(job, 10):
             raise JobFailure("lease_lost")
 
@@ -835,7 +839,7 @@ def main() -> None:
         raise ValueError("invalid translation worker token")
     cache_dir = os.environ.get("SCHOLAR_TRANSLATION_CACHE_DIR", "/tmp")
     timeout_seconds = int(os.environ.get("SCHOLAR_TRANSLATION_TIMEOUT_SECONDS", "1800"))
-    if not 60 <= timeout_seconds <= 3600:
+    if not 60 <= timeout_seconds <= MAX_TIMEOUT_SECONDS:
         raise ValueError("invalid translation timeout")
     db = Database(dsn)
     s3 = _s3_client()

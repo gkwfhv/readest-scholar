@@ -556,3 +556,20 @@ export function describeTranslationError(
       return _('Translation failed');
   }
 }
+
+/** Server-side job error codes that are worth telling the user about. */
+export function describeJobFailure(
+  errorCode: string | null | undefined,
+  _: (key: string) => string,
+): string {
+  switch (errorCode) {
+    case 'pdf_page_limit':
+      return _('This PDF has too many pages to translate.');
+    case 'engine_timeout':
+      return _('Translation took too long and was stopped.');
+    case 'model_response_invalid':
+      return _('The translation model kept returning unusable output.');
+    default:
+      return _('Translation failed');
+  }
+}

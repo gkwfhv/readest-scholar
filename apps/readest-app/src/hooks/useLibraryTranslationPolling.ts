@@ -5,11 +5,14 @@ import type { AppService } from '@/types/system';
 import type { EnvConfigType } from '@/services/environment';
 import {
   applyJobToBook,
+  describeJobFailure,
   finalizeJob,
   getJob,
   isTranslationInFlight,
 } from '@/services/scholarTranslation';
 import { useTranslationStore } from '@/store/translationStore';
+import { useTranslation } from '@/hooks/useTranslation';
+import { eventDispatcher } from '@/utils/event';
 
 export const TRANSLATION_POLL_INTERVAL_MS = 5000;
 
@@ -23,6 +26,7 @@ export function useLibraryTranslationPolling(
   deps: { envConfig: EnvConfigType | null; appService: AppService | null; enabled?: boolean },
 ): void {
   const { envConfig, appService, enabled = true } = deps;
+  const _ = useTranslation();
   const booksRef = useRef(books);
   booksRef.current = books;
   const runningRef = useRef(false);
@@ -57,7 +61,15 @@ export function useLibraryTranslationPolling(
                 store.endFinalize(book.hash);
               }
             } else {
+              const wasInFlight = book.translation?.state;
               await applyJobToBook(envConfig, book, job);
+              if (job.state === 'failed' && wasInFlight !== 'failed') {
+                eventDispatcher.dispatch('toast', {
+                  type: 'error',
+                  message: describeJobFailure(job.errorCode, _),
+                  timeout: 5000,
+                });
+              }
             }
           } catch {
             // A transient network/404 failure just retries on the next tick; the

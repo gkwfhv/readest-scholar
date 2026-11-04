@@ -67,7 +67,7 @@ services:
       SCHOLAR_TRANSLATION_WORKER_TOKEN_FILE: /run/secrets/translation_worker_token
       SCHOLAR_TRANSLATION_CACHE_DIR: /tmp
       TIKTOKEN_CACHE_DIR: /assets/.cache/babeldoc/tiktoken
-      SCHOLAR_TRANSLATION_TIMEOUT_SECONDS: "3600"
+      SCHOLAR_TRANSLATION_TIMEOUT_SECONDS: "10800"
       # pdf2zh is LLM-I/O bound (--qps 1) and the container is capped at 2
       # CPUs: BLAS/OpenMP thread pools only burn CPU quota and cgroup pids,
       # which starved the engine into "pthread_create failed" / double-free.
@@ -85,7 +85,7 @@ services:
         target: translation_worker_token
     read_only: true
     tmpfs:
-      - /tmp:rw,noexec,nosuid,nodev,size=650m
+      - /tmp:rw,noexec,nosuid,nodev,size=1g
     volumes:
       - scholar_translation_assets:/assets:ro
     cpus: 2.0
