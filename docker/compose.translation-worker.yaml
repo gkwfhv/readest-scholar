@@ -88,7 +88,7 @@ services:
       - /tmp:rw,noexec,nosuid,nodev,size=1g
     volumes:
       - scholar_translation_assets:/assets:ro
-    cpus: 2.0
+    cpus: 4.0
     mem_limit: 4g
     pids_limit: 512
     cap_drop:
