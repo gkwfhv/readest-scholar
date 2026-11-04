@@ -21,6 +21,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { useLibraryStore } from '@/store/libraryStore';
 
 const MAX_OUTPUT_BYTES = 200 * 1024 * 1024;
+const DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000;
 const IN_FLIGHT_STATES: ReadonlySet<BookTranslation['state']> = new Set(['queued', 'running']);
 
 export interface ScholarFileStatus {
@@ -105,31 +106,57 @@ export const resolveTranslationModel = (
 const fileKeyFor = (accountId: string, book: Book) =>
   `${accountId}/${CLOUD_BOOKS_SUBDIR}/${getRemoteBookFilename(book)}`;
 
+// fetchWithAuth has no timeout. A polling request that never settles used to
+// wedge the poller's in-flight latch, so the cover badge stopped updating while
+// the job kept running. Bound every JSON round-trip; uploads/downloads keep
+// their own long-lived paths.
+const REQUEST_TIMEOUT_MS = 20000;
+
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit = {},
+  timeoutMs = REQUEST_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetchWithAuth(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchJson<T>(
+  url: string,
+  init: RequestInit = {},
+  timeoutMs = REQUEST_TIMEOUT_MS,
+): Promise<T> {
+  const response = await fetchWithTimeout(url, init, timeoutMs);
+  return (await response.json()) as T;
+}
+
 export async function getScholarFileStatus(book: Book): Promise<ScholarFileStatus> {
   const accountId = await getScholarAccountId();
   if (!accountId) throw new TranslationError('not-signed-in');
-  const response = await fetchWithAuth(
+  return await fetchJson<ScholarFileStatus>(
     `${getAPIBaseUrl()}/scholar/files/status?fileKey=${encodeURIComponent(fileKeyFor(accountId, book))}`,
     { method: 'GET' },
   );
-  return (await response.json()) as ScholarFileStatus;
 }
 
 export async function listJobs(fileId: string): Promise<TranslationJob[]> {
-  const response = await fetchWithAuth(
+  const data = await fetchJson<{ jobs?: TranslationJob[] }>(
     `${getAPIBaseUrl()}/scholar/translation-jobs?fileId=${encodeURIComponent(fileId)}`,
     { method: 'GET' },
   );
-  const data = (await response.json()) as { jobs?: TranslationJob[] };
   return data.jobs ?? [];
 }
 
 export async function getJob(jobId: string): Promise<TranslationJob> {
-  const response = await fetchWithAuth(
+  return await fetchJson<TranslationJob>(
     `${getAPIBaseUrl()}/scholar/translation-jobs/${encodeURIComponent(jobId)}`,
     { method: 'GET' },
   );
-  return (await response.json()) as TranslationJob;
 }
 
 export async function createJob(args: {
@@ -151,16 +178,15 @@ export async function createJob(args: {
       : {}),
     ...(options.glossarySha256 ? { glossarySha256: options.glossarySha256 } : {}),
   };
-  const response = await fetchWithAuth(`${getAPIBaseUrl()}/scholar/translation-jobs`, {
+  return await fetchJson<TranslationJob>(`${getAPIBaseUrl()}/scholar/translation-jobs`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  return (await response.json()) as TranslationJob;
 }
 
 export async function cancelJob(jobId: string): Promise<void> {
-  await fetchWithAuth(
+  await fetchWithTimeout(
     `${getAPIBaseUrl()}/scholar/translation-jobs/${encodeURIComponent(jobId)}/cancel`,
     { method: 'POST' },
   );
@@ -170,7 +196,7 @@ export async function retryJob(
   jobId: string,
   translationModel: PdfTranslationModelRequest,
 ): Promise<TranslationJob> {
-  const response = await fetchWithAuth(
+  return await fetchJson<TranslationJob>(
     `${getAPIBaseUrl()}/scholar/translation-jobs/${encodeURIComponent(jobId)}/retry`,
     {
       method: 'POST',
@@ -178,18 +204,19 @@ export async function retryJob(
       body: JSON.stringify({ idempotencyKey: crypto.randomUUID(), translationModel }),
     },
   );
-  return (await response.json()) as TranslationJob;
 }
 
 export async function uploadGlossary(csv: File): Promise<string> {
   if (csv.size > 65536) throw new Error('Glossary must be 64 KiB or smaller');
   const text = await csv.text();
-  const response = await fetchWithAuth(`${getAPIBaseUrl()}/scholar/translation-glossaries`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ csv: text }),
-  });
-  const result = (await response.json()) as { sha256: string };
+  const result = await fetchJson<{ sha256: string }>(
+    `${getAPIBaseUrl()}/scholar/translation-glossaries`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ csv: text }),
+    },
+  );
   return result.sha256;
 }
 
@@ -273,7 +300,16 @@ export async function downloadOutputs(
       continue;
     }
     if (output.fileSize > MAX_OUTPUT_BYTES) throw new TranslationError('too-large');
-    const response = await fetch(output.downloadUrl);
+    // The signed URL can stall; without a bound, finalizeJob (and the badge
+    // mutex) would stay in flight forever. Downloads are large, so allow more.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS);
+    let response: Response;
+    try {
+      response = await fetch(output.downloadUrl, { signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
     if (!response.ok) throw new TranslationError('server-error');
     const bytes = await response.arrayBuffer();
     if (bytes.byteLength !== output.fileSize) throw new TranslationError('server-error');

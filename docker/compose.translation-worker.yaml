@@ -67,7 +67,14 @@ services:
       SCHOLAR_TRANSLATION_WORKER_TOKEN_FILE: /run/secrets/translation_worker_token
       SCHOLAR_TRANSLATION_CACHE_DIR: /tmp
       TIKTOKEN_CACHE_DIR: /assets/.cache/babeldoc/tiktoken
-      SCHOLAR_TRANSLATION_TIMEOUT_SECONDS: "1800"
+      SCHOLAR_TRANSLATION_TIMEOUT_SECONDS: "3600"
+      # pdf2zh is LLM-I/O bound (--qps 1) and the container is capped at 2
+      # CPUs: BLAS/OpenMP thread pools only burn CPU quota and cgroup pids,
+      # which starved the engine into "pthread_create failed" / double-free.
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      TOKENIZERS_PARALLELISM: "false"
       S3_ENDPOINT: http://minio:9000
       S3_REGION: us-east-1
       S3_BUCKET_NAME: ${S3_BUCKET_NAME}
@@ -83,7 +90,7 @@ services:
       - scholar_translation_assets:/assets:ro
     cpus: 2.0
     mem_limit: 4g
-    pids_limit: 128
+    pids_limit: 512
     cap_drop:
       - ALL
     cap_add:
