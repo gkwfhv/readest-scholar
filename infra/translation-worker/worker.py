@@ -420,9 +420,81 @@ def _terminate_process(process) -> None:
     except subprocess.TimeoutExpired:
         try:
             os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
+        except OSError:
             pass
         process.wait(timeout=5)
+    except OSError:
+        # A signal failure must not replace the job's real failure code.
+        pass
+
+
+def _remove_workdir(path: str) -> None:
+    """Delete a job workspace even when the engine owns parts of it.
+
+    The container runs as root without CAP_DAC_OVERRIDE, so a 0700 directory
+    owned by the engine (uid 1000) cannot be listed or emptied. Reclaim
+    ownership and permissions top-down first; otherwise cleanup raises
+    PermissionError, which masks the actual job failure and leaks the
+    workspace in /tmp.
+    """
+    import os
+    import shutil
+
+    pending = [path]
+    while pending:
+        current = pending.pop()
+        try:
+            os.chown(current, 0, 0)
+            os.chmod(current, 0o700)
+            with os.scandir(current) as entries:
+                for entry in entries:
+                    if entry.is_dir(follow_symlinks=False):
+                        pending.append(entry.path)
+        except FileNotFoundError:
+            continue
+        except OSError:
+            continue
+    shutil.rmtree(path, ignore_errors=True)
+
+
+class _WorkDir:
+    """mkdtemp workspace whose cleanup can never mask a job failure."""
+
+    def __init__(self, cache_dir: str):
+        import tempfile
+
+        self.path = tempfile.mkdtemp(prefix="scholar-translate-", dir=cache_dir)
+
+    def __enter__(self) -> str:
+        return self.path
+
+    def __exit__(self, *exc_info) -> None:
+        _remove_workdir(self.path)
+
+
+def _engine_failure_context(log_path: Path, limit: int = 40) -> None:
+    """Print only engine error lines; the workspace itself holds book text."""
+    import re
+
+    try:
+        with log_path.open("rb") as log:
+            log.seek(0, 2)
+            log.seek(max(0, log.tell() - 16384))
+            tail = log.read().decode("utf-8", "replace")
+    except OSError:
+        return
+    pattern = re.compile(
+        r"(error|exception|traceback|fail|timeout|timed out|\b429\b|\b5[0-9]{2}\b|"
+        r"invalid|refus|retry|abort|killed|pthread|memory|corrupt|double free)",
+        re.I,
+    )
+    lines = [line.strip() for line in tail.splitlines() if pattern.search(line)]
+    if not lines:
+        return
+    print("--- engine error lines ---", flush=True)
+    for line in lines[-limit:]:
+        print(line[:400], flush=True)
+    print("--- end engine error lines ---", flush=True)
 
 
 class Database:
@@ -569,6 +641,9 @@ def run_engine(
                     last_renewal = now
             if process.returncode != 0:
                 raise JobFailure("engine_failed")
+        except BaseException:
+            _engine_failure_context(log_path)
+            raise
         finally:
             if process.poll() is None:
                 _terminate_process(process)
@@ -589,7 +664,6 @@ def _s3_client():
 def process_job(job, db: Database, s3, *, bucket: str, base_url: str,
                 api_key: str, cache_dir: str, timeout_seconds: int) -> str:
     import os
-    import tempfile
 
     uploaded: list[str] = []
     publication_uncertain = False
@@ -611,7 +685,7 @@ def process_job(job, db: Database, s3, *, bucket: str, base_url: str,
         if not db.renew(job, 10):
             raise JobFailure("lease_lost")
 
-        with tempfile.TemporaryDirectory(prefix="scholar-translate-", dir=cache_dir) as folder:
+        with _WorkDir(cache_dir) as folder:
             work = Path(folder)
             job_cache = work / "cache"
             job_cache.mkdir(mode=0o700)
@@ -709,8 +783,9 @@ def process_job(job, db: Database, s3, *, bucket: str, base_url: str,
             result = failure.code
     except Exception as exc:
         # File text, model credentials and engine logs stay in the private
-        # temporary directory; only the failure class is exposed.
-        print(f"translation job {job['id']} failed: {type(exc).__name__}", flush=True)
+        # temporary directory; only the failure class and message are exposed.
+        detail = str(exc).replace("\n", " ")[:300]
+        print(f"translation job {job['id']} failed: {type(exc).__name__}: {detail}", flush=True)
         if publication_uncertain:
             try:
                 if db.succeeded(job):

@@ -562,5 +562,42 @@ class WorkerContractTests(unittest.TestCase):
         self.assertIn("os.chmod(current, 0o770)", handoff_source)
 
 
+class WorkspaceCleanupTests(unittest.TestCase):
+    def test_workdir_removes_directories_the_engine_locked_down(self):
+        with tempfile.TemporaryDirectory() as cache:
+            holder = {}
+            with __import__("worker")._WorkDir(cache) as folder:
+                holder["path"] = folder
+                nested = Path(folder) / "cache" / "Microsoft"
+                nested.mkdir(parents=True)
+                (nested / "state.db").write_bytes(b"synthetic")
+                os.chmod(nested, 0o700)
+            self.assertFalse(Path(holder["path"]).exists())
+
+    def test_cleanup_never_raises_when_permissions_cannot_be_reset(self):
+        created = tempfile.mkdtemp()
+        try:
+            with patch("worker.os.chown", side_effect=PermissionError), patch("shutil.rmtree"):
+                __import__("worker")._remove_workdir(created)
+            self.assertTrue(Path(created).exists())
+        finally:
+            import shutil
+
+            shutil.rmtree(created, ignore_errors=True)
+
+    def test_signal_failure_does_not_mask_the_job_failure(self):
+        class Process:
+            pid = 424242
+
+            def poll(self):
+                return None
+
+            def wait(self, timeout=None):
+                return 0
+
+        with patch("os.killpg", side_effect=PermissionError):
+            __import__("worker")._terminate_process(Process())
+
+
 if __name__ == "__main__":
     unittest.main()
