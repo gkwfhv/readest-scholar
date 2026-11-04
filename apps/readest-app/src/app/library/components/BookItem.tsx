@@ -24,6 +24,7 @@ import { formatAuthors, formatDescription, formatSeries } from '@/utils/book';
 import { splitDuration } from '@/utils/time';
 import { INDETERMINATE_PROGRESS } from '@/utils/transfer';
 import { getBookTags, getTranslationBadge } from '../utils/libraryUtils';
+import { useSmoothProgress } from '@/hooks/useSmoothProgress';
 import ReadingProgress from './ReadingProgress';
 import BookCover from '@/components/BookCover';
 
@@ -64,7 +65,11 @@ const BookItem: React.FC<BookItemProps> = ({
   const { settings } = useSettingsStore();
   const showSpine = skeuomorphicCovers ?? settings.librarySkeuomorphicCovers;
   const iconSize15 = useResponsiveSize(15);
-  const translationBadge = getTranslationBadge(book, _);
+  const smoothTranslationPercent = useSmoothProgress(
+    book.translation?.progress ?? 0,
+    book.translation?.state === 'running',
+  );
+  const translationBadge = getTranslationBadge(book, _, smoothTranslationPercent);
 
   // Reset during render, not in an effect: a cached cover reports its size
   // before a mount effect runs, and the effect would then drop it, leaving the

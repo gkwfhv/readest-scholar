@@ -252,6 +252,8 @@ export type TranslationBadgeTone = 'busy' | 'failed' | 'done';
 export const getTranslationBadge = (
   book: Book,
   _: (key: string) => string,
+  /** Smoothed value for the running case; falls back to the reported integer. */
+  runningPercent?: number,
 ): { text: string; tone: TranslationBadgeTone; label: string } | null => {
   const translation = book.translation;
   if (!translation) return null;
@@ -259,8 +261,8 @@ export const getTranslationBadge = (
     case 'queued':
       return { text: '…', tone: 'busy', label: _('Waiting') };
     case 'running': {
-      const percent = Math.max(0, Math.min(100, Math.round(translation.progress)));
-      return { text: `${percent}%`, tone: 'busy', label: _('Translating') };
+      const percent = Math.max(0, Math.min(100, runningPercent ?? translation.progress));
+      return { text: `${percent.toFixed(1)}%`, tone: 'busy', label: _('Translating') };
     }
     case 'succeeded':
       return { text: '译', tone: 'done', label: _('Translated') };

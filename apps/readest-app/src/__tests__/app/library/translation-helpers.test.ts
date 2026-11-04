@@ -42,19 +42,29 @@ describe('getTranslationBadge', () => {
     });
   });
 
-  it('shows a rounded, clamped percentage while running', () => {
+  it('shows a clamped percentage with one decimal while running', () => {
     expect(
       getTranslationBadge(
         book({ translation: translation({ state: 'running', progress: 42.6 }) }),
         _,
       )?.text,
-    ).toBe('43%');
+    ).toBe('42.6%');
     expect(
       getTranslationBadge(
         book({ translation: translation({ state: 'running', progress: 140 }) }),
         _,
       )?.text,
-    ).toBe('100%');
+    ).toBe('100.0%');
+  });
+
+  it('prefers the smoothed value passed by the cover', () => {
+    expect(
+      getTranslationBadge(
+        book({ translation: translation({ state: 'running', progress: 42 }) }),
+        _,
+        42.3,
+      )?.text,
+    ).toBe('42.3%');
   });
 
   it('shows a green 译 when succeeded', () => {

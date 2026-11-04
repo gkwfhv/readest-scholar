@@ -620,7 +620,10 @@ def run_engine(
                 now = time.monotonic()
                 if now - started > timeout_seconds:
                     raise JobFailure("engine_timeout")
-                if now - last_renewal >= 25:
+                # The engine prints progress every five seconds; refreshing the
+                # lease at the same cadence gives the client fresh percentages
+                # without extra database traffic.
+                if now - last_renewal >= 5:
                     stage_progress = engine_progress(log_path)
                     invalid_responses = invalid_model_response_count(log_path)
                     if stage_progress > last_stage_progress:
