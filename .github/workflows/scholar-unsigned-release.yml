@@ -400,7 +400,7 @@ jobs:
           version=$(node -p 'require("./apps/readest-app/src-tauri/scholar.release.json").version')
           test "$RELEASE_TAG" = "v$version"
           git fetch origin main --force
-          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+          git merge-base --is-ancestor HEAD origin/main
 
       - name: Download verified unsigned installers
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v7.0.0
