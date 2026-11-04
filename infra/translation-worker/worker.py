@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -25,6 +26,17 @@ ACADEMIC_TRANSLATION_PROMPT = (
     "chains of modifiers. Obey the surrounding PDF translator output contract: return only "
     "the required JSON array, keeping every requested id and adding its translated output. "
     "Do not return prose or Markdown."
+)
+
+
+# Only these non-secret execution controls may cross the worker/engine boundary.
+# The translation engine receives a deliberately minimal environment so database,
+# storage, and worker credentials cannot be exposed to PDF processing code.
+ENGINE_RUNTIME_ENVIRONMENT = (
+    "OPENBLAS_NUM_THREADS",
+    "OMP_NUM_THREADS",
+    "MKL_NUM_THREADS",
+    "TOKENIZERS_PARALLELISM",
 )
 
 
@@ -121,7 +133,7 @@ def child_environment(base_url: str, model: str, api_key: str, cache_dir: str) -
     """Pass only the model connection to untrusted PDF processing."""
     if not base_url.startswith(("http://", "https://")) or not model or not api_key:
         raise ValueError("translation model is unavailable")
-    return {
+    environment = {
         "PATH": f"{Path(sys.executable).parent}:/usr/local/bin:/usr/bin:/bin",
         "HOME": cache_dir,
         "XDG_CACHE_HOME": cache_dir,
@@ -131,6 +143,10 @@ def child_environment(base_url: str, model: str, api_key: str, cache_dir: str) -
         "PDF2ZH_OPENAI_COMPATIBLE_MODEL": model,
         "PDF2ZH_OPENAI_COMPATIBLE_API_KEY": api_key,
     }
+    environment.update(
+        {name: value for name in ENGINE_RUNTIME_ENVIRONMENT if (value := os.environ.get(name))}
+    )
+    return environment
 
 
 def _validate_model_profile(payload: object, job: dict) -> tuple[str, str]:
