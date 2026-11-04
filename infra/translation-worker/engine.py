@@ -16,7 +16,7 @@ JSON_RESPONSE_SUFFIX = (
     "Return only the JSON array required by Output Format. Keep every requested id and "
     "include its translated output. Do not return prose, explanations, or Markdown."
 )
-SCHOLAR_MAX_COMPLETION_TOKENS = 4096
+SCHOLAR_MAX_COMPLETION_TOKENS = 20480
 
 
 def apply_completion_token_limit(options: dict) -> dict:
