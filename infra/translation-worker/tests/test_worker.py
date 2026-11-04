@@ -304,9 +304,24 @@ class WorkerContractTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             output_key(account, job, "../source")
 
-    def test_engine_child_does_not_receive_database_or_object_store_credentials(self):
-        env = child_environment(
-            "http://model.internal:3168/v1", "local-model", "synthetic-key", "/cache"
+    def test_engine_child_receives_only_allowed_runtime_controls(self):
+        allowed = {
+            "OPENBLAS_NUM_THREADS": "1",
+            "OMP_NUM_THREADS": "1",
+            "MKL_NUM_THREADS": "1",
+            "TOKENIZERS_PARALLELISM": "false",
+        }
+        with patch.dict(
+            "worker.os.environ",
+            {**allowed, "DATABASE_URL": "postgres://secret", "S3_SECRET_ACCESS_KEY": "secret"},
+            clear=False,
+        ):
+            env = child_environment(
+                "http://model.internal:3168/v1", "local-model", "synthetic-key", "/cache"
+            )
+        self.assertEqual(
+            {name: env[name] for name in allowed},
+            allowed,
         )
         self.assertEqual(env["PDF2ZH_OPENAI_COMPATIBLE_API_KEY"], "synthetic-key")
         self.assertNotIn("DATABASE_URL", env)
