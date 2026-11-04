@@ -2,12 +2,19 @@ import type { Book } from '@/types/book';
 import type { FileSystem } from '@/types/system';
 import { EXTS } from '@/libs/document';
 import { getDir, getLocalBookFilename } from '@/utils/book';
+import { getBaseFilename } from '@/utils/path';
 import { isContentURI, isValidURL } from '@/utils/misc';
 import { isPseStreamFileName } from './opds/pseStream';
 import { isFeedBookUrl } from '@/services/rss/feedBookUrl';
 import { findABSServerById } from '@/store/absServerStore';
 import { createAbsEbookFetcher } from '@/services/audiobookshelf/ebookFetch';
 import { buildAbsEbookUrl, isAbsEbook, parseAbsFilePath } from '@/utils/audiobook';
+
+/** Translated outputs live beside the book; never let one stand in for it. */
+const TRANSLATION_FILE_PREFIX = 'translation-';
+
+const isTranslationFilename = (path: string) =>
+  getBaseFilename(path).startsWith(TRANSLATION_FILE_PREFIX);
 
 export type BookContentSource =
   | { kind: 'managed'; path: string; base: 'Books'; legacy?: boolean }
@@ -47,11 +54,16 @@ async function resolveLegacyManagedSource(
       : managed;
     // A translated PDF also lives under Books/<hash>/. Prefer the exact managed
     // filename, then any non-translation file with the book's extension, so a
-    // translated copy is never mistaken for the book itself.
+    // translated copy is never mistaken for the book itself. A sourceTitle
+    // rewritten by an older translated open makes "exact" name the translation.
+    const exactMatch = isTranslationFilename(exactPath)
+      ? undefined
+      : files.find((f) => f.path === exactPath);
     const bookFile =
-      files.find((f) => f.path === exactPath) ??
+      exactMatch ??
       files.find(
-        (f) => f.path.endsWith(`.${EXTS[book.format]}`) && !f.path.startsWith('translation-'),
+        (f) =>
+          f.path.endsWith(`.${EXTS[book.format]}`) && !f.path.startsWith(TRANSLATION_FILE_PREFIX),
       );
     if (!bookFile) return null;
     return { kind: 'managed', path: `${bookDir}/${bookFile.path}`, base: 'Books', legacy: true };
@@ -65,9 +77,12 @@ export async function resolveBookContentSource(
   book: Book,
 ): Promise<BookContentSource> {
   // Prefer the managed copy when it exists; book.filePath is device-local and
-  // can outlive a prior in-place/import mode.
+  // can outlive a prior in-place/import mode. A translated open used to rewrite
+  // sourceTitle to the translation's own filename, which made this managed path
+  // resolve to the translated PDF; ignore such a name and repair it below.
   const managedPath = getLocalBookFilename(book);
-  if (await fs.exists(managedPath, 'Books')) {
+  const managedPointsAtTranslation = isTranslationFilename(managedPath);
+  if (!managedPointsAtTranslation && (await fs.exists(managedPath, 'Books'))) {
     return { kind: 'managed', path: managedPath, base: 'Books' };
   }
 
@@ -117,5 +132,10 @@ export async function resolveBookContentSource(
   }
 
   const legacyManagedSource = await resolveLegacyManagedSource(fs, book);
+  if (legacyManagedSource?.kind === 'managed' && managedPointsAtTranslation) {
+    // Restore the identity an old translated open overwrote, so sync keys and
+    // the managed filename point back at the book rather than the translation.
+    book.sourceTitle = getBaseFilename(legacyManagedSource.path);
+  }
   return legacyManagedSource ?? { kind: 'missing' };
 }

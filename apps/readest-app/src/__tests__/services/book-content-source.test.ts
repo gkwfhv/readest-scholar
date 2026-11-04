@@ -163,3 +163,47 @@ describe('ABS ebook content source', () => {
     expect(fs.openFile).toHaveBeenCalledWith(path, 'None', undefined, expect.any(Function));
   });
 });
+
+describe('translated PDFs beside the book', () => {
+  test('a sourceTitle rewritten by a translated open still resolves the original', async () => {
+    const book = makeBook({
+      format: 'PDF',
+      title: 'Cognitive Architectures for Language Agents',
+      sourceTitle: 'translation-job-mono',
+      translationFiles: [
+        {
+          jobId: 'job',
+          kind: 'mono',
+          path: 'bookhash/translation-job-mono.pdf',
+          sha256: 'a'.repeat(64),
+          fileSize: 1,
+          downloadedAt: 1,
+        },
+      ],
+    });
+    const fs = makeFs({});
+    fs.readDir = vi
+      .fn()
+      .mockResolvedValue([{ path: '2309.02427.pdf' }, { path: 'translation-job-mono.pdf' }]);
+
+    const source = await resolveBookContentSource(fs, book);
+
+    expect(source).toEqual({
+      kind: 'managed',
+      path: 'bookhash/2309.02427.pdf',
+      base: 'Books',
+      legacy: true,
+    });
+    expect(book.sourceTitle).toBe('2309.02427');
+  });
+
+  test('a normal managed book keeps using its exact filename', async () => {
+    const book = makeBook({ format: 'PDF', sourceTitle: '2309.02427' });
+    const fs = makeFs({ existing: [['bookhash/2309.02427.pdf', 'Books']] });
+
+    const source = await resolveBookContentSource(fs, book);
+
+    expect(source).toEqual({ kind: 'managed', path: 'bookhash/2309.02427.pdf', base: 'Books' });
+    expect(fs.readDir).not.toHaveBeenCalled();
+  });
+});

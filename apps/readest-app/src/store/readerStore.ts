@@ -230,6 +230,10 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
       let bookDoc = bookData?.bookDoc;
       let docFormat = bookData?.docFormat;
       let file: File | null = bookData?.file ?? null;
+      // A translated document must not rewrite the book's identity: its PDF
+      // metadata (or missing title) would replace sourceTitle with the
+      // translation's filename, and that name then drives the "original" path.
+      let translationLoaded = false;
       // Per-book config and the third-party annotation module are pure IO
       // with no dependency on the document load. Kick them off here so their
       // round trips overlap with the content fetch / document parsing below
@@ -275,6 +279,7 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
           const translationFile = translationPath
             ? await appService.openFile(translationPath, 'None').catch(() => null)
             : null;
+          translationLoaded = !!translationFile;
           // resolveNativeBookFilePath only reads `book` (it feeds the Rust
           // EPUB prefetch), so it can race the content load instead of
           // queueing behind it.
@@ -345,10 +350,14 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
         config.viewSettings?.sortedTOC ?? false,
         config.viewSettings?.convertChineseVariant ?? 'none',
       );
-      if (!bookDoc.metadata.title && file) {
+      if (!bookDoc.metadata.title && file && !translationLoaded) {
         bookDoc.metadata.title = getBaseFilename(file.name);
       }
-      book.sourceTitle = formatTitle(bookDoc.metadata.title);
+      // The translated PDF is not the book: keep the identity that the library,
+      // sync keys and the "open the original" path all derive from.
+      if (!translationLoaded) {
+        book.sourceTitle = formatTitle(bookDoc.metadata.title);
+      }
       // Correct language codes mistakenly set with language names
       if (typeof bookDoc.metadata?.language === 'string') {
         if (bookDoc.metadata.language in SUPPORTED_LANGNAMES) {
@@ -357,26 +366,29 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
       }
       // Set the book's language for formerly imported books, newly imported books have this field set
       const primaryLanguage = getPrimaryLanguage(bookDoc.metadata.language);
-      book.primaryLanguage = book.primaryLanguage ?? primaryLanguage;
-      book.metadata = book.metadata ?? bookDoc.metadata;
+      const bookMetadata = book.metadata ?? bookDoc.metadata;
+      if (!translationLoaded) {
+        book.primaryLanguage = book.primaryLanguage ?? primaryLanguage;
+        book.metadata = bookMetadata;
+      }
 
       // Update series info from metadata if available and not already set on the book
-      if (bookDoc.metadata.belongsTo?.series) {
+      if (!translationLoaded && bookDoc.metadata.belongsTo?.series) {
         const belongsTo = bookDoc.metadata.belongsTo.series;
         const series = Array.isArray(belongsTo) ? belongsTo[0] : belongsTo;
         if (series) {
-          book.metadata.series = book.metadata.series ?? formatTitle(series.name);
-          book.metadata.seriesIndex =
-            book.metadata.seriesIndex ?? parseSeriesPosition(series.position);
-          book.metadata.seriesTotal =
-            book.metadata.seriesTotal ?? (series.total ? parseInt(series.total, 10) : undefined);
+          bookMetadata.series = bookMetadata.series ?? formatTitle(series.name);
+          bookMetadata.seriesIndex =
+            bookMetadata.seriesIndex ?? parseSeriesPosition(series.position);
+          bookMetadata.seriesTotal =
+            bookMetadata.seriesTotal ?? (series.total ? parseInt(series.total, 10) : undefined);
         }
       }
       // TODO: uncomment this when we can ensure metaHash is correctly generated for all books
       // book.metaHash = book.metaHash ?? getMetadataHash(bookDoc.metadata);
       // PDF metaHash is salted with the original import filename (issue #5411),
       // which is lost after import — keep the value stamped at import time.
-      if (book.format !== 'PDF' || !book.metaHash) {
+      if (!translationLoaded && (book.format !== 'PDF' || !book.metaHash)) {
         book.metaHash = getMetadataHash(bookDoc.metadata);
       }
 
