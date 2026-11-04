@@ -44,6 +44,55 @@ def configure_openai_completion_limit(translator_cls=None) -> None:
     translator_cls._scholar_completion_limit = True
 
 
+def configure_model_call_probe(translator_cls=None) -> None:
+    """Log each model reply's shape so empty-content failures are diagnosable.
+
+    Only counts and finish reasons are printed; prompts, translations and
+    reasoning text never leave the engine's private workspace.
+    """
+    if translator_cls is None:
+        from pdf2zh_next.translator.translator_impl.openai import OpenAITranslator
+        translator_cls = OpenAITranslator
+    if getattr(translator_cls, "_scholar_model_probe", False):
+        return
+    original_init = translator_cls.__init__
+
+    def probed_init(self, *args, **kwargs):
+        original_init(self, *args, **kwargs)
+        create = self.client.chat.completions.create
+
+        def probed_create(*call_args, **call_kwargs):
+            response = create(*call_args, **call_kwargs)
+            try:
+                choice = response.choices[0]
+                message = choice.message
+                extra = getattr(message, "model_extra", None) or {}
+                reasoning = getattr(message, "reasoning_content", None) or extra.get(
+                    "reasoning_content"
+                ) or ""
+                usage = getattr(response, "usage", None)
+                print(
+                    "@@MODEL_CALL finish=%s content_chars=%d reasoning_chars=%d "
+                    "completion_tokens=%s max_tokens=%s"
+                    % (
+                        choice.finish_reason,
+                        len(message.content or ""),
+                        len(reasoning),
+                        getattr(usage, "completion_tokens", None),
+                        call_kwargs.get("max_tokens"),
+                    ),
+                    flush=True,
+                )
+            except Exception as exc:
+                print(f"@@MODEL_CALL probe_failed {type(exc).__name__}", flush=True)
+            return response
+
+        self.client.chat.completions.create = probed_create
+
+    translator_cls.__init__ = probed_init
+    translator_cls._scholar_model_probe = True
+
+
 def append_json_response_constraint(template: str) -> str:
     """Repeat pdf2zh's JSON contract after the variable PDF input."""
     if JSON_RESPONSE_SUFFIX.strip() in template:
@@ -63,6 +112,7 @@ def strengthen_pdf2zh_json_contract() -> None:
 async def main() -> int:
     logging.basicConfig(level=logging.WARNING)
     configure_openai_completion_limit()
+    configure_model_call_probe()
     strengthen_pdf2zh_json_contract()
     settings = ConfigManager().initialize_config()
     files = list(settings.basic.input_files)
