@@ -484,8 +484,8 @@ def _engine_failure_context(log_path: Path, limit: int = 40) -> None:
     except OSError:
         return
     pattern = re.compile(
-        r"(@@MODEL_CALL|error|exception|traceback|fail|timeout|timed out|\b429\b|\b5[0-9]{2}\b|"
-        r"invalid|refus|retry|abort|killed|pthread|memory|corrupt|double free)",
+        r"(@@MODEL_CALL|@@THINKING_PROBE|error|exception|traceback|fail|timeout|timed out|"
+        r"\b429\b|\b5[0-9]{2}\b|invalid|refus|retry|abort|killed|pthread|memory|corrupt|double free)",
         re.I,
     )
     lines = [line.strip() for line in tail.splitlines() if pattern.search(line)]

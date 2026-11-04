@@ -44,6 +44,86 @@ def configure_openai_completion_limit(translator_cls=None) -> None:
     translator_cls._scholar_completion_limit = True
 
 
+THINKING_DISABLE_BODIES = (
+    ("chat_template_kwargs", {"chat_template_kwargs": {"enable_thinking": False}}),
+    ("enable_thinking", {"enable_thinking": False}),
+    ("thinking", {"thinking": {"type": "disabled"}}),
+)
+THINKING_PROBE_MESSAGES = [{"role": "user", "content": "Reply with the single word ok."}]
+
+
+def _reply_shape(response) -> tuple[str, str, str]:
+    choice = response.choices[0]
+    message = choice.message
+    extra = getattr(message, "model_extra", None) or {}
+    reasoning = getattr(message, "reasoning_content", None) or extra.get("reasoning_content") or ""
+    return choice.finish_reason, message.content or "", reasoning
+
+
+def disable_model_thinking(translator) -> None:
+    """Turn off the model's reasoning loop before translating.
+
+    A thinking model spends the whole completion budget on reasoning, leaving
+    `content` empty, which pdf2zh cannot parse as JSON. Providers expose this
+    switch differently, so probe the documented variants with a one-word reply
+    and keep the first that returns content.
+    """
+    client = translator.client
+    base = {
+        "model": translator.model,
+        "messages": THINKING_PROBE_MESSAGES,
+        "max_tokens": 64,
+    }
+
+    def attempt(label: str, **kwargs) -> tuple[bool, int]:
+        try:
+            response = client.chat.completions.create(**base, **kwargs)
+        except Exception as exc:
+            print(f"@@THINKING_PROBE {label} error {type(exc).__name__}", flush=True)
+            return False, -1
+        finish, content, reasoning = _reply_shape(response)
+        print(
+            "@@THINKING_PROBE %s finish=%s content_chars=%d reasoning_chars=%d"
+            % (label, finish, len(content), len(reasoning)),
+            flush=True,
+        )
+        return bool(content.strip()), len(reasoning)
+
+    def quiet(ok: bool, reasoning_chars: int) -> bool:
+        # Disabled reasoning yields no reasoning text at all; a candidate the
+        # server ignores still echoes the baseline's thinking block.
+        return ok and 0 <= reasoning_chars < 50
+
+    ok, reasoning_chars = attempt("baseline")
+    if quiet(ok, reasoning_chars):
+        print("@@THINKING_PROBE nothing to disable", flush=True)
+        return
+    for label, payload in THINKING_DISABLE_BODIES:
+        ok, reasoning_chars = attempt(label, extra_body=payload)
+        if quiet(ok, reasoning_chars):
+            translator.options["extra_body"] = payload
+            translator.add_cache_impact_parameters("extra_body", payload)
+            print(f"@@THINKING_PROBE selected {label}", flush=True)
+            return
+    ok, reasoning_chars = attempt("soft_switch", messages=[{
+        "role": "user", "content": "Reply with the single word ok. /no_think",
+    }])
+    if quiet(ok, reasoning_chars):
+        import babeldoc.format.pdf.document_il.midend.il_translator_llm_only as llm_only
+
+        template = llm_only.PROMPT_TEMPLATE.template
+        if "/no_think" not in template:
+            llm_only.PROMPT_TEMPLATE = Template(template.rstrip() + "\n\n/no_think")
+        print("@@THINKING_PROBE selected soft_switch", flush=True)
+        return
+    ok, reasoning_chars = attempt("reasoning_effort", reasoning_effort="none")
+    if quiet(ok, reasoning_chars):
+        translator.options["reasoning_effort"] = "none"
+        print("@@THINKING_PROBE selected reasoning_effort", flush=True)
+        return
+    print("@@THINKING_PROBE none worked", flush=True)
+
+
 def configure_model_call_probe(translator_cls=None) -> None:
     """Log each model reply's shape so empty-content failures are diagnosable.
 
@@ -88,6 +168,10 @@ def configure_model_call_probe(translator_cls=None) -> None:
             return response
 
         self.client.chat.completions.create = probed_create
+        try:
+            disable_model_thinking(self)
+        except Exception as exc:
+            print(f"@@THINKING_PROBE failed {type(exc).__name__}", flush=True)
 
     translator_cls.__init__ = probed_init
     translator_cls._scholar_model_probe = True
