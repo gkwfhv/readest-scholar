@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import re
 from pathlib import Path
 from string import Template
 
@@ -124,6 +126,67 @@ def disable_model_thinking(translator) -> None:
     print("@@THINKING_PROBE none worked", flush=True)
 
 
+def _reply_texts(payload) -> str:
+    if isinstance(payload, str):
+        return payload.strip()
+    if isinstance(payload, dict):
+        for key in ("output", "translation", "text", "content"):
+            value = payload.get(key)
+            if isinstance(value, str):
+                return value.strip()
+        return ""
+    if isinstance(payload, list):
+        parts = [_reply_texts(item) for item in payload]
+        return "\n".join(part for part in parts if part)
+    return ""
+
+
+def unwrap_structured_reply(reply):
+    """Recover prose from a reply that slipped into the batch JSON format.
+
+    babeldoc's per-paragraph fallback asks for plain text, so a model reply
+    shaped like the batch contract ("```json[{...}]") is written verbatim into
+    the PDF. Unwrap fences and pull out the translated strings; leave anything
+    that is genuinely plain text untouched.
+    """
+    if not isinstance(reply, str):
+        return reply
+    text = reply.strip()
+    fenced = re.match(r"^```[A-Za-z0-9_-]*\s*(.*?)\s*```$", text, re.S)
+    if fenced:
+        text = fenced.group(1).strip()
+    elif text.startswith("```"):
+        text = re.sub(r"^```[A-Za-z0-9_-]*\s*", "", text)
+        text = re.sub(r"\s*```\s*$", "", text).strip()
+    if not text.startswith(("[", "{")):
+        return text
+    try:
+        payload = json.loads(text)
+    except (TypeError, ValueError):
+        return text
+    extracted = _reply_texts(payload)
+    return extracted or text
+
+
+def sanitize_fallback_output(translator_cls=None) -> None:
+    """Strip structured replies from the plain-text fallback translation path."""
+    if translator_cls is None:
+        from pdf2zh_next.translator.translator_impl.openai import OpenAITranslator
+        translator_cls = OpenAITranslator
+    if getattr(translator_cls, "_scholar_fallback_sanitized", False):
+        return
+    original = translator_cls.do_llm_translate
+
+    def sanitized(self, text, rate_limit_params=None):
+        reply = original(self, text, rate_limit_params)
+        if rate_limit_params and rate_limit_params.get("request_json_mode"):
+            return reply
+        return unwrap_structured_reply(reply)
+
+    translator_cls.do_llm_translate = sanitized
+    translator_cls._scholar_fallback_sanitized = True
+
+
 def configure_model_call_probe(translator_cls=None) -> None:
     """Log each model reply's shape so empty-content failures are diagnosable.
 
@@ -197,6 +260,7 @@ async def main() -> int:
     logging.basicConfig(level=logging.WARNING)
     configure_openai_completion_limit()
     configure_model_call_probe()
+    sanitize_fallback_output()
     strengthen_pdf2zh_json_contract()
     settings = ConfigManager().initialize_config()
     files = list(settings.basic.input_files)

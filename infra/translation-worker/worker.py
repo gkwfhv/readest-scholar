@@ -23,9 +23,7 @@ ACADEMIC_TRANSLATION_PROMPT = (
     "occurrence, use Chinese (English), then use the Chinese term when unambiguous. Do not add, "
     "omit, summarize, explain, or editorialize. Avoid literal translationese such as 使得, "
     "值得注意的是, 具体来说, 通过……来……, 由……组成, 让……成为可能, 被……所……, and "
-    "chains of modifiers. Obey the surrounding PDF translator output contract: return only "
-    "the required JSON array, keeping every requested id and adding its translated output. "
-    "Do not return prose or Markdown."
+    "chains of modifiers."
 )
 
 

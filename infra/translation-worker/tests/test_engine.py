@@ -7,7 +7,35 @@ from engine import (
     configure_openai_completion_limit,
     append_json_response_constraint,
     strengthen_pdf2zh_json_contract,
+    unwrap_structured_reply,
 )
+
+
+class FallbackReplyTests(unittest.TestCase):
+    def test_fenced_output_objects_become_prose(self):
+        reply = '```json\n[{"id": 1, "output": "第一段。"}, {"id": 2, "output": "第二段。"}]\n```'
+        self.assertEqual(unwrap_structured_reply(reply), "第一段。\n第二段。")
+
+    def test_fenced_string_array_becomes_prose(self):
+        reply = '```json\n["参考文献一。", "参考文献二。"]\n```'
+        self.assertEqual(unwrap_structured_reply(reply), "参考文献一。\n参考文献二。")
+
+    def test_echoed_input_schema_keeps_the_text(self):
+        reply = '```json\n[{"id": "1", "text": "Y. Du et al. 2023."}]\n```'
+        self.assertEqual(unwrap_structured_reply(reply), "Y. Du et al. 2023.")
+
+    def test_plain_translation_is_untouched(self):
+        self.assertEqual(unwrap_structured_reply("普通译文。"), "普通译文。")
+
+    def test_unclosed_fence_is_stripped(self):
+        self.assertEqual(
+            unwrap_structured_reply('```json\n["第一段。"]'),
+            "第一段。",
+        )
+
+    def test_invalid_json_is_kept_verbatim(self):
+        reply = '["这不是 JSON'
+        self.assertEqual(unwrap_structured_reply(reply), reply)
 
 
 class EnginePromptContractTests(unittest.TestCase):
