@@ -366,6 +366,29 @@ def model_response_is_stalled(
     )
 
 
+PARSE_END_PERCENT = 20
+PARSE_BADGE_SHARE = 10
+TRANSLATION_END_PERCENT = 95
+TRANSLATION_BADGE_END = 95
+
+
+def map_engine_percent(percent: int) -> float:
+    """Spread babeldoc's overall percentage across the phases it represents.
+
+    The first ~20 points parse and lay out the PDF, the last few write output,
+    and translation fills the middle but takes most of the wall clock. Give
+    parsing a small slice of the badge so the long translation stretch does
+    not look stalled.
+    """
+    if percent <= PARSE_END_PERCENT:
+        return percent * PARSE_BADGE_SHARE / PARSE_END_PERCENT
+    if percent <= TRANSLATION_END_PERCENT:
+        return PARSE_BADGE_SHARE + (percent - PARSE_END_PERCENT) * (
+            TRANSLATION_BADGE_END - PARSE_BADGE_SHARE
+        ) / (TRANSLATION_END_PERCENT - PARSE_END_PERCENT)
+    return min(100.0, TRANSLATION_BADGE_END + (percent - TRANSLATION_END_PERCENT))
+
+
 def engine_progress(log_path: Path) -> int:
     """Map the CLI's tqdm percentage to the queue's processing range."""
     if not log_path.exists():
@@ -377,12 +400,12 @@ def engine_progress(log_path: Path) -> int:
     structured = re.findall(rb"@@SCHOLAR_PROGRESS:([0-9]{1,3})", tail)
     if structured:
         percent = min(100, int(structured[-1]))
-        return 20 + round(percent * 0.55)
+        return 20 + round(map_engine_percent(percent) * 0.55)
     readings = re.findall(rb"(?<![0-9])([0-9]{1,3})%\|", tail)
     if not readings:
         return 20
     percent = min(100, int(readings[-1]))
-    return 20 + round(percent * 0.55)
+    return 20 + round(map_engine_percent(percent) * 0.55)
 
 
 def _grant_engine_access(path: Path) -> None:

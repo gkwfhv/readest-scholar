@@ -10,7 +10,7 @@ from unittest.mock import patch
 from io import BytesIO
 from pathlib import Path
 
-from worker import ACADEMIC_TRANSLATION_PROMPT, JobFailure, _validate_model_profile, academic_translation_prompt, inspect_output, build_cli_command, merge_page_outputs, parse_page_selection, child_environment, engine_progress, find_output, invalid_model_response_count, model_response_is_stalled, output_key, prepare_asset_links, process_job, run_engine, verify_glossary_text, verify_source_bytes
+from worker import ACADEMIC_TRANSLATION_PROMPT, JobFailure, _validate_model_profile, academic_translation_prompt, inspect_output, build_cli_command, map_engine_percent, merge_page_outputs, parse_page_selection, child_environment, engine_progress, find_output, invalid_model_response_count, model_response_is_stalled, output_key, prepare_asset_links, process_job, run_engine, verify_glossary_text, verify_source_bytes
 
 
 class WorkerContractTests(unittest.TestCase):
@@ -210,13 +210,23 @@ class WorkerContractTests(unittest.TestCase):
             log = Path(folder) / "engine.log"
             self.assertEqual(engine_progress(log), 20)
             log.write_bytes(b"translate:  50%|#####| 5/10\r")
-            self.assertEqual(engine_progress(log), 48)
+            self.assertEqual(engine_progress(log), 44)
             log.write_bytes(log.read_bytes() + b"save: 100%|##########| 10/10\r")
             self.assertEqual(engine_progress(log), 75)
             log.write_bytes(b"@@SCHOLAR_PROGRESS:33\n")
-            self.assertEqual(engine_progress(log), 38)
+            self.assertEqual(engine_progress(log), 34)
             log.write_bytes(log.read_bytes() + b"@@SCHOLAR_PROGRESS:100\n")
             self.assertEqual(engine_progress(log), 75)
+
+    def test_engine_percent_gives_parsing_a_small_share_of_the_badge(self):
+        self.assertEqual(map_engine_percent(0), 0)
+        self.assertEqual(map_engine_percent(10), 5)
+        self.assertEqual(map_engine_percent(20), 10)
+        self.assertAlmostEqual(map_engine_percent(57.5), 52.5)
+        self.assertEqual(map_engine_percent(95), 95)
+        self.assertEqual(map_engine_percent(100), 100)
+        values = [map_engine_percent(p) for p in range(101)]
+        self.assertEqual(values, sorted(values))
 
     def test_invalid_model_response_guard_requires_a_stall_and_repeated_errors(self):
         with tempfile.TemporaryDirectory() as folder:
