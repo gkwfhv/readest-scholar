@@ -8,6 +8,7 @@ from engine import (
     append_json_response_constraint,
     strengthen_pdf2zh_json_contract,
     unwrap_structured_reply,
+    strip_style_markup,
 )
 
 
@@ -85,6 +86,40 @@ class EnginePromptContractTests(unittest.TestCase):
             self.assertIn(JSON_RESPONSE_SUFFIX.strip(), llm_only.PROMPT_TEMPLATE.template)
         finally:
             llm_only.PROMPT_TEMPLATE = original
+
+
+class StyleMarkupTests(unittest.TestCase):
+    class Characters:
+        def __init__(self, text):
+            self.unicode = text
+
+    class Composition:
+        def __init__(self, text):
+            self.pdf_same_style_unicode_characters = StyleMarkupTests.Characters(text)
+
+    class Paragraph:
+        def __init__(self, text, parts):
+            self.unicode = text
+            self.pdf_paragraph_composition = [
+                StyleMarkupTests.Composition(part) for part in parts
+            ]
+
+    def test_leaked_placeholders_are_removed_from_every_text_run(self):
+        paragraph = self.Paragraph(
+            "<style id='2'>加粗</style>普通文本",
+            ["<style id='3'>另一段</style>", "收尾"],
+        )
+        self.assertTrue(strip_style_markup(paragraph))
+        self.assertEqual(paragraph.unicode, "加粗普通文本")
+        self.assertEqual(
+            [c.pdf_same_style_unicode_characters.unicode for c in paragraph.pdf_paragraph_composition],
+            ["另一段", "收尾"],
+        )
+
+    def test_plain_text_is_untouched(self):
+        paragraph = self.Paragraph("普通译文。", ["另一段。"])
+        self.assertFalse(strip_style_markup(paragraph))
+        self.assertEqual(paragraph.unicode, "普通译文。")
 
 
 if __name__ == "__main__":

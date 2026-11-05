@@ -315,7 +315,12 @@ def inspect_output(
         raise JobFailure("untranslated_output")
     pages = pdf_page_count(content, limit=min(1000, 2 * source_pages + 2))
     # A paper about HTML may legitimately contain style tags in its source.
-    if count_raw_style_markers(content) and count_raw_style_markers(source_content) == 0:
+    output_markers = count_raw_style_markers(content)
+    if output_markers and count_raw_style_markers(source_content) == 0:
+        print(
+            f"translation output contains {output_markers} raw style markers",
+            flush=True,
+        )
         raise JobFailure("invalid_translation_markup")
     return {"sha256": digest, "fileSize": len(content), "pageCount": pages}
 

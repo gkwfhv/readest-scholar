@@ -126,6 +126,62 @@ def disable_model_thinking(translator) -> None:
     print("@@THINKING_PROBE none worked", flush=True)
 
 
+STYLE_MARKUP_RE = re.compile(r"</?\s*style\b[^>]*>?", re.IGNORECASE)
+
+
+def strip_style_markup(paragraph) -> bool:
+    """Remove literal babeldoc <style> placeholders left in a paragraph.
+
+    Returns True when something was stripped. The tags carry no printable
+    meaning; keeping only the surrounding text lets the document publish
+    instead of failing the worker's whole-output markup check.
+    """
+    changed = False
+
+    def scrub(value):
+        nonlocal changed
+        if not isinstance(value, str) or "<style" not in value.lower():
+            return value
+        cleaned = STYLE_MARKUP_RE.sub("", value)
+        changed = changed or cleaned != value
+        return cleaned
+
+    paragraph.unicode = scrub(paragraph.unicode)
+    for composition in getattr(paragraph, "pdf_paragraph_composition", None) or []:
+        characters = getattr(composition, "pdf_same_style_unicode_characters", None)
+        if characters is not None:
+            characters.unicode = scrub(getattr(characters, "unicode", ""))
+    return changed
+
+
+def guard_rich_text_markup(translator_cls=None) -> None:
+    """Keep raw babeldoc <style> placeholders out of the rendered PDF.
+
+    A model reply that mangles the placeholder tags can leave the literal tag
+    in the paragraph, and the worker rejects the entire document as
+    invalid_translation_markup. Strip the tags after post-processing so the
+    text itself still publishes.
+    """
+    if translator_cls is None:
+        from babeldoc.format.pdf.document_il.midend.il_translator import (
+            ILTranslator,
+        )
+
+        translator_cls = ILTranslator
+    if getattr(translator_cls, "_scholar_markup_guard", False):
+        return
+    original = translator_cls.post_translate_paragraph
+
+    def guarded(self, paragraph, tracker, translate_input, translated_text):
+        result = original(self, paragraph, tracker, translate_input, translated_text)
+        if result and strip_style_markup(paragraph):
+            print("@@MARKUP_GUARD stripped style tags", flush=True)
+        return result
+
+    translator_cls.post_translate_paragraph = guarded
+    translator_cls._scholar_markup_guard = True
+
+
 def _reply_texts(payload) -> str:
     if isinstance(payload, str):
         return payload.strip()
@@ -261,6 +317,7 @@ async def main() -> int:
     configure_openai_completion_limit()
     configure_model_call_probe()
     sanitize_fallback_output()
+    guard_rich_text_markup()
     strengthen_pdf2zh_json_contract()
     settings = ConfigManager().initialize_config()
     files = list(settings.basic.input_files)
