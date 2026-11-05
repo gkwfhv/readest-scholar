@@ -17,6 +17,8 @@ import urllib.error
 import urllib.request
 import uuid
 import zipfile
+import posixpath
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -98,6 +100,10 @@ def classify_pdf(pdf_bytes: bytes) -> str:
             chars = sum(len(document[index].get_text("text")) for index in range(sample))
             per_page = chars / sample if sample else 0
     except Exception:
+        return "paper"
+    # Short documents are papers even when the publisher added many section
+    # bookmarks; a full book runs well past this.
+    if pages < 100:
         return "paper"
     if len(toc) >= 20:
         return "book"
@@ -474,18 +480,19 @@ def build_epub(work: Path, extract: BookExtract, out: Path, job_id: str) -> None
     title = extract.title or "Untitled"
     author = extract.author or ""
     chapters = [chapter for chapter in extract.chapters if chapter.blocks]
+    # href values are relative to content.opf, which itself lives in OEBPS/.
     manifest = [
-        ("nav", "OEBPS/nav.xhtml", "application/xhtml+xml"),
-        ("ncx", "OEBPS/toc.ncx", "application/x-dtbncx+xml"),
-        ("css", "OEBPS/style.css", "text/css"),
+        ("nav", "nav.xhtml", "application/xhtml+xml"),
+        ("ncx", "toc.ncx", "application/x-dtbncx+xml"),
+        ("css", "style.css", "text/css"),
     ]
     spine = []
     for index in range(1, len(chapters) + 1):
         item_id = f"chapter-{index:03d}"
-        manifest.append((item_id, f"OEBPS/text/{item_id}.xhtml", "application/xhtml+xml"))
+        manifest.append((item_id, f"text/{item_id}.xhtml", "application/xhtml+xml"))
         spine.append(item_id)
     for image_name in extract.images:
-        manifest.append((f"img-{image_name}", f"OEBPS/images/{image_name}", _media_type(image_name)))
+        manifest.append((f"img-{image_name}", f"images/{image_name}", _media_type(image_name)))
 
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as archive:
         mimetype = zipfile.ZipInfo("mimetype")
@@ -525,6 +532,24 @@ def inspect_epub(path: Path, source_pages: int) -> dict:
                 raise BookFailure("invalid_output_epub")
         if not any(name.startswith("OEBPS/text/") for name in names):
             raise BookFailure("invalid_output_epub")
+        try:
+            package = ET.fromstring(archive.read("OEBPS/content.opf"))
+        except ET.ParseError:
+            raise BookFailure("invalid_output_epub") from None
+        ns = {"opf": "http://www.idpf.org/2007/opf"}
+        manifest_ids = set()
+        for item in package.findall(".//opf:manifest/opf:item", ns):
+            item_id = item.get("id")
+            href = item.get("href")
+            if not item_id or not href:
+                raise BookFailure("invalid_output_epub")
+            manifest_ids.add(item_id)
+            target = posixpath.normpath(posixpath.join("OEBPS", href))
+            if target not in names:
+                raise BookFailure("invalid_output_epub")
+        for itemref in package.findall(".//opf:spine/opf:itemref", ns):
+            if itemref.get("idref") not in manifest_ids:
+                raise BookFailure("invalid_output_epub")
         if sum(entry.file_size for entry in entries) > 512 * 1024 * 1024:
             raise BookFailure("output_size_limit")
     return {"sha256": digest, "fileSize": size, "pageCount": max(1, source_pages)}

@@ -199,7 +199,7 @@ BEGIN
     size_bytes:=(item->>'fileSize')::bigint;
     pages:=(item->>'pageCount')::integer;
     IF size_bytes<1
-       OR size_bytes > CASE WHEN kind='epub' THEN 268435456 ELSE 209715200 END
+       OR size_bytes > (CASE WHEN kind='epub' THEN 268435456 ELSE 209715200 END)
        OR pages<1 OR pages>1000 THEN
       RAISE EXCEPTION 'translated output exceeds limit' USING ERRCODE='PT413';
     END IF;

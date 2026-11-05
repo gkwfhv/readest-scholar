@@ -36,7 +36,11 @@ import { purgeCloudBookData } from '@/services/purgeCloudBookData';
 import { isReadestCloudStorageActive } from '@/services/sync/cloudSyncProvider';
 import { getFilename, getFolderImportGroupName, joinScannedPath } from '@/utils/path';
 import { parseOpenWithFiles } from '@/helpers/openWith';
-import { getInitializedAppService, isTauriAppPlatform } from '@/services/environment';
+import {
+  getInitializedAppService,
+  isScholarReleaseBundle,
+  isTauriAppPlatform,
+} from '@/services/environment';
 import { checkForAppUpdates, checkAppReleaseNotes } from '@/helpers/updater';
 import { impactFeedback } from '@tauri-apps/plugin-haptics';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
@@ -526,6 +530,9 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
 
   useEffect(() => {
     const doCheckAppUpdates = async () => {
+      // Scholar ships without the upstream update feed; the Readest changelog
+      // and version banner do not apply to this fork.
+      if (isScholarReleaseBundle()) return;
       if (appService?.hasUpdater && settings.autoCheckUpdates) {
         await checkForAppUpdates(_, true, settings.updateChannel);
       } else if (appService?.hasUpdater === false) {

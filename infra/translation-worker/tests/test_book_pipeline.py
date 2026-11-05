@@ -27,10 +27,11 @@ def make_book_pdf(pages: int = 6, sections: int = 5) -> bytes:
     return document.tobytes()
 
 
-def make_classify_book_pdf() -> bytes:
+def make_many_bookmarks_pdf(pages: int) -> bytes:
     document = fitz.open()
-    page = document.new_page(width=595, height=842)
-    page.insert_text((72, 100), "Dense text " * 300, fontsize=10)
+    for index in range(pages):
+        page = document.new_page(width=595, height=842)
+        page.insert_text((72, 100), f"Page {index + 1} body text.", fontsize=10)
     document.set_toc([[1, f"Section {index + 1}", 1] for index in range(24)])
     return document.tobytes()
 
@@ -49,7 +50,10 @@ def make_image_pdf() -> bytes:
 
 class ClassifyTests(unittest.TestCase):
     def test_bookmarks_make_a_book(self):
-        self.assertEqual(bp.classify_pdf(make_classify_book_pdf()), "book")
+        self.assertEqual(bp.classify_pdf(make_many_bookmarks_pdf(120)), "book")
+
+    def test_many_bookmarks_do_not_turn_a_short_paper_into_a_book(self):
+        self.assertEqual(bp.classify_pdf(make_many_bookmarks_pdf(10)), "paper")
 
     def test_short_document_without_bookmarks_is_a_paper(self):
         document = fitz.open()
@@ -210,6 +214,10 @@ class EpubTests(unittest.TestCase):
             self.assertTrue(any(name.startswith("OEBPS/images/") for name in names))
             nav = archive.read("OEBPS/nav.xhtml").decode("utf-8")
             self.assertIn("第一章", nav)
+            opf = archive.read("OEBPS/content.opf").decode("utf-8")
+            self.assertIn('href="nav.xhtml"', opf)
+            self.assertIn('href="text/chapter-001.xhtml"', opf)
+            self.assertNotIn('href="OEBPS/', opf)
         metadata = bp.inspect_epub(out, 1)
         self.assertEqual(metadata["pageCount"], 1)
         self.assertEqual(len(metadata["sha256"]), 64)

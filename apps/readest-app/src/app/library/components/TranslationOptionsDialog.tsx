@@ -5,11 +5,9 @@ import React, { useState } from 'react';
 import type { Book, TranslationMode } from '@/types/book';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useKeyDownActions } from '@/hooks/useKeyDownActions';
-import {
-  describeTranslationError,
-  resolveTranslationModel,
-  type TranslationOptions,
-} from '@/services/scholarTranslation';
+import { describeTranslationError, type TranslationOptions } from '@/services/scholarTranslation';
+import { getPdfTranslationModel } from '@/services/ai/translationModel';
+import { useSettingsStore } from '@/store/settingsStore';
 
 interface TranslationOptionsDialogProps {
   /** One book for the context menu, N for a batch — one form for all of them. */
@@ -43,7 +41,10 @@ const TranslationOptionsDialog: React.FC<TranslationOptionsDialogProps> = ({
 
   useKeyDownActions({ onCancel });
 
-  const model = resolveTranslationModel();
+  // Subscribe so the dialog recovers once the OS keychain delivers the API
+  // key after mount; reading the store once left the button disabled forever.
+  const aiSettings = useSettingsStore((state) => state.settings?.aiSettings);
+  const model = getPdfTranslationModel(aiSettings);
   const batch = books.length > 1;
   const isBook = documentType === 'book';
 

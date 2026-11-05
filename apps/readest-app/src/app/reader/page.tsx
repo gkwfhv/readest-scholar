@@ -12,6 +12,7 @@ import { useOpenDeviceLink } from '@/hooks/useOpenDeviceLink';
 import { useClipUrlIngress } from '@/hooks/useClipUrlIngress';
 import { useRestoreLibraryOnRelaunch } from '@/hooks/useRestoreLibraryOnRelaunch';
 import { useSettingsStore } from '@/store/settingsStore';
+import { isScholarReleaseBundle } from '@/services/environment';
 import { checkForAppUpdates, checkAppReleaseNotes } from '@/helpers/updater';
 import { tauriHandleSetAlwaysOnTop } from '@/utils/window';
 import ClipSignInAlert from '@/components/ClipSignInAlert';
@@ -34,6 +35,8 @@ export default function Page() {
 
   useEffect(() => {
     const doCheckAppUpdates = async () => {
+      // Scholar does not follow Readest's upstream release feed.
+      if (isScholarReleaseBundle()) return;
       if (appService?.hasUpdater && settings.autoCheckUpdates) {
         await checkForAppUpdates(_, true, settings.updateChannel);
       } else if (appService?.hasUpdater === false) {
