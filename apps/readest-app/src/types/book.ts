@@ -204,6 +204,9 @@ export interface Book {
   // SYNCED pointer to the Chinese EPUB imported for a book-mode translation.
   // The derived book's hash is stable, so a re-translation replaces that row.
   translatedBookHash?: string | null;
+  // Derived translations stay in the store (so the reader can open them) but
+  // never appear as their own shelf item.
+  hidden?: boolean | null;
 }
 
 /** Server job lifecycle, as returned by /api/scholar/translation-jobs. */

@@ -202,6 +202,10 @@ describe('finalizeJob for book mode', () => {
     ];
     expect(file.name).toBe(`${derivedHash}.epub`);
     expect(options).toMatchObject({ nativeHash: derivedHash, overwrite: true });
+    const derivedUpdate = mocks.updateBook.mock.calls.find(
+      ([, value]) => (value as { hash?: string }).hash === derivedHash,
+    );
+    expect(derivedUpdate?.[1]).toMatchObject({ hidden: true });
     expect(mocks.updateBook).toHaveBeenLastCalledWith(
       envConfig,
       expect.objectContaining({ translatedBookHash: derivedHash }),

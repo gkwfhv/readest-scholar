@@ -444,8 +444,8 @@ export async function importTranslatedBook(
     titleOverride: title,
   });
   if (!imported) throw new TranslationError('epub-import-failed');
-  if (imported.title !== title || imported.primaryLanguage !== 'zh-CN') {
-    const adjusted: Book = { ...imported, title, primaryLanguage: 'zh-CN' };
+  if (imported.title !== title || imported.primaryLanguage !== 'zh-CN' || !imported.hidden) {
+    const adjusted: Book = { ...imported, title, primaryLanguage: 'zh-CN', hidden: true };
     await useLibraryStore.getState().updateBook(envConfig, adjusted);
     return adjusted;
   }
@@ -461,9 +461,15 @@ export async function ensureTranslatedBook(
   const hash = book.translatedBookHash ?? derivedTranslationHash(book);
   const existing = useLibraryStore.getState().getBookByHash(hash);
   if (existing) {
-    if (!book.translatedBookHash) {
-      const linked: Book = { ...book, translatedBookHash: hash };
-      await useLibraryStore.getState().updateBook(envConfig, linked);
+    if (!book.translatedBookHash || !existing.hidden) {
+      if (!existing.hidden) {
+        await useLibraryStore.getState().updateBook(envConfig, { ...existing, hidden: true });
+      }
+      if (!book.translatedBookHash) {
+        await useLibraryStore
+          .getState()
+          .updateBook(envConfig, { ...book, translatedBookHash: hash });
+      }
     }
     return existing;
   }

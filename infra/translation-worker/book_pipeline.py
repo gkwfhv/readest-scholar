@@ -112,13 +112,15 @@ def classify_pdf(pdf_bytes: bytes) -> str:
     return "paper"
 
 
-def _body_size(sizes: list[float]) -> float:
+def _body_size(sizes: list[tuple[float, int]]) -> float:
+    """Most common font size, weighted by characters so author lines at a
+    larger point size cannot become the body size."""
     if not sizes:
         return 10.0
     counts: dict[float, int] = {}
-    for size in sizes:
+    for size, chars in sizes:
         key = round(size * 2) / 2
-        counts[key] = counts.get(key, 0) + 1
+        counts[key] = counts.get(key, 0) + max(1, chars)
     return max(counts, key=counts.get)
 
 
@@ -154,41 +156,161 @@ def _image_extension(data: bytes) -> str:
     return "bin"
 
 
-def _two_column(page, width: float) -> bool:
-    blocks = [
-        block
+def _column_gutter(page, width: float) -> float | None:
+    """X where the right column starts, when the page clearly has two columns."""
+    boxes = [
+        block["bbox"]
         for block in page.get_text("dict").get("blocks", [])
         if block.get("type") == 0 and (block.get("bbox") or (0, 0, 0, 0))[2] > 0
     ]
-    if len(blocks) < 6:
-        return False
-    left = sum(1 for block in blocks if (block["bbox"][0] + block["bbox"][2]) / 2 < width / 2)
-    return 0.25 * len(blocks) <= left <= 0.75 * len(blocks)
+    # Ignore full-width headings and figures when measuring the gutter.
+    left = [box for box in boxes if box[2] < width * 0.50]
+    right = [box for box in boxes if box[0] > width * 0.45]
+    if not left or not right:
+        return None
+    gutter = min(box[0] for box in right) - max(box[2] for box in left)
+    return min(box[0] for box in right) if gutter > width * 0.03 else None
 
 
-def _sorted_text_blocks(page, width: float) -> list[tuple[float, float, float, str, float]]:
-    """Return (y0, x0, y1, text, size) in reading order."""
+def _is_cjk(char: str) -> bool:
+    return bool(char) and '\u3000' <= char <= '\u9fff'
+
+
+def _join_lines(lines: list[str]) -> str:
+    """Join wrapped PDF lines, repairing hyphenation and CJK line breaks."""
+    out = ""
+    for line in lines:
+        piece = line.strip()
+        if not piece:
+            continue
+        if not out:
+            out = piece
+        elif out.endswith("-") and piece[:1].islower():
+            out = out[:-1] + piece
+        elif out.endswith("-") and piece[:1].isupper():
+            out += piece
+        elif _is_cjk(out[-1]) and _is_cjk(piece[0]):
+            out += piece
+        else:
+            out += " " + piece
+    return out
+
+
+def _ends_sentence(text: str) -> bool:
+    return bool(re.search(r"[.!?。！？:：;；]$", text.rstrip()))
+
+
+SECTION_HEADING_RE = re.compile(
+    r"^\s*(abstract|introduction|related work|background|method|methods|approach|"
+    r"experiments?|evaluation|results?|discussion|conclusion|references|"
+    r"acknowledg(e)?ments?)\s*$",
+    re.IGNORECASE,
+)
+
+
+NUMBERED_HEADING_RE = re.compile(r"^\s*\d+(?:\.\d+)*\.?\s+[A-Z][A-Za-z0-9 ,&/\-]{2,70}$")
+
+
+def _is_numbered_heading(line: str) -> bool:
+    return bool(NUMBERED_HEADING_RE.match(line.strip()))
+
+
+def _is_section_heading(text: str) -> bool:
+    return bool(SECTION_HEADING_RE.match(text)) and len(text.strip()) <= 60
+
+
+def _is_footnote(text: str) -> bool:
+    return bool(re.match(r"^\s*[*†‡]", text))
+
+
+def _looks_like_code(lines: list[str], text: str) -> bool:
+    numbered = sum(1 for line in lines if re.match(r"^\s*\d+:", line))
+    if numbered >= 2 and len(lines) >= 2:
+        return True
+    return bool(re.match(r"^\s*(algorithm|算法)\s*\d+", text.strip(), re.IGNORECASE))
+
+
+def _merge_text(previous: str, following: str) -> str:
+    left = previous.rstrip()
+    right = following.lstrip()
+    if not right:
+        return previous
+    if left.endswith("-") and right[:1].islower():
+        return left[:-1] + right
+    if left.endswith("-") and right[:1].isupper():
+        return left + right
+    if _is_cjk(left[-1]) and _is_cjk(right[0]):
+        return left + right
+    return f"{left} {right}"
+
+
+def _shrink_image(data: bytes) -> tuple[bytes, str]:
+    """Downscale oversized figures so an EPUB page is not dominated by one image."""
+    import fitz
+
+    try:
+        pixmap = fitz.Pixmap(data)
+        if max(pixmap.width, pixmap.height) <= 1400:
+            return data, _image_extension(data)
+        if pixmap.colorspace is None or pixmap.colorspace.n not in (1, 3):
+            pixmap = fitz.Pixmap(fitz.csRGB, pixmap)
+        while max(pixmap.width, pixmap.height) > 1400:
+            pixmap.shrink(1)
+        return pixmap.tobytes("png"), "png"
+    except Exception:
+        return data, _image_extension(data)
+
+
+def _code_line(text: str) -> bool:
+    return bool(re.match(
+        r"^\s*(\d+\s*:|Require\s*:|Ensure\s*:|Input\s*:|Output\s*:|return\b|end\b)",
+        text,
+    ))
+
+
+def _sorted_text_blocks(
+    page, width: float,
+) -> list[tuple[float, float, float, float, str, float, list[str]]]:
+    """Return (y0, x0, x1, y1, text, size, lines) in reading order."""
     entries = []
     for block in page.get_text("dict").get("blocks", []):
         if block.get("type") != 0:
             continue
-        lines = block.get("lines") or []
-        text = "\n".join(
+        line_texts = [
             "".join(span.get("text", "") for span in line.get("spans", []))
-            for line in lines
-        ).strip()
-        if not text:
+            for line in (block.get("lines") or [])
+        ]
+        line_texts = [line for line in line_texts if line.strip()]
+        if not line_texts:
             continue
         bbox = block.get("bbox") or (0, 0, 0, 0)
         size = max(
-            (float(span.get("size") or 0) for line in lines for span in line.get("spans", [])),
+            (
+                float(span.get("size") or 0)
+                for line in block.get("lines", [])
+                for span in line.get("spans", [])
+            ),
             default=0.0,
         )
-        entries.append((bbox[1], bbox[0], bbox[3], text, size))
-    if _two_column(page, width):
-        entries.sort(key=lambda item: (0 if item[1] < width / 2 else 1, round(item[0] / 6), item[1]))
+        entries.append((
+            bbox[1], bbox[0], bbox[2], bbox[3],
+            _join_lines(line_texts), size, line_texts,
+        ))
+    gutter = _column_gutter(page, width)
+    if gutter is None:
+        entries.sort(key=lambda entry: (round(entry[0] / 6), entry[1]))
     else:
-        entries.sort(key=lambda item: (round(item[0] / 6), item[1]))
+        def key(entry):
+            y0, x0, x1, _y1, _text, _size, _lines = entry
+            if x1 <= gutter * 0.98:
+                column = 1
+            elif x0 >= gutter:
+                column = 2
+            else:
+                column = 0
+            return (column, round(y0 / 6), x0)
+
+        entries.sort(key=key)
     return entries
 
 
@@ -203,15 +325,13 @@ def extract_book(pdf_bytes: bytes, work: Path) -> BookExtract:
     with fitz.open(stream=pdf_bytes, filetype="pdf") as document:
         total = len(document)
         metadata = document.metadata or {}
-        title = metadata.get("title") or "Untitled"
+        title = (metadata.get("title") or "").strip()
         author = metadata.get("author") or ""
         toc = [
             (int(level), str(name), int(page))
             for level, name, page in (document.get_toc(simple=True) or [])
             if page and 1 <= int(page) <= total
         ]
-        # Parts and chapters (levels 1-2) make usable EPUB chapters; deeper
-        # headings stay inside a chapter and are detected from font size.
         chapter_level = 2 if sum(1 for level, _, _ in toc if level <= 2) >= 3 else 1
         starts = []
         for level, name, page in toc:
@@ -231,7 +351,7 @@ def extract_book(pdf_bytes: bytes, work: Path) -> BookExtract:
                 end = starts[index + 1][1] - 1 if index + 1 < len(starts) else total
                 chapters.append(Chapter(name, start, max(start, end)))
         else:
-            chapters.append(Chapter(title, 1, total))
+            chapters.append(Chapter(title or "Document", 1, total))
 
         for chapter in chapters:
             stripped_title = chapter.title.strip()
@@ -246,7 +366,7 @@ def extract_book(pdf_bytes: bytes, work: Path) -> BookExtract:
                 text_blocks = [
                     item
                     for item in _sorted_text_blocks(page, width)
-                    if not _is_furniture(item[3], item[0], item[2], height)
+                    if not _is_furniture(item[4], item[0], item[3], height)
                 ]
                 pictures = []
                 for image in page.get_image_info(xrefs=True):
@@ -262,37 +382,161 @@ def extract_book(pdf_bytes: bytes, work: Path) -> BookExtract:
                     if data:
                         pictures.append((bbox[1], data))
                 pictures.sort(key=lambda item: item[0])
-                merged: list[tuple[float, int, object]] = [
-                    (item[0], 0, item) for item in text_blocks
-                ] + [(item[0], 1, item) for item in pictures]
-                merged.sort(key=lambda item: (item[0], item[1]))
-                for _, kind, payload in merged:
-                    if kind == 1:
-                        data = payload[1]
-                        name = f"img-{hashlib.sha1(data).hexdigest()[:16]}.{_image_extension(data)}"
+                # Insert figures where they start in the (already ordered) text
+                # flow. Re-sorting by y would undo the column ordering.
+                ordered: list[tuple[str, object]] = []
+                picture_index = 0
+                for block in text_blocks:
+                    while (
+                        picture_index < len(pictures)
+                        and pictures[picture_index][0] <= block[0]
+                    ):
+                        ordered.append(("image", pictures[picture_index][1]))
+                        picture_index += 1
+                    ordered.append(("text", block))
+                for _, data in pictures[picture_index:]:
+                    ordered.append(("image", data))
+
+                for kind, payload in ordered:
+                    if kind == "image":
+                        data, extension = _shrink_image(payload)
+                        name = f"img-{hashlib.sha1(data).hexdigest()[:16]}.{extension}"
                         if name not in images:
                             images[name] = data
                             (image_dir / name).write_bytes(data)
                         items.append(("image", name))
                     else:
-                        _, _, _, text, size = payload
-                        sizes.append(size)
-                        items.append(("text", (text, size)))
+                        y0, x0, x1, y1, text, size, lines = payload
+                        sizes.append((size, len(text)))
+                        items.append((
+                            "text",
+                            {"y0": y0, "y1": y1, "page": page_number,
+                             "size": size, "text": text, "lines": lines},
+                        ))
 
             body = _body_size(sizes)
             blocks: list[Block] = []
+            pending: int | None = None
+            code_buffer: list[str] | None = None
+            last_bottom = 0.0
+            last_page = 0
             for kind, payload in items:
                 if kind == "image":
+                    if code_buffer is not None:
+                        blocks.append(Block("code", text="\n".join(code_buffer)))
+                        code_buffer = None
                     blocks.append(Block("image", image_name=str(payload)))
-                else:
-                    text, size = payload
-                    blocks.append(Block(_heading_kind(size, body, text), text=text, size=size))
+                    pending = None
+                    continue
+                data = payload
+                text = data["text"]
+                size = data["size"]
+                lines = data["lines"]
+                stripped = text.strip()
+                if code_buffer is not None:
+                    if _code_line(stripped) or _looks_like_code(lines, text):
+                        code_buffer.extend(line.rstrip() for line in lines)
+                        continue
+                    blocks.append(Block("code", text="\n".join(code_buffer)))
+                    code_buffer = None
+                    pending = None
+                if re.match(r"^\s*(algorithm|算法)\s*\d+", stripped, re.IGNORECASE):
+                    code_buffer = [line.rstrip() for line in lines]
+                    pending = None
+                    continue
+                if _looks_like_code(lines, text):
+                    blocks.append(Block("code", text="\n".join(line.rstrip() for line in lines)))
+                    pending = None
+                    continue
+                if _is_footnote(text):
+                    blocks.append(Block("footnote", text=text, size=size))
+                    continue
+                if len(lines) <= 1 and _is_numbered_heading(text):
+                    blocks.append(Block("h2", text=text.strip(), size=size))
+                    pending = None
+                    continue
+                if len(lines) > 1 and _is_numbered_heading(lines[0]):
+                    blocks.append(Block("h2", text=lines[0].strip(), size=size))
+                    pending = None
+                    text = _join_lines(lines[1:])
+                    lines = lines[1:]
+                    stripped = text.strip()
+                if _is_section_heading(text):
+                    blocks.append(Block("h2", text=text, size=size))
+                    pending = None
+                    continue
+                heading = _heading_kind(size, body, text)
+                if heading != "p":
+                    blocks.append(Block(heading, text=text, size=size))
+                    pending = None
+                    continue
+                joined = False
+                if pending is not None:
+                    previous = blocks[pending]
+                    same_page = data["page"] == last_page
+                    gap = data["y0"] - last_bottom
+                    hyphenated = previous.text.rstrip().endswith("-") and (
+                        text[:1].islower() or text[:1].isupper()
+                    )
+                    continuous = (
+                        same_page
+                        and gap < max(8.0, size * 1.6)
+                        and not _ends_sentence(previous.text)
+                    )
+                    if hyphenated or continuous:
+                        previous.text = _merge_text(previous.text, text)
+                        previous.size = max(previous.size, size)
+                        last_bottom = data["y1"]
+                        last_page = data["page"]
+                        joined = True
+                if not joined:
+                    blocks.append(Block("p", text=text, size=size))
+                    pending = len(blocks) - 1
+                    last_bottom = data["y1"]
+                    last_page = data["page"]
+            if code_buffer is not None:
+                blocks.append(Block("code", text="\n".join(code_buffer)))
             for index, block in enumerate(blocks):
                 if block.kind != "p" or not CAPTION_RE.match(block.text):
                     continue
                 if index and blocks[index - 1].kind == "image":
                     block.kind = "figcaption"
             chapter.blocks = blocks
+
+        # A paragraph cut by a chapter bookmark (an abstract continuing past
+        # "Introduction") still belongs to the previous chapter.
+        for index in range(1, len(chapters)):
+            previous, current = chapters[index - 1], chapters[index]
+            last_index = next(
+                (i for i in range(len(previous.blocks) - 1, -1, -1)
+                 if previous.blocks[i].kind == "p"),
+                None,
+            )
+            first_index = next(
+                (i for i, block in enumerate(current.blocks) if block.kind == "p"),
+                None,
+            )
+            if last_index is None or first_index is None or first_index != 0:
+                continue
+            last_block = previous.blocks[last_index]
+            first_block = current.blocks[first_index]
+            if _ends_sentence(last_block.text):
+                continue
+            if last_block.text.rstrip().endswith("-") or first_block.text[:1].islower():
+                last_block.text = _merge_text(last_block.text, first_block.text)
+                del current.blocks[first_index]
+
+        if not title:
+            for chapter in chapters:
+                found = next(
+                    (block.text.strip() for block in chapter.blocks
+                     if block.kind in ("h1", "h2") and block.text.strip()),
+                    "",
+                )
+                if found:
+                    title = found[:120]
+                    break
+        title = title or "Untitled"
 
     return BookExtract(title=title, author=author, chapters=chapters, images=images)
 
@@ -431,7 +675,7 @@ def translate_book(
         for chapter in extract.chapters
         if not chapter.keep_source
         for block in chapter.blocks
-        if block.kind != "image" and block.text.strip()
+        if block.kind not in ("image", "code") and block.text.strip()
     ]
     total = len(pieces) + len(titles)
     if total == 0:
@@ -641,6 +885,10 @@ def _chapter_xhtml(index: int, chapter) -> str:
             parts.append(f"<h3>{html.escape(block.text)}</h3>")
         elif block.kind == "figcaption":
             parts.append(f'<p class="caption">{html.escape(block.text)}</p>')
+        elif block.kind == "code":
+            parts.append(f'<pre class="code">{html.escape(block.text)}</pre>')
+        elif block.kind == "footnote":
+            parts.append(f'<p class="footnote">{html.escape(block.text)}</p>')
         else:
             parts.append(f"<p>{html.escape(block.text)}</p>")
     return (
@@ -661,5 +909,9 @@ _STYLE = (
     "h3{font-size:1.15em;margin:.9em 0 .4em;}"
     "p{text-indent:2em;margin:.5em 0;}"
     ".caption{font-size:.9em;text-align:center;text-indent:0;color:#444;}"
-    ".figure{text-align:center;margin:1em 0;}img{max-width:100%;height:auto;}"
+    ".footnote{font-size:.8em;color:#555;text-indent:0;}"
+    "pre.code{white-space:pre-wrap;font-family:monospace;font-size:.82em;"
+    "line-height:1.45;background:#f6f6f6;padding:.6em;border-radius:.3em;}"
+    ".figure{text-align:center;margin:1em 0;}"
+    "img{max-width:100%;max-height:65vh;height:auto;object-fit:contain;}"
 )

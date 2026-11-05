@@ -234,6 +234,23 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     setCheckOpenWithBooks,
     setCheckLastOpenBooks,
   } = useLibraryStore();
+  // Derived Chinese EPUBs live in the store so the reader can open them by
+  // hash, but they never render as their own shelf item.
+  const visibleLibraryBooks = libraryBooks.filter((book) => !book.hidden);
+  // One-time repair for EPUBs imported before the hidden flag existed.
+  useEffect(() => {
+    const derived = new Set<string>();
+    for (const book of libraryBooks) {
+      if (book.translatedBookHash) derived.add(book.translatedBookHash);
+    }
+    const stale = libraryBooks.filter((book) => derived.has(book.hash) && !book.hidden);
+    if (stale.length > 0) {
+      void updateBooks(
+        envConfig,
+        stale.map((book) => ({ ...book, hidden: true })),
+      );
+    }
+  }, [libraryBooks, envConfig, updateBooks]);
   const _ = useTranslation();
   const { selectFiles } = useFileSelector(appService, _);
   const { safeAreaInsets: insets, isRoundedWindow } = useThemeStore();
@@ -608,7 +625,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
   }, [handleImportBookFiles, handleImportBookDirectory]);
 
   useEffect(() => {
-    if (!libraryBooks.some((book) => !book.deletedAt)) {
+    if (!visibleLibraryBooks.some((book) => !book.deletedAt)) {
       handleSetSelectMode(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -919,7 +936,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     ) {
       // Find the group to get its name
       const allGroups = createBookGroups(
-        libraryBooks.filter((b) => !b.deletedAt),
+        visibleLibraryBooks.filter((b) => !b.deletedAt),
         groupBy,
       );
       const targetGroup = findGroupById(allGroups, groupId);
@@ -1314,7 +1331,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
   const handleMetadataValueClick = (type: 'tag' | 'subject', value: string) => {
     const groupBy = type === 'tag' ? LibraryGroupByType.Tag : LibraryGroupByType.Subject;
     const targetGroup = createBookGroups(
-      libraryBooks.filter((book) => !book.deletedAt),
+      visibleLibraryBooks.filter((book) => !book.deletedAt),
       groupBy,
     ).find((item): item is BooksGroup => 'books' in item && item.name === value);
     if (!targetGroup) return;
@@ -1918,7 +1935,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     return <div className='full-height bg-base-200' />;
   }
 
-  const showBookshelf = libraryLoaded || libraryBooks.length > 0;
+  const showBookshelf = libraryLoaded || visibleLibraryBooks.length > 0;
 
   return (
     <div
@@ -2073,7 +2090,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
           >
             <DropIndicator />
             <Bookshelf
-              libraryBooks={libraryBooks}
+              libraryBooks={visibleLibraryBooks}
               isSelectMode={isSelectMode}
               isSelectAll={isSelectAll}
               isSelectNone={isSelectNone}
