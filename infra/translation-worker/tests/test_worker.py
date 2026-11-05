@@ -313,6 +313,10 @@ class WorkerContractTests(unittest.TestCase):
             output_key(account, job, "dual"),
             f"{account}/Scholar/translations/{job}/dual.pdf",
         )
+        self.assertEqual(
+            output_key(account, job, "epub"),
+            f"{account}/Scholar/translations/{job}/book.epub",
+        )
         with self.assertRaises(ValueError):
             output_key(account, job, "../source")
 

@@ -8,11 +8,13 @@ import { useKeyDownActions } from '@/hooks/useKeyDownActions';
 
 interface TranslationOpenDialogProps {
   book: Book;
-  /** Kinds actually available (local file or fetchable server output). */
+  /** PDF kinds actually available (local file or fetchable server output). */
   kinds: TranslationOutputKind[];
-  /** True while the translated PDF is being downloaded on this device. */
+  /** True when a derived Chinese EPUB exists or can be fetched. */
+  translatedBook?: boolean;
+  /** True while the translated copy is being downloaded on this device. */
   downloading?: boolean;
-  onChoose: (choice: 'original' | TranslationOutputKind) => void;
+  onChoose: (choice: 'original' | TranslationOutputKind | 'epub') => void;
   onCancel: () => void;
 }
 
@@ -24,6 +26,7 @@ interface TranslationOpenDialogProps {
 const TranslationOpenDialog: React.FC<TranslationOpenDialogProps> = ({
   book,
   kinds,
+  translatedBook = false,
   downloading = false,
   onChoose,
   onCancel,
@@ -57,6 +60,16 @@ const TranslationOpenDialog: React.FC<TranslationOpenDialogProps> = ({
           >
             {_('Open the original PDF')}
           </button>
+          {translatedBook && (
+            <button
+              type='button'
+              className='btn btn-contrast justify-start'
+              disabled={downloading}
+              onClick={() => onChoose('epub')}
+            >
+              {_('Open the Chinese EPUB')}
+            </button>
+          )}
           {kinds.map((kind) => (
             <button
               key={kind}

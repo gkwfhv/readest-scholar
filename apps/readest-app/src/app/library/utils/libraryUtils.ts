@@ -1139,7 +1139,7 @@ export const pickFresherReadingStatus = (
   };
 };
 
-type TranslationFields = Pick<Book, 'translation' | 'translationUpdatedAt'>;
+type TranslationFields = Pick<Book, 'translation' | 'translationUpdatedAt' | 'translatedBookHash'>;
 
 /**
  * Field-level last-writer-wins for the synced PDF-translation state: return
@@ -1156,6 +1156,7 @@ export const pickFresherTranslation = (
   return {
     translation: winner.translation,
     translationUpdatedAt: winner.translationUpdatedAt,
+    translatedBookHash: winner.translatedBookHash,
   };
 };
 

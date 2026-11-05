@@ -34,6 +34,7 @@ const TranslationOptionsDialog: React.FC<TranslationOptionsDialogProps> = ({
   onSubmit,
 }) => {
   const _ = useTranslation();
+  const [documentType, setDocumentType] = useState<'auto' | 'paper' | 'book'>('auto');
   const [mode, setMode] = useState<TranslationMode>('dual');
   const [glossary, setGlossary] = useState<File | null>(null);
   const [whiteBackground, setWhiteBackground] = useState(false);
@@ -44,6 +45,7 @@ const TranslationOptionsDialog: React.FC<TranslationOptionsDialogProps> = ({
 
   const model = resolveTranslationModel();
   const batch = books.length > 1;
+  const isBook = documentType === 'book';
 
   const submit = () => {
     if (busy) return;
@@ -51,16 +53,17 @@ const TranslationOptionsDialog: React.FC<TranslationOptionsDialogProps> = ({
       setLocalError(describeTranslationError('no-model', _));
       return;
     }
-    if (whiteBackground && !whiteBackgroundPages.trim()) {
+    if (!isBook && whiteBackground && !whiteBackgroundPages.trim()) {
       setLocalError(_('Enter the compatibility page numbers.'));
       return;
     }
     setLocalError('');
     onSubmit({
-      mode,
+      mode: isBook ? 'mono' : mode,
+      documentType,
       glossaryCsv: glossary,
-      whiteBackgroundCompatibility: whiteBackground,
-      whiteBackgroundPages: whiteBackground ? whiteBackgroundPages.trim() : undefined,
+      whiteBackgroundCompatibility: isBook ? false : whiteBackground,
+      whiteBackgroundPages: !isBook && whiteBackground ? whiteBackgroundPages.trim() : undefined,
     });
   };
 
@@ -82,20 +85,41 @@ const TranslationOptionsDialog: React.FC<TranslationOptionsDialogProps> = ({
         </p>
 
         <div className='mt-4 grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-3'>
-          <label className='text-xs' htmlFor='translation-options-mode'>
-            {_('Output')}
+          <label className='text-xs' htmlFor='translation-options-document-type'>
+            {_('Document type')}
           </label>
           <select
-            id='translation-options-mode'
+            id='translation-options-document-type'
             className='select select-bordered select-sm eink-bordered w-full'
-            value={mode}
+            value={documentType}
             disabled={busy}
-            onChange={(event) => setMode(event.target.value as TranslationMode)}
+            onChange={(event) => setDocumentType(event.target.value as 'auto' | 'paper' | 'book')}
           >
-            <option value='dual'>{_('Bilingual')}</option>
-            <option value='mono'>{_('Chinese')}</option>
-            <option value='both'>{_('Both')}</option>
+            <option value='auto'>{_('Auto')}</option>
+            <option value='paper'>{_('Paper (in-place PDF)')}</option>
+            <option value='book' disabled={batch}>
+              {_('Book (Chinese EPUB)')}
+            </option>
           </select>
+
+          {!isBook && (
+            <>
+              <label className='text-xs' htmlFor='translation-options-mode'>
+                {_('Output')}
+              </label>
+              <select
+                id='translation-options-mode'
+                className='select select-bordered select-sm eink-bordered w-full'
+                value={mode}
+                disabled={busy}
+                onChange={(event) => setMode(event.target.value as TranslationMode)}
+              >
+                <option value='dual'>{_('Bilingual')}</option>
+                <option value='mono'>{_('Chinese')}</option>
+                <option value='both'>{_('Both')}</option>
+              </select>
+            </>
+          )}
 
           <label className='text-xs' htmlFor='translation-options-glossary'>
             {_('Glossary CSV')}
@@ -115,23 +139,33 @@ const TranslationOptionsDialog: React.FC<TranslationOptionsDialogProps> = ({
           </span>
         </div>
 
-        <label className='eink-bordered border-base-300 mt-4 flex w-full items-start gap-2 rounded-md border p-2 text-xs'>
-          <input
-            type='checkbox'
-            className='checkbox checkbox-xs eink-bordered mt-0.5'
-            checked={whiteBackground}
-            disabled={busy}
-            onChange={(event) => setWhiteBackground(event.target.checked)}
-          />
-          <span>
-            <span className='font-medium'>{_('White-background compatibility')}</span>
-            <span className='text-base-content/65 mt-1 block'>
-              {_('Use on white pages when original text overlaps the translation.')}
-            </span>
-          </span>
-        </label>
+        {isBook && (
+          <p className='text-base-content/65 mt-4 text-xs'>
+            {_(
+              'Book mode generates a Chinese EPUB with chapter structure, keeps reference sections in English, and does not preserve complex table or formula layouts.',
+            )}
+          </p>
+        )}
 
-        {whiteBackground && (
+        {!isBook && (
+          <label className='eink-bordered border-base-300 mt-4 flex w-full items-start gap-2 rounded-md border p-2 text-xs'>
+            <input
+              type='checkbox'
+              className='checkbox checkbox-xs eink-bordered mt-0.5'
+              checked={whiteBackground}
+              disabled={busy}
+              onChange={(event) => setWhiteBackground(event.target.checked)}
+            />
+            <span>
+              <span className='font-medium'>{_('White-background compatibility')}</span>
+              <span className='text-base-content/65 mt-1 block'>
+                {_('Use on white pages when original text overlaps the translation.')}
+              </span>
+            </span>
+          </label>
+        )}
+
+        {!isBook && whiteBackground && (
           <label className='mt-2 block w-full text-xs'>
             {_('Compatibility pages')}
             <input

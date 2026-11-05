@@ -94,6 +94,14 @@ export interface ImportBookOptions {
   inPlace?: boolean;
   /** Pre-built lookup index for O(1) dedup during batch imports. */
   lookupIndex?: BookLookupIndex;
+  /**
+   * Force the book hash instead of deriving it from the file bytes. Used for
+   * derived translations whose content changes between jobs but must replace
+   * the same library row.
+   */
+  nativeHash?: string;
+  /** Override the title taken from the file metadata (e.g. add a language tag). */
+  titleOverride?: string;
 }
 
 export interface Book {
@@ -193,6 +201,9 @@ export interface Book {
   // published to peers and stripped on adopt — same contract as `altFilePaths`
   // above and DEVICE_LOCAL_BOOK_FIELDS (services/sync/file/wire.ts).
   translationFiles?: TranslationFileRef[] | null;
+  // SYNCED pointer to the Chinese EPUB imported for a book-mode translation.
+  // The derived book's hash is stable, so a re-translation replaces that row.
+  translatedBookHash?: string | null;
 }
 
 /** Server job lifecycle, as returned by /api/scholar/translation-jobs. */
@@ -201,6 +212,8 @@ export type TranslationJobState = 'queued' | 'running' | 'succeeded' | 'failed' 
 export type TranslationMode = 'mono' | 'dual' | 'both';
 /** Which PDF a translation output is: `mono` = Chinese only, `dual` = bilingual. */
 export type TranslationOutputKind = 'mono' | 'dual';
+/** Any artifact a job can publish; `epub` is the book-mode Chinese edition. */
+export type TranslationArtifactKind = TranslationOutputKind | 'epub';
 
 export interface BookTranslation {
   jobId: string;
@@ -210,7 +223,7 @@ export interface BookTranslation {
   /** The mode the user asked for; `both` makes the open dialog offer three ways. */
   mode: TranslationMode;
   /** Output kinds the succeeded job produced. Empty until state === 'succeeded'. */
-  outputs: TranslationOutputKind[];
+  outputs: TranslationArtifactKind[];
   /** Server error_code, e.g. 'invalid_translation_markup'. */
   errorCode?: string | null;
   updatedAt: number;

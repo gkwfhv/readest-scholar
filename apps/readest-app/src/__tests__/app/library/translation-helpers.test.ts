@@ -113,6 +113,20 @@ describe('pickFresherTranslation', () => {
     expect(pickFresherTranslation(older, older).translation?.jobId).toBe('old');
   });
 
+  it('carries the derived Chinese book pointer from the winning side', () => {
+    const older = {
+      translation: translation({ jobId: 'old' }),
+      translationUpdatedAt: 10,
+      translatedBookHash: 'old-book',
+    };
+    const newer = {
+      translation: translation({ jobId: 'new' }),
+      translationUpdatedAt: 20,
+      translatedBookHash: 'new-book',
+    };
+    expect(pickFresherTranslation(older, newer).translatedBookHash).toBe('new-book');
+  });
+
   it('treats a missing timestamp as epoch 0', () => {
     const stamped = { translation: translation({ jobId: 'stamped' }), translationUpdatedAt: 1 };
     const unstamped = { translation: translation({ jobId: 'unstamped' }) };

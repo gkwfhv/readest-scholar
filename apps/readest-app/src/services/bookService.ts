@@ -536,6 +536,8 @@ export async function importBook(
     inPlace = false,
     lookupIndex,
     osPlatform,
+    nativeHash: forcedHash,
+    titleOverride,
   } = options;
   const isPseStream = typeof file === 'string' && isPseStreamFileName(file);
 
@@ -668,7 +670,9 @@ export async function importBook(
       throw new Error(`Failed to open the book file: ${(error as Error).message || error}`);
     }
 
-    const hash = isPseStream ? md5(file as string) : (nativeHash ?? (await partialMD5(fileobj!)));
+    const hash = isPseStream
+      ? md5(file as string)
+      : (forcedHash ?? nativeHash ?? (await partialMD5(fileobj!)));
 
     // PDF metadata is often generic boilerplate (e.g. every PowerPoint export
     // is titled "PowerPoint Presentation" by the same author), so metadata
@@ -742,7 +746,7 @@ export async function importBook(
       hash,
       format,
       metaHash,
-      title: formatTitle(loadedBook.metadata.title),
+      title: titleOverride ?? formatTitle(loadedBook.metadata.title),
       sourceTitle: formatTitle(loadedBook.metadata.title),
       primaryLanguage,
       author: formatAuthors(loadedBook.metadata.author, primaryLanguage),

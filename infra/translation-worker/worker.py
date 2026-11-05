@@ -114,10 +114,14 @@ def merge_page_outputs(
         writer.write(stream)
 
 
+OUTPUT_SUFFIX = {"mono": ".pdf", "dual": ".pdf", "epub": ".epub"}
+
+
 def output_key(account: str, job: str, kind: str) -> str:
-    if not UUID.fullmatch(account) or not UUID.fullmatch(job) or kind not in {"mono", "dual"}:
+    if not UUID.fullmatch(account) or not UUID.fullmatch(job) or kind not in OUTPUT_SUFFIX:
         raise ValueError("invalid translation identity")
-    return f"{account}/Scholar/translations/{job}/{kind}.pdf"
+    name = "book" if kind == "epub" else kind
+    return f"{account}/Scholar/translations/{job}/{name}{OUTPUT_SUFFIX[kind]}"
 
 
 def verify_source_bytes(content: bytes, expected_sha256: str, expected_size: int) -> None:
@@ -584,7 +588,7 @@ class Database:
 
     def publish(self, job, outputs: list[dict], engine_version: str) -> bool:
         row = self.one(
-            "SELECT public.publish_scholar_translation_outputs_v1(%s,%s,%s::jsonb,%s) AS ok",
+            "SELECT public.publish_scholar_translation_outputs_v2(%s,%s,%s::jsonb,%s) AS ok",
             (job["id"], job["lease_token"], json.dumps(outputs), engine_version),
         )
         return bool(row and row["ok"])
@@ -694,6 +698,108 @@ def _s3_client():
     )
 
 
+def process_book_job(job, db: Database, s3, *, content: bytes, pages: int, bucket: str,
+                     base_url: str, api_key: str, cache_dir: str,
+                     timeout_seconds: int) -> str:
+    """Translate extracted book text into a standalone Chinese EPUB."""
+    import time
+
+    import book_pipeline
+
+    uploaded: list[str] = []
+    publication_uncertain = False
+    deadline = time.monotonic() + timeout_seconds
+    try:
+        with _WorkDir(cache_dir) as folder:
+            work = Path(folder)
+            extract = book_pipeline.extract_book(content, work)
+            if not any(chapter.blocks for chapter in extract.chapters):
+                raise JobFailure("empty_document")
+            if not db.renew(job, 15):
+                raise JobFailure("lease_lost")
+
+            def on_progress(fraction: float) -> None:
+                if not db.renew(job, 15 + round(75 * fraction)):
+                    raise JobFailure("lease_lost")
+
+            book_pipeline.translate_book(
+                extract,
+                base_url=base_url,
+                api_key=api_key,
+                model=job["model"],
+                renew=on_progress,
+                canceled=lambda: db.canceled(job),
+                deadline=deadline,
+            )
+            if not db.renew(job, 92):
+                raise JobFailure("lease_lost")
+            output = work / "book.epub"
+            book_pipeline.build_epub(work, extract, output, str(job["id"]))
+            metadata = book_pipeline.inspect_epub(output, pages)
+            if not db.renew(job, 97):
+                raise JobFailure("lease_lost")
+            key = output_key(str(job["user_id"]), str(job["id"]), "epub")
+            data = output.read_bytes()
+            s3.put_object(
+                Bucket=bucket, Key=key, Body=data,
+                ContentType="application/epub+zip", IfNoneMatch="*",
+            )
+            uploaded.append(key)
+            readback = s3.get_object(Bucket=bucket, Key=key)["Body"]
+            try:
+                observed = readback.read(268435456 + 1)
+            finally:
+                readback.close()
+            if hashlib.sha256(observed).hexdigest() != metadata["sha256"]:
+                raise JobFailure("output_upload_mismatch")
+            publication_uncertain = True
+            published = db.publish(
+                job,
+                [{"kind": "epub", "objectKey": key, **metadata}],
+                "scholar-book/1.0.0",
+            )
+            if not published:
+                if db.succeeded(job):
+                    return "succeeded"
+                publication_uncertain = False
+                raise JobFailure("publish_rejected")
+            return "succeeded"
+    except book_pipeline.BookFailure as failure:
+        if failure.code == "canceled" or db.canceled(job):
+            db.finish(job, "canceled")
+            result = "canceled"
+        else:
+            db.finish(job, "failed", failure.code)
+            result = failure.code
+    except JobFailure as failure:
+        if failure.code == "canceled" or db.canceled(job):
+            db.finish(job, "canceled")
+            result = "canceled"
+        else:
+            db.finish(job, "failed", failure.code)
+            result = failure.code
+    except Exception as exc:
+        detail = str(exc).replace("\n", " ")[:300]
+        print(f"book translation job {job['id']} failed: {type(exc).__name__}: {detail}", flush=True)
+        if publication_uncertain:
+            try:
+                if db.succeeded(job):
+                    return "succeeded"
+            except Exception:
+                pass
+        try:
+            db.finish(job, "failed", "worker_internal")
+        except Exception:
+            pass
+        result = "worker_internal"
+    for key in ([] if publication_uncertain else uploaded):
+        try:
+            s3.delete_object(Bucket=bucket, Key=key)
+        except Exception:
+            pass
+    return result
+
+
 def process_job(job, db: Database, s3, *, bucket: str, base_url: str,
                 api_key: str, cache_dir: str, timeout_seconds: int) -> str:
     import os
@@ -717,6 +823,21 @@ def process_job(job, db: Database, s3, *, bucket: str, base_url: str,
         pages = pdf_page_count(content, limit=MAX_PDF_PAGES)
         if not db.renew(job, 10):
             raise JobFailure("lease_lost")
+
+        # Old clients omit documentType entirely; keep them on the PDF path.
+        pipeline = (job.get("request_options") or {}).get("documentType", "paper")
+        if pipeline == "auto":
+            import book_pipeline
+
+            pipeline = book_pipeline.classify_pdf(content)
+        if pipeline == "book":
+            if job["mode"] != "mono":
+                raise JobFailure("invalid_mode_for_book")
+            return process_book_job(
+                job, db, s3, content=content, pages=pages, bucket=bucket,
+                base_url=base_url, api_key=api_key, cache_dir=cache_dir,
+                timeout_seconds=timeout_seconds,
+            )
 
         with _WorkDir(cache_dir) as folder:
             work = Path(folder)

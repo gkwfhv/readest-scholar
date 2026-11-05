@@ -67,12 +67,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     glossarySha256,
     whiteBackgroundCompatibility,
     whiteBackgroundPages,
+    documentType,
   } = req.body ?? {};
+  const requestedDocumentType = documentType ?? 'auto';
   if (
     !isUuid(fileId) ||
     !isUuid(versionId) ||
     !isUuid(idempotencyKey) ||
     !['mono', 'dual', 'both'].includes(mode) ||
+    !['auto', 'paper', 'book'].includes(requestedDocumentType) ||
+    (requestedDocumentType === 'book' && mode !== 'mono') ||
     (whiteBackgroundCompatibility !== undefined &&
       typeof whiteBackgroundCompatibility !== 'boolean') ||
     (whiteBackgroundPages !== undefined &&
@@ -105,7 +109,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const supabase = createSupabaseAdminClient();
-  const { data: job, error } = await supabase.rpc('enqueue_scholar_translation_job_v4', {
+  const { data: job, error } = await supabase.rpc('enqueue_scholar_translation_job_v5', {
     p_job_id: jobId,
     p_user_id: user.id,
     p_source_file_id: fileId,
@@ -123,6 +127,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     p_glossary_sha256: glossarySha256 ?? null,
     p_white_background_compat: whiteBackgroundCompatibility ?? false,
     p_white_background_pages: whiteBackgroundPages ?? null,
+    p_document_type: requestedDocumentType,
   });
   if (error) {
     if (error.code === 'PT409') return res.status(409).json({ error: 'Idempotency key conflict' });

@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   deleteFile: vi.fn(async () => {}),
   exists: vi.fn(async () => false),
   accountId: 'acct' as string | null,
+  importBook: vi.fn(),
 }));
 
 vi.mock('@/utils/fetch', () => ({ fetchWithAuth: mocks.fetchWithAuth }));
@@ -25,7 +26,13 @@ vi.mock('@/utils/book', () => ({
   getRemoteBookFilename: () => 'paper.pdf',
 }));
 vi.mock('@/store/libraryStore', () => ({
-  useLibraryStore: { getState: () => ({ updateBook: mocks.updateBook }) },
+  useLibraryStore: {
+    getState: () => ({
+      updateBook: mocks.updateBook,
+      getBookByHash: () => undefined,
+      library: [],
+    }),
+  },
 }));
 vi.mock('@/store/settingsStore', () => ({
   useSettingsStore: { getState: () => ({ settings: { aiSettings: {} } }) },
@@ -42,12 +49,15 @@ const {
   ensureUploaded,
   pruneTranslationFiles,
   describeJobFailure,
+  finalizeJob,
+  derivedTranslationHash,
   TranslationError,
 } = await import('@/services/scholarTranslation');
 
 const envConfig = {} as never;
 const appService = {
   uploadBook: mocks.uploadBook,
+  importBook: mocks.importBook,
   writeFile: mocks.writeFile,
   deleteFile: mocks.deleteFile,
   exists: mocks.exists,
@@ -103,6 +113,100 @@ describe('createJob', () => {
     expect(body.prompt).toBeUndefined();
     expect(body.systemPrompt).toBeUndefined();
     expect(typeof body.idempotencyKey).toBe('string');
+  });
+});
+
+describe('createJob document type', () => {
+  const baseOptions = {
+    mode: 'dual' as const,
+    whiteBackgroundCompatibility: false,
+  };
+
+  it('sends auto by default', async () => {
+    mocks.fetchWithAuth.mockResolvedValueOnce(
+      jsonResponse({ id: 'job-1', state: 'queued', progress: 0, mode: 'dual' }),
+    );
+    await createJob({
+      fileId: 'file-1',
+      versionId: 'version-1',
+      options: baseOptions,
+      translationModel: { provider: 'ai-gateway', model: 'm', apiKey: 'k' },
+    });
+    const body = JSON.parse(mocks.fetchWithAuth.mock.calls[0]![1].body as string);
+    expect(body.documentType).toBe('auto');
+  });
+
+  it('forces mono and drops page options in book mode', async () => {
+    mocks.fetchWithAuth.mockResolvedValueOnce(
+      jsonResponse({ id: 'job-1', state: 'queued', progress: 0, mode: 'mono' }),
+    );
+    await createJob({
+      fileId: 'file-1',
+      versionId: 'version-1',
+      options: {
+        mode: 'both',
+        documentType: 'book',
+        whiteBackgroundCompatibility: true,
+        whiteBackgroundPages: '2-4',
+      },
+      translationModel: { provider: 'ai-gateway', model: 'm', apiKey: 'k' },
+    });
+    const body = JSON.parse(mocks.fetchWithAuth.mock.calls[0]![1].body as string);
+    expect(body.mode).toBe('mono');
+    expect(body.documentType).toBe('book');
+    expect(body.whiteBackgroundCompatibility).toBe(false);
+    expect(body.whiteBackgroundPages).toBeUndefined();
+  });
+});
+
+describe('finalizeJob for book mode', () => {
+  it('imports the EPUB under a stable derived hash and links the source book', async () => {
+    const bytes = new TextEncoder().encode('epub-bytes');
+    const digest = await crypto.subtle.digest('SHA-256', bytes);
+    const sha256 = Array.from(new Uint8Array(digest))
+      .map((value) => value.toString(16).padStart(2, '0'))
+      .join('');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(bytes, { status: 200 })),
+    );
+    const source = book({ hash: 'sourcehash', title: 'A Book' });
+    const derivedHash = derivedTranslationHash(source);
+    mocks.importBook.mockResolvedValue({
+      hash: derivedHash,
+      title: 'A Book（中文）',
+      primaryLanguage: 'zh-CN',
+    });
+
+    const result = await finalizeJob(envConfig, appService, source, {
+      id: 'job-epub',
+      state: 'succeeded',
+      progress: 100,
+      mode: 'mono',
+      outputs: [
+        {
+          kind: 'epub',
+          downloadUrl: 'https://files/book.epub',
+          sha256,
+          fileSize: bytes.byteLength,
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(mocks.importBook).toHaveBeenCalledTimes(1);
+    const [file, , options] = mocks.importBook.mock.calls[0]! as [
+      File,
+      unknown,
+      Record<string, unknown>,
+    ];
+    expect(file.name).toBe(`${derivedHash}.epub`);
+    expect(options).toMatchObject({ nativeHash: derivedHash, overwrite: true });
+    expect(mocks.updateBook).toHaveBeenLastCalledWith(
+      envConfig,
+      expect.objectContaining({ translatedBookHash: derivedHash }),
+    );
+    vi.unstubAllGlobals();
   });
 });
 

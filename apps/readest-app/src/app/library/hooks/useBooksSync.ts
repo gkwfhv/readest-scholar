@@ -271,6 +271,7 @@ export const useBooksSync = () => {
         const translation = pickFresherTranslation(oldBook, matchingBook);
         mergedBook.translation = translation.translation;
         mergedBook.translationUpdatedAt = translation.translationUpdatedAt;
+        mergedBook.translatedBookHash = translation.translatedBookHash;
         // The metadata group merges on its own metadataUpdatedAt clock so a
         // metadata edit survives losing whole-row LWW to page-turn progress
         // (issue #5438). Null means neither side is fresher — the row-level

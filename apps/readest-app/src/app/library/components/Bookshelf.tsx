@@ -83,6 +83,7 @@ import { useLibraryTranslationPolling } from '@/hooks/useLibraryTranslationPolli
 import {
   availableTranslationKinds,
   describeTranslationError,
+  ensureTranslatedBook,
   ensureTranslatedFiles,
   isTranslationInFlight,
   startTranslation,
@@ -229,6 +230,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({
   const [translationOpen, setTranslationOpen] = useState<{
     book: Book;
     kinds: TranslationOutputKind[];
+    readyBook: boolean;
   } | null>(null);
   const [translationDownloading, setTranslationDownloading] = useState(false);
   const [importBookUrl] = useState(searchParams?.get('url') || '');
@@ -936,11 +938,13 @@ const Bookshelf: React.FC<BookshelfProps> = ({
         return;
       }
       const kinds = availableTranslationKinds(book);
-      if (kinds.length === 0) {
+      const readyBook =
+        !!book.translatedBookHash || (book.translation?.outputs ?? []).includes('epub');
+      if (kinds.length === 0 && !readyBook) {
         void openBook(book);
         return;
       }
-      setTranslationOpen({ book, kinds });
+      setTranslationOpen({ book, kinds, readyBook });
     },
     [openBook, _],
   );
@@ -1025,13 +1029,32 @@ const Bookshelf: React.FC<BookshelfProps> = ({
     }
   };
 
-  const handleTranslationChoice = async (choice: 'original' | TranslationOutputKind) => {
+  const handleTranslationChoice = async (choice: 'original' | TranslationOutputKind | 'epub') => {
     const target = translationOpen;
     if (!target || !appService) return;
     const { book } = target;
     if (choice === 'original') {
       setTranslationOpen(null);
       await openBook(book);
+      return;
+    }
+    if (choice === 'epub') {
+      setTranslationDownloading(true);
+      try {
+        const derived = await ensureTranslatedBook(envConfig, appService, book);
+        setTranslationOpen(null);
+        if (derived) await openBook(derived);
+        else await openBook(book);
+      } catch {
+        eventDispatcher.dispatch('toast', {
+          type: 'error',
+          message: _('Could not import the translated EPUB.'),
+        });
+        setTranslationOpen(null);
+        await openBook(book);
+      } finally {
+        setTranslationDownloading(false);
+      }
       return;
     }
     setTranslationDownloading(true);
@@ -1353,6 +1376,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({
         <TranslationOpenDialog
           book={translationOpen.book}
           kinds={translationOpen.kinds}
+          translatedBook={translationOpen.readyBook}
           downloading={translationDownloading}
           onChoose={(choice) => void handleTranslationChoice(choice)}
           onCancel={() => void handleTranslationChoice('original')}

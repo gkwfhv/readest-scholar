@@ -76,6 +76,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     targetLanguage: job.target_language,
     whiteBackgroundCompatibility: job.request_options?.whiteBackgroundCompatibility === true,
     whiteBackgroundPages: job.request_options?.whiteBackgroundPages ?? null,
+    documentType: job.request_options?.documentType ?? 'auto',
     errorCode: job.error_code,
     createdAt: job.created_at,
     updatedAt: job.updated_at,

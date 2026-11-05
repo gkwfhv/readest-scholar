@@ -1,6 +1,7 @@
 import type {
   Book,
   BookTranslation,
+  TranslationArtifactKind,
   TranslationFileRef,
   TranslationMode,
   TranslationOutputKind,
@@ -15,12 +16,13 @@ import {
   type PdfTranslationModelRequest,
 } from '@/services/ai/translationModel';
 import { getDir, getRemoteBookFilename } from '@/utils/book';
+import { md5 } from '@/utils/md5';
 import { fetchWithAuth } from '@/utils/fetch';
 import { toProgressPercent, type ProgressHandler } from '@/utils/transfer';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useLibraryStore } from '@/store/libraryStore';
 
-const MAX_OUTPUT_BYTES = 200 * 1024 * 1024;
+const MAX_OUTPUT_BYTES = 256 * 1024 * 1024;
 const DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000;
 const IN_FLIGHT_STATES: ReadonlySet<BookTranslation['state']> = new Set(['queued', 'running']);
 
@@ -30,7 +32,7 @@ export interface ScholarFileStatus {
 }
 
 export interface TranslationOutput {
-  kind: TranslationOutputKind;
+  kind: TranslationArtifactKind;
   downloadUrl: string;
   sha256: string;
   fileSize: number;
@@ -47,6 +49,8 @@ export interface TranslationJob {
 
 export interface TranslationOptions {
   mode: TranslationMode;
+  /** auto lets the worker classify; book produces a Chinese EPUB. */
+  documentType?: 'auto' | 'paper' | 'book';
   /** Uploaded once per submission; the resulting hash is reused for a batch. */
   glossaryCsv?: File | null;
   glossarySha256?: string | null;
@@ -65,6 +69,7 @@ export type TranslationFailureReason =
   | 'queue-full'
   | 'too-large'
   | 'source-missing'
+  | 'epub-import-failed'
   | 'server-error';
 
 export type StartTranslationResult =
@@ -82,12 +87,12 @@ export class TranslationError extends Error {
 // Paths
 // ---------------------------------------------------------------------------
 
-export const translationFilename = (jobId: string, kind: TranslationOutputKind) =>
-  `translation-${jobId}-${kind}.pdf`;
+export const translationFilename = (jobId: string, kind: TranslationArtifactKind) =>
+  kind === 'epub' ? `translation-${jobId}-book.epub` : `translation-${jobId}-${kind}.pdf`;
 
 /** Books-relative path of a downloaded output; deterministic and never the
  *  book's own managed filename. */
-export const translationPath = (book: Book, jobId: string, kind: TranslationOutputKind) =>
+export const translationPath = (book: Book, jobId: string, kind: TranslationArtifactKind) =>
   `${getDir(book)}/${translationFilename(jobId, kind)}`;
 
 // ---------------------------------------------------------------------------
@@ -166,14 +171,17 @@ export async function createJob(args: {
   translationModel: PdfTranslationModelRequest;
 }): Promise<TranslationJob> {
   const { fileId, versionId, options, translationModel } = args;
+  const documentType = options.documentType ?? 'auto';
+  const isBook = documentType === 'book';
   const body = {
     fileId,
     versionId,
     idempotencyKey: crypto.randomUUID(),
-    mode: options.mode,
+    mode: isBook ? 'mono' : options.mode,
+    documentType,
     translationModel,
-    whiteBackgroundCompatibility: options.whiteBackgroundCompatibility,
-    ...(options.whiteBackgroundCompatibility && options.whiteBackgroundPages?.trim()
+    whiteBackgroundCompatibility: isBook ? false : options.whiteBackgroundCompatibility,
+    ...(!isBook && options.whiteBackgroundCompatibility && options.whiteBackgroundPages?.trim()
       ? { whiteBackgroundPages: options.whiteBackgroundPages.trim() }
       : {}),
     ...(options.glossarySha256 ? { glossarySha256: options.glossarySha256 } : {}),
@@ -270,10 +278,13 @@ const sha256Hex = async (bytes: ArrayBuffer): Promise<string> => {
     .join('');
 };
 
-const outputKinds = (job: TranslationJob): TranslationOutputKind[] =>
+const outputKinds = (job: TranslationJob): TranslationArtifactKind[] =>
   (job.outputs ?? [])
     .map((output) => output.kind)
-    .filter((kind): kind is TranslationOutputKind => kind === 'mono' || kind === 'dual');
+    .filter(
+      (kind): kind is TranslationArtifactKind =>
+        kind === 'mono' || kind === 'dual' || kind === 'epub',
+    );
 
 /**
  * Download every output of a succeeded job into Books/<hash>/. An existing file
@@ -364,6 +375,7 @@ export async function applyJobToBook(
   book: Book,
   job: TranslationJob,
   localFiles?: TranslationFileRef[],
+  translatedBookHash?: string | null,
 ): Promise<Book> {
   const previous = book.translation;
   let state = job.state;
@@ -385,9 +397,84 @@ export async function applyJobToBook(
     translationUpdatedAt: now,
     updatedAt: now,
     ...(localFiles ? { translationFiles: localFiles } : {}),
+    ...(translatedBookHash ? { translatedBookHash } : {}),
   };
   await useLibraryStore.getState().updateBook(envConfig, next);
   return next;
+}
+
+/** Stable hash for the Chinese edition of a book: re-translating replaces the
+ *  same library row instead of piling up versions. */
+export const derivedTranslationHash = (source: Book): string =>
+  md5(`${source.hash}:scholar-book-zh`);
+
+async function fetchOutputBytes(output: TranslationOutput): Promise<ArrayBuffer> {
+  if (output.fileSize > MAX_OUTPUT_BYTES) throw new TranslationError('too-large');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS);
+  let response: Response;
+  try {
+    response = await fetch(output.downloadUrl, { signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!response.ok) throw new TranslationError('server-error');
+  const bytes = await response.arrayBuffer();
+  if (bytes.byteLength !== output.fileSize) throw new TranslationError('server-error');
+  if ((await sha256Hex(bytes)) !== output.sha256) throw new TranslationError('server-error');
+  return bytes;
+}
+
+/** Download a book-mode EPUB and import it as the derived Chinese book. */
+export async function importTranslatedBook(
+  envConfig: EnvConfigType,
+  appService: AppService,
+  source: Book,
+  output: TranslationOutput,
+): Promise<Book> {
+  const bytes = await fetchOutputBytes(output);
+  const hash = derivedTranslationHash(source);
+  const title = `${source.title}（中文）`;
+  const file = new File([bytes], `${hash}.epub`, { type: 'application/epub+zip' });
+  const imported = await appService.importBook(file, useLibraryStore.getState().library, {
+    overwrite: true,
+    saveBook: true,
+    saveCover: true,
+    nativeHash: hash,
+    titleOverride: title,
+  });
+  if (!imported) throw new TranslationError('epub-import-failed');
+  if (imported.title !== title || imported.primaryLanguage !== 'zh-CN') {
+    const adjusted: Book = { ...imported, title, primaryLanguage: 'zh-CN' };
+    await useLibraryStore.getState().updateBook(envConfig, adjusted);
+    return adjusted;
+  }
+  return imported;
+}
+
+/** Ensure the derived Chinese EPUB exists on this device and is linked. */
+export async function ensureTranslatedBook(
+  envConfig: EnvConfigType,
+  appService: AppService,
+  book: Book,
+): Promise<Book | null> {
+  const hash = book.translatedBookHash ?? derivedTranslationHash(book);
+  const existing = useLibraryStore.getState().getBookByHash(hash);
+  if (existing) {
+    if (!book.translatedBookHash) {
+      const linked: Book = { ...book, translatedBookHash: hash };
+      await useLibraryStore.getState().updateBook(envConfig, linked);
+    }
+    return existing;
+  }
+  const translation = book.translation;
+  if (!translation || translation.state !== 'succeeded') return null;
+  const job = await getJob(translation.jobId);
+  const output = (job.outputs ?? []).find((item) => item.kind === 'epub');
+  if (!output) return null;
+  const imported = await importTranslatedBook(envConfig, appService, book, output);
+  await applyJobToBook(envConfig, book, job, undefined, imported.hash);
+  return imported;
 }
 
 /** Terminal observation: download and verify the outputs, prune the previous
@@ -401,6 +488,18 @@ export async function finalizeJob(
   if (job.state !== 'succeeded') {
     const next = await applyJobToBook(envConfig, book, job);
     return { ok: false, book: next, reason: 'server-error' };
+  }
+  const epub = (job.outputs ?? []).find((output) => output.kind === 'epub');
+  if (epub) {
+    try {
+      const imported = await importTranslatedBook(envConfig, appService, book, epub);
+      const next = await applyJobToBook(envConfig, book, job, undefined, imported.hash);
+      return { ok: true, book: next };
+    } catch (cause) {
+      const reason = cause instanceof TranslationError ? cause.reason : 'epub-import-failed';
+      const next = await applyJobToBook(envConfig, book, job);
+      return { ok: false, book: next, reason };
+    }
   }
   try {
     const files = await downloadOutputs(appService, book, job);
@@ -552,6 +651,8 @@ export function describeTranslationError(
       return _('This PDF is too large to translate.');
     case 'source-missing':
       return _('The PDF is not available on this device.');
+    case 'epub-import-failed':
+      return _('Could not import the translated EPUB.');
     default:
       return _('Translation failed');
   }

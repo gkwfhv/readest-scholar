@@ -47,7 +47,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const { data: job, error } = await createSupabaseAdminClient().rpc(
-    'retry_scholar_translation_job_v4',
+    'retry_scholar_translation_job_v5',
     {
       p_job_id: jobId,
       p_user_id: user.id,
