@@ -367,9 +367,9 @@ def model_response_is_stalled(
 
 
 PARSE_END_PERCENT = 20
-PARSE_BADGE_SHARE = 10
+PARSE_BADGE_SHARE = 12
 TRANSLATION_END_PERCENT = 95
-TRANSLATION_BADGE_END = 95
+TRANSLATION_BADGE_END = 97
 
 
 def map_engine_percent(percent: int) -> float:
