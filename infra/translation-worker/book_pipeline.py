@@ -38,6 +38,9 @@ KEEP_SOURCE_RE = re.compile(
     r"^(references|bibliography|works cited|index|notes|附录|参考文献|索引|注释)\b",
     re.IGNORECASE,
 )
+# The printed table of contents is layout-heavy and redundant once the EPUB
+# has its own navigation; leave it in the source language.
+CONTENTS_RE = re.compile(r"^(table of contents|contents|目录|目錄)$", re.IGNORECASE)
 THINKING_DISABLE_BODIES = (
     {"chat_template_kwargs": {"enable_thinking": False}},
     {"enable_thinking": False},
@@ -225,7 +228,10 @@ def extract_book(pdf_bytes: bytes, work: Path) -> BookExtract:
             chapters.append(Chapter(title, 1, total))
 
         for chapter in chapters:
-            chapter.keep_source = bool(KEEP_SOURCE_RE.match(chapter.title.strip()))
+            stripped_title = chapter.title.strip()
+            chapter.keep_source = bool(
+                KEEP_SOURCE_RE.match(stripped_title) or CONTENTS_RE.match(stripped_title)
+            )
             sizes: list[float] = []
             items: list[tuple[str, object]] = []
             for page_number in range(chapter.start_page, chapter.end_page + 1):
