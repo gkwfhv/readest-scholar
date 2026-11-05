@@ -73,6 +73,20 @@ class ExtractTests(unittest.TestCase):
         self.assertTrue(references[0].keep_source)
         self.assertTrue(any(block.text for chapter in extract.chapters for block in chapter.blocks))
 
+    def test_display_equations_are_kept_as_images(self):
+        document = fitz.open()
+        page = document.new_page(width=595, height=842)
+        page.insert_text((72, 120), "f(x) = (a + b) / (c - d) * sum(x_i, i=1..n)", fontsize=11)
+        page.insert_text(
+            (72, 160), "Normal running prose about the method and its results.", fontsize=11
+        )
+        document.set_toc([[1, "Chapter", 1]])
+        with tempfile.TemporaryDirectory() as folder:
+            extract = bp.extract_book(document.tobytes(), Path(folder))
+        blocks = [block for chapter in extract.chapters for block in chapter.blocks]
+        self.assertTrue(any(block.kind == "formula" for block in blocks))
+        self.assertTrue(any(block.kind == "p" for block in blocks))
+
     def test_images_are_extracted_and_captions_marked(self):
         with tempfile.TemporaryDirectory() as folder:
             work = Path(folder)

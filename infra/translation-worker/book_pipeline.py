@@ -219,6 +219,27 @@ def _is_section_heading(text: str) -> bool:
     return bool(SECTION_HEADING_RE.match(text)) and len(text.strip()) <= 60
 
 
+MATH_CHARS = set("∈∑∏∫√±×÷≤≥≠≈∞∂∇αβγδεζηθικλμνξοπρστυφχψωΓΔΘΛΞΠΣΦΨΩ^_{}\\|")
+
+
+def _looks_like_formula(text: str) -> bool:
+    """Display equations are common in books but carry no LaTeX in the PDF.
+
+    Cropping them as images keeps every symbol exactly as printed instead of
+    letting the translation model rewrite them as prose.
+    """
+    stripped = text.strip()
+    if not 4 <= len(stripped) <= 250 or "=" not in stripped:
+        return False
+    if _ends_sentence(stripped):
+        return False
+    visible = [char for char in stripped if not char.isspace()]
+    if not visible:
+        return False
+    symbol_ratio = sum(1 for char in visible if not char.isalnum()) / len(visible)
+    return symbol_ratio >= 0.14
+
+
 def _is_footnote(text: str) -> bool:
     return bool(re.match(r"^\s*[*†‡]", text))
 
@@ -433,6 +454,21 @@ def extract_book(pdf_bytes: bytes, work: Path) -> BookExtract:
                 size = data["size"]
                 lines = data["lines"]
                 stripped = text.strip()
+                if code_buffer is None and not _is_footnote(text) and _looks_like_formula(text):
+                    try:
+                        crop = document[data["page"] - 1].get_pixmap(
+                            clip=fitz.Rect(x0 - 2, y0 - 2, x1 + 2, y1 + 2), dpi=200,
+                        )
+                        payload_bytes = crop.tobytes("png")
+                        name = f"img-{hashlib.sha1(payload_bytes).hexdigest()[:16]}.png"
+                        if name not in images:
+                            images[name] = payload_bytes
+                            (image_dir / name).write_bytes(payload_bytes)
+                        blocks.append(Block("formula", image_name=name))
+                        pending = None
+                        continue
+                    except Exception:
+                        pass
                 if code_buffer is not None:
                     if _code_line(stripped) or _looks_like_code(lines, text):
                         code_buffer.extend(line.rstrip() for line in lines)
@@ -879,6 +915,8 @@ def _chapter_xhtml(index: int, chapter) -> str:
     for block in chapter.blocks:
         if block.kind == "image":
             parts.append(f'<div class="figure"><img src="../images/{block.image_name}" alt=""/></div>')
+        elif block.kind == "formula":
+            parts.append(f'<figure class="formula"><img src="../images/{block.image_name}" alt=""/></figure>')
         elif block.kind == "h1":
             parts.append(f"<h2>{html.escape(block.text)}</h2>")
         elif block.kind == "h2":
@@ -913,5 +951,7 @@ _STYLE = (
     "pre.code{white-space:pre-wrap;font-family:monospace;font-size:.82em;"
     "line-height:1.45;background:#f6f6f6;padding:.6em;border-radius:.3em;}"
     ".figure{text-align:center;margin:1em 0;}"
-    "img{max-width:100%;max-height:65vh;height:auto;object-fit:contain;}"
+    ".formula{text-align:center;margin:1em 0;}"
+    "img{max-width:90%;max-height:50vh;height:auto;object-fit:contain;}"
+    ".formula img{max-height:none;}"
 )
