@@ -66,7 +66,7 @@ describe('Scholar translation enqueue API', () => {
   it('queues only under the authenticated account', async () => {
     const res = await call({ ...valid, userId: '00000000-0000-4000-8000-000000000099' });
     expect(state.rpc).toHaveBeenCalledWith(
-      'enqueue_scholar_translation_job_v4',
+      'enqueue_scholar_translation_job_v5',
       expect.objectContaining({
         p_user_id: state.userId,
         p_source_file_id: fileId,
@@ -83,7 +83,7 @@ describe('Scholar translation enqueue API', () => {
       whiteBackgroundPages: '2',
     });
     expect(state.rpc).toHaveBeenCalledWith(
-      'enqueue_scholar_translation_job_v4',
+      'enqueue_scholar_translation_job_v5',
       expect.objectContaining({
         p_user_id: state.userId,
         p_white_background_compat: true,

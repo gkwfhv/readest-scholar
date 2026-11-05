@@ -67,7 +67,7 @@ describe('Scholar translation controls', () => {
     const res = await call(retryHandler, jobId, { idempotencyKey: retryId, translationModel });
     expect(res.status).toHaveBeenCalledWith(202);
     expect(state.rpc).toHaveBeenCalledWith(
-      'retry_scholar_translation_job_v4',
+      'retry_scholar_translation_job_v5',
       expect.objectContaining({
         p_user_id: state.userId,
         p_prior_job_id: jobId,
