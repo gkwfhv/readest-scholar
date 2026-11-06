@@ -34,7 +34,8 @@ BOOK_SYSTEM_PROMPT = (
 JSON_CONTRACT = (
     "Return only a JSON object of the form "
     '{"items":[{"id":<number>,"output":"<translated text>"}]} '
-    "covering every id. Keep placeholder tokens like ⟦M1⟧ exactly as written. "
+    "covering every id. Keep placeholder tokens such as ⟦I12⟧ or ⟦M3⟧ exactly "
+    "as written, with no spaces inside the brackets. "
     "Do not return prose, Markdown or code fences."
 )
 CAPTION_RE = re.compile(r"^\s*(figure|fig\.|table|图|表)\s*[\d.:]", re.IGNORECASE)
@@ -69,9 +70,13 @@ class Block:
     image_name: str = ""
     size: float = 0.0
     mathml: str = ""
+    source_text: str = ""
+    width_em: float = 0.0
     rows: list[list[str]] | None = None
     header: bool = False
     inline_map: list[str] | None = None
+    # ⟦I12⟧ token -> (image name, height in em, baseline descent in em)
+    inline_images: dict[int, tuple[str, float, float]] | None = None
 
 
 @dataclass
@@ -145,7 +150,10 @@ def _is_furniture(text: str, y0: float, y1: float, height: float) -> bool:
     stripped = text.strip()
     if not stripped:
         return True
-    if re.fullmatch(r"[0-9ivxlcdm]{1,6}", stripped, re.IGNORECASE):
+    if re.fullmatch(r"[0-9ivxlcdm]{1,6}", stripped, re.IGNORECASE) and (
+        y0 < 60 or y1 > height - 50
+    ):
+        # Running headers/footers only; a lone "M" mid-page is a variable.
         return True
     if len(stripped) <= 90 and (y0 < 45 or y1 > height - 32):
         return True
@@ -162,44 +170,92 @@ def _image_extension(data: bytes) -> str:
     return "bin"
 
 
-def _column_gutter(page, width: float) -> float | None:
-    """X where the right column starts, when the page clearly has two columns."""
-    boxes = [
-        block["bbox"]
-        for block in page.get_text("dict").get("blocks", [])
-        if block.get("type") == 0 and (block.get("bbox") or (0, 0, 0, 0))[2] > 0
-    ]
-    # Ignore full-width headings and figures when measuring the gutter.
-    left = [box for box in boxes if box[2] < width * 0.50]
-    right = [box for box in boxes if box[0] > width * 0.45]
-    if not left or not right:
+def _page_spans(page, height: float) -> list[dict]:
+    """Text spans on a page, tagged with their column and font class."""
+    spans = []
+    for block in page.get_text("dict").get("blocks", []):
+        if block.get("type") != 0:
+            continue
+        for line in block.get("lines", []):
+            direction = line.get("dir") or (1.0, 0.0)
+            if abs(direction[1]) > 0.1:
+                # Rotated sidebar/watermark text has a bbox spanning the whole
+                # page and would swallow every real row it overlaps.
+                continue
+            for span in line.get("spans", []):
+                text = span.get("text") or ""
+                if not text.strip():
+                    continue
+                bbox = span.get("bbox") or (0, 0, 0, 0)
+                size = float(span.get("size") or 0)
+                if size > 0 and bbox[3] - bbox[1] > size * 4:
+                    continue
+                if _is_furniture(text, bbox[1], bbox[3], height):
+                    continue
+                font = span.get("font") or ""
+                spans.append({
+                    "text": text,
+                    "bbox": bbox,
+                    "size": size,
+                    "origin": span.get("origin") or (bbox[0], bbox[3]),
+                    "font": font,
+                    "math": bool(MATH_FONT_RE.search(font)),
+                    "line_id": id(line),
+                    "line_bbox": line.get("bbox") or (0, 0, 0, 0),
+                })
+    return spans
+
+
+def _column_gutter(spans: list[dict], width: float) -> float | None:
+    """X where the right column starts, when the page clearly has two columns.
+
+    Works on spans rather than blocks: PDF text blocks routinely glue a line
+    from the left column to the equation in the right column, which hid the
+    gutter from the old block-bbox version.
+    """
+    if len(spans) < 20:
         return None
-    gutter = min(box[0] for box in right) - max(box[2] for box in left)
-    return min(box[0] for box in right) if gutter > width * 0.03 else None
+    low = int(width * 0.32)
+    high = int(width * 0.68)
+    if high - low < 12:
+        return None
+    cover = [0] * (high - low + 2)
+    for span in spans:
+        start = max(low, int(span["bbox"][0]))
+        end = min(high, int(span["bbox"][2]))
+        if end > start:
+            cover[start - low] += 1
+            cover[end - low] -= 1
+    limit = max(2, int(len(spans) * 0.02))
+    best_start = best_end = None
+    running = 0
+    run_start = None
+    for index in range(high - low):
+        running += cover[index]
+        if running <= limit:
+            if run_start is None:
+                run_start = index
+        else:
+            if run_start is not None:
+                if best_end is None or index - run_start > best_end - best_start:
+                    best_start, best_end = run_start, index
+                run_start = None
+    if run_start is not None:
+        if best_end is None or (high - low) - run_start > best_end - best_start:
+            best_start, best_end = run_start, high - low
+    if best_start is None or best_end - best_start < max(8, width * 0.012):
+        return None
+    gutter = low + best_end
+    left = sum(1 for span in spans if span["bbox"][2] <= gutter * 1.01)
+    right = sum(1 for span in spans if span["bbox"][0] >= gutter - 1)
+    if left < len(spans) * 0.15 or right < len(spans) * 0.15:
+        return None
+    return float(gutter)
+
 
 
 def _is_cjk(char: str) -> bool:
     return bool(char) and '\u3000' <= char <= '\u9fff'
-
-
-def _join_lines(lines: list[str]) -> str:
-    """Join wrapped PDF lines, repairing hyphenation and CJK line breaks."""
-    out = ""
-    for line in lines:
-        piece = line.strip()
-        if not piece:
-            continue
-        if not out:
-            out = piece
-        elif out.endswith("-") and piece[:1].islower():
-            out = out[:-1] + piece
-        elif out.endswith("-") and piece[:1].isupper():
-            out += piece
-        elif _is_cjk(out[-1]) and _is_cjk(piece[0]):
-            out += piece
-        else:
-            out += " " + piece
-    return out
 
 
 def _ends_sentence(text: str) -> bool:
@@ -223,9 +279,6 @@ def _is_numbered_heading(line: str) -> bool:
 
 def _is_section_heading(text: str) -> bool:
     return bool(SECTION_HEADING_RE.match(text)) and len(text.strip()) <= 60
-
-
-MATH_CHARS = set("∈∑∏∫√±×÷≤≥≠≈∞∂∇αβγδεζηθικλμνξοπρστυφχψωΓΔΘΛΞΠΣΦΨΩ^_{}\\|")
 
 
 def _looks_like_formula(text: str) -> bool:
@@ -304,15 +357,398 @@ def _register_image(images: dict[str, bytes], image_dir: Path, data: bytes) -> s
     return name
 
 
-def _crop_region(document, page_number: int, bbox, dpi: int = 200) -> bytes | None:
+def _crop_region(document, page_number: int, bbox, dpi: int = 200, padding: float = 2.0) -> bytes | None:
     try:
         page = document[page_number - 1]
         pixmap = page.get_pixmap(
-            clip=(bbox[0] - 2, bbox[1] - 2, bbox[2] + 2, bbox[3] + 2), dpi=dpi,
+            clip=(
+                bbox[0] - padding, bbox[1] - padding,
+                bbox[2] + padding, bbox[3] + padding,
+            ),
+            dpi=dpi,
         )
         return pixmap.tobytes("png")
     except Exception:
         return None
+
+
+MATH_FONT_RE = re.compile(
+    r"(cmmi|cmsy|cmex|cmr|msam|msbm|eufm|rsfs|stix|math|symbol)", re.IGNORECASE
+)
+
+
+def _ordered_spans(spans: list[dict]) -> list[dict]:
+    return sorted(spans, key=lambda span: (span["bbox"][0], span["bbox"][1]))
+
+
+def _row_plain_text(spans: list[dict]) -> str:
+    out = ""
+    previous = None
+    for span in _ordered_spans(spans):
+        text = span["text"]
+        if not text.strip():
+            continue
+        if previous is not None:
+            gap = span["bbox"][0] - previous["bbox"][2]
+            if gap > 0.2 * max(span["size"], previous["size"], 1.0) and not out.endswith(" "):
+                out += " "
+        out += text
+        previous = span
+    return re.sub(r"[ \t]+", " ", out).strip()
+
+
+def _visual_rows(page, height: float) -> tuple[list[dict], float | None]:
+    """Group spans into visual rows inside each column.
+
+    A pdf line object may contain the left-column prose *and* a right-column
+    equation on the same baseline, so rows are assembled per column from
+    spans instead of trusting PyMuPDF's block/line grouping.
+    """
+    width = page.rect.width
+    spans = _page_spans(page, height)
+    gutter = _column_gutter(spans, width)
+    lines: dict[int, dict] = {}
+    for span in spans:
+        entry = lines.setdefault(
+            span["line_id"], {"bbox": span["line_bbox"], "spans": []},
+        )
+        entry["spans"].append(span)
+
+    crossing: dict[int, bool] = {}
+    body_top = body_bottom = None
+    full_width_boxes: list[tuple[float, float, float, float]] = []
+    if gutter is not None:
+        for line_id, line in lines.items():
+            box = line["bbox"]
+            crossing[line_id] = box[0] < gutter - 5 and box[2] > gutter + 5
+        left = [
+            line["bbox"] for line in lines.values()
+            if not crossing[line["spans"][0]["line_id"]]
+            and line["bbox"][2] <= gutter * 0.98
+        ]
+        right = [
+            line["bbox"] for line in lines.values()
+            if not crossing[line["spans"][0]["line_id"]]
+            and line["bbox"][0] >= gutter
+        ]
+        if left and right:
+            body_top = max(min(box[1] for box in left), min(box[1] for box in right))
+            body_bottom = min(max(box[3] for box in left), max(box[3] for box in right))
+            if body_bottom <= body_top:
+                body_top = body_bottom = None
+        if body_top is not None:
+            full_width_boxes = [
+                line["bbox"] for line_id, line in lines.items()
+                if crossing.get(line_id) and (
+                    line["bbox"][3] <= body_top + 1
+                    or line["bbox"][1] >= body_bottom - 1
+                )
+            ]
+
+    def on_full_width_line(box) -> bool:
+        height = max(1.0, box[3] - box[1])
+        for other in full_width_boxes:
+            overlap = min(box[3], other[3]) - max(box[1], other[1])
+            if overlap > 0.5 * height:
+                return True
+        return False
+
+    groups: dict[int, list[dict]] = {0: [], 1: [], 2: []}
+    for span in spans:
+        center = (span["bbox"][0] + span["bbox"][2]) / 2
+        if gutter is None:
+            column = 1
+        elif crossing.get(span["line_id"]) and body_top is not None and (
+            span["line_bbox"][3] <= body_top + 1 or span["line_bbox"][1] >= body_bottom - 1
+        ):
+            # Title/caption lines above or below the two-column body run across
+            # the whole page: their halves must stay one row in x order.
+            column = 0
+        elif on_full_width_line(span["bbox"]):
+            column = 0
+        elif center < gutter - 2:
+            column = 1
+        elif center > gutter + 2:
+            column = 2
+        else:
+            column = 0
+        span["col"] = column
+        groups[column].append(span)
+
+    rows: list[dict] = []
+    for column, items in groups.items():
+        items.sort(key=lambda span: (span["bbox"][1], span["bbox"][0]))
+        made: list[dict] = []
+        for span in items:
+            box = span["bbox"]
+            span_height = max(1.0, box[3] - box[1])
+            target = None
+            for row in reversed(made[-8:]):
+                other = row["bbox"]
+                overlap = min(other[3], box[3]) - max(other[1], box[1])
+                smaller = min(other[3] - other[1], span_height)
+                if smaller > 0 and overlap > 0.55 * smaller:
+                    target = row
+                    break
+            if target is None:
+                made.append({"col": column, "bbox": list(box), "spans": [span]})
+            else:
+                other = target["bbox"]
+                target["bbox"] = [
+                    min(other[0], box[0]), min(other[1], box[1]),
+                    max(other[2], box[2]), max(other[3], box[3]),
+                ]
+                target["spans"].append(span)
+        rows.extend(made)
+
+    for row in rows:
+        chars = math = body = 0
+        size = 0.0
+        for span in row["spans"]:
+            text = span["text"].strip()
+            count = len(text)
+            if not count:
+                continue
+            chars += count
+            if span["math"]:
+                math += count
+            else:
+                body += count
+            size = max(size, span["size"])
+        row["chars"] = chars
+        row["m"] = math / max(1, chars)
+        row["b"] = body / max(1, chars)
+        row["size"] = size or 10.0
+        row["text"] = _row_plain_text(row["spans"])
+        row["inline"] = {}
+    rows.sort(key=lambda row: (row["col"], row["bbox"][1], row["bbox"][0]))
+    return rows, gutter
+
+
+def _inline_runs(spans: list[dict]) -> list[list[dict]]:
+    """Contiguous math-font spans form one inline formula."""
+    ordered = _ordered_spans(spans)
+    runs: list[list[dict]] = []
+    current: list[dict] = []
+    for span in ordered:
+        text = span["text"]
+        if span["math"]:
+            if not current:
+                if text.strip():
+                    current = [span]
+                continue
+            last = current[-1]
+            gap = span["bbox"][0] - last["bbox"][2]
+            allowed = max(2.5, 0.9 * max(span["size"], last["size"], 1.0))
+            if gap <= allowed:
+                current.append(span)
+            else:
+                if any(item["text"].strip() for item in current):
+                    runs.append(current)
+                current = [span] if text.strip() else []
+            continue
+        if current and not text.strip():
+            last = current[-1]
+            gap = span["bbox"][0] - last["bbox"][2]
+            if gap <= max(2.5, 0.9 * max(span["size"], last["size"], 1.0)):
+                current.append(span)
+                continue
+        if current:
+            if any(item["text"].strip() for item in current):
+                runs.append(current)
+            current = []
+    if current and any(item["text"].strip() for item in current):
+        runs.append(current)
+    return runs
+
+
+def _row_with_inline_images(
+    row: dict,
+    page,
+    body_size: float,
+    images: dict[str, bytes],
+    image_dir: Path,
+    token_state: dict,
+) -> tuple[str, dict[int, tuple[str, float, float]]]:
+    """Replace inline math runs with ⟦I<id>⟧ tokens backed by cropped PNGs."""
+    import fitz
+
+    ordered = _ordered_spans(row["spans"])
+    runs = _inline_runs(ordered)
+    token_of: dict[int, tuple[int, str, float, float, float]] = {}
+    skip: set[int] = set()
+    for run in runs:
+        x0 = min(span["bbox"][0] for span in run)
+        y0 = min(span["bbox"][1] for span in run)
+        x1 = max(span["bbox"][2] for span in run)
+        y1 = max(span["bbox"][3] for span in run)
+        main = max(run, key=lambda span: span["size"])
+        baseline = float(main["origin"][1])
+        try:
+            pixmap = page.get_pixmap(
+                clip=fitz.Rect(x0 - 0.6, y0 - 0.6, x1 + 0.6, y1 + 0.6), dpi=300,
+            )
+            data = pixmap.tobytes("png")
+        except Exception:
+            continue
+        name = _register_image(images, image_dir, data)
+        token_state["next"] += 1
+        token = token_state["next"]
+        height = max(0.6, min(2.5, (y1 - y0) / max(1.0, body_size)))
+        descent = max(-0.25, min(0.85, (y1 - baseline) / max(1.0, body_size)))
+        token_of[id(run[0])] = (token, name, height, descent, x1)
+        for span in run[1:]:
+            skip.add(id(span))
+
+    out = ""
+    previous_end = None
+    previous_size = 0.0
+    for span in ordered:
+        if id(span) in skip:
+            continue
+        text = span["text"]
+        entry = token_of.get(id(span))
+        if entry is None and not text.strip():
+            continue
+        if previous_end is not None:
+            gap = span["bbox"][0] - previous_end
+            if gap > 0.2 * max(span["size"], previous_size, 1.0) and not out.endswith(" "):
+                out += " "
+        if entry is not None:
+            token, name, height, descent, end = entry
+            out += f"⟦I{token}⟧"
+            row["inline"][token] = (name, height, descent)
+            previous_end = end
+        else:
+            out += text
+            previous_end = span["bbox"][2]
+        previous_size = span["size"]
+    return out.strip(), row["inline"]
+
+
+def _equation_material(row: dict, body_size: float) -> bool:
+    """Whether a row can belong to a display equation (math or a short case)."""
+    if row["size"] > body_size * 1.15:
+        return False
+    if row["chars"] > 45:
+        return False
+    if row["b"] >= 0.55:
+        # Short right-aligned conditions ("j = 0", "otherwise") sit inside
+        # piecewise equations; full prose rows also have a high body share
+        # and are rejected by the length/position checks above.
+        return (
+            row["chars"] <= 30
+            and not _ends_sentence(row["text"])
+            and len(re.findall(r"[A-Za-z]{2,}", row["text"])) <= 6
+        )
+    return row["m"] >= 0.12
+
+
+def _equation_continuation(above: dict, below: dict, body_size: float) -> bool:
+    line_height = max(1.0, above["bbox"][3] - above["bbox"][1])
+    gap = below["bbox"][1] - above["bbox"][3]
+    if gap > max(7.0, 2.0 * line_height):
+        return False
+    if gap < -max(6.0, 1.2 * line_height):
+        return False
+    if not _equation_material(above, body_size) or not _equation_material(below, body_size):
+        return False
+    # A body-font condition row only belongs to the equation when it sits in
+    # the right-hand condition column, not at the normal paragraph indent.
+    if above["b"] >= 0.55 and above["bbox"][0] < below["bbox"][0] - 8:
+        return False
+    if below["b"] >= 0.55 and below["bbox"][0] < above["bbox"][0] - 8:
+        return False
+    return True
+
+
+def _row_math_bounds(row: dict) -> tuple[float, float, float, float]:
+    """Bounding box of the mathematical part of a row.
+
+    A display equation often shares its last baseline with the first words of
+    the following sentence ("... = 1. This for-"); the trailing prose must not
+    be baked into the equation image.
+    """
+    if row["m"] < 0.6:
+        return tuple(row["bbox"])
+    boxes = [span["bbox"] for span in row["spans"] if span["math"]]
+    if not boxes:
+        return tuple(row["bbox"])
+    return (
+        min(box[0] for box in boxes),
+        min(box[1] for box in boxes),
+        max(box[2] for box in boxes),
+        max(box[3] for box in boxes),
+    )
+
+
+def _is_core_equation_row(row: dict) -> bool:
+    if row["m"] >= 0.55:
+        return True
+    return (
+        row["m"] >= 0.45
+        and row["chars"] <= 45
+        and not _ends_sentence(row["text"])
+    )
+
+
+def _formula_regions(rows: list[dict], body_size: float) -> list[tuple[float, float, float, float]]:
+    """Group math rows into complete display-equation regions.
+
+    Equations are split into many tiny spans/rows (left-hand side, brace,
+    condition columns, equation number); grouping rows rather than lines keeps
+    one crop per equation instead of a handful of unreadable fragments.
+    """
+    if any(re.match(r"^\s*(algorithm|算法)\s*\d+", row["text"], re.IGNORECASE) for row in rows):
+        # Algorithm listings use the same LaTeX fonts; keep them as code text.
+        return []
+    regions: list[tuple[float, float, float, float]] = []
+    for column in (0, 1, 2):
+        sequence = [row for row in rows if row["col"] == column]
+        index = 0
+        while index < len(sequence):
+            row = sequence[index]
+            if not _is_core_equation_row(row) or row["chars"] > 160:
+                index += 1
+                continue
+            if column == 0 and row["m"] < 0.7:
+                # Full-width rows are usually headings; only a clearly
+                # mathematical one is a display equation spanning both columns.
+                index += 1
+                continue
+            start = end = index
+            while start > 0 and _equation_continuation(sequence[start - 1], sequence[start], body_size):
+                start -= 1
+            while end + 1 < len(sequence) and _equation_continuation(sequence[end], sequence[end + 1], body_size):
+                end += 1
+            group = sequence[start:end + 1]
+            boxes = [_row_math_bounds(item) for item in group]
+            top = min(box[1] for box in boxes) - 0.8
+            bottom = max(box[3] for box in boxes) + 3.0
+            if end + 1 < len(sequence):
+                # Keep a subscript's descender but never pull in the next line.
+                bottom = min(bottom, sequence[end + 1]["bbox"][1] - 0.8)
+            regions.append((
+                min(box[0] for box in boxes) - 1.5,
+                top,
+                max(box[2] for box in boxes) + 1.5,
+                bottom,
+            ))
+            index = end + 1
+    # Drop duplicate overlapping regions produced by page-spanning rows.
+    unique: list[tuple[float, float, float, float]] = []
+    for region in regions:
+        area = max(1.0, (region[2] - region[0]) * (region[3] - region[1]))
+        overlap = False
+        for other in unique:
+            width = max(0.0, min(region[2], other[2]) - max(region[0], other[0]))
+            height = max(0.0, min(region[3], other[3]) - max(region[1], other[1]))
+            if width * height / area > 0.7:
+                overlap = True
+                break
+        if not overlap:
+            unique.append(region)
+    return unique
 
 
 def _table_rows(table):
@@ -378,13 +814,30 @@ def _restore_inline_math(text: str, mapping: list[str] | None) -> str:
     return re.sub(r"⟦M(\d+)⟧", replace, text)
 
 
+def _latex_plausible(latex: str, source: str) -> bool:
+    """Reject a vision transcription that lost most of the printed symbols.
+
+    The cropped equation is the ground truth; a hallucinated or truncated
+    LaTeX string is worse than showing that crop as an image.
+    """
+    if len(latex.strip()) < 3:
+        return False
+    plain = re.sub(r"\\[A-Za-z]+", " ", latex)
+    plain = re.sub(r"[{}_^&$\\]", " ", plain).lower()
+    tokens = re.findall(r"[A-Za-z]{2,}|\d+(?:\.\d+)?", source)
+    if not tokens:
+        return True
+    hits = sum(1 for token in tokens if token.lower() in plain)
+    return hits / len(tokens) >= 0.6
+
+
 def _latex_to_mathml(latex: str) -> str:
     if not latex:
         return ""
     try:
         from latex2mathml.converter import convert
 
-        return convert(latex)
+        return convert(latex, display="block")
     except Exception:
         return ""
 
@@ -399,8 +852,12 @@ def _vision_latex(
             {
                 "role": "system",
                 "content": (
-                    "You transcribe mathematical equations from images. "
-                    "Return ONLY the LaTeX source, without $ delimiters or fences."
+                    "You transcribe the mathematical equation shown in the image into "
+                    "LaTeX. Preserve every symbol, subscript, superscript, fraction, "
+                    "brace, matrix, case distinction and alignment. Use an aligned or "
+                    "cases environment for multi-line equations. Ignore a trailing "
+                    "equation number such as (6). Return ONLY the LaTeX source, "
+                    "without $ delimiters or fences."
                 ),
             },
             {
@@ -424,52 +881,6 @@ def _vision_latex(
         return ""
     reply = re.sub(r"^```[A-Za-z0-9_-]*\s*|\s*```$", "", reply).strip()
     return reply.strip("$").strip()
-
-
-def _sorted_text_blocks(
-    page, width: float,
-) -> list[tuple[float, float, float, float, str, float, list[str]]]:
-    """Return (y0, x0, x1, y1, text, size, lines) in reading order."""
-    entries = []
-    for block in page.get_text("dict").get("blocks", []):
-        if block.get("type") != 0:
-            continue
-        line_texts = [
-            "".join(span.get("text", "") for span in line.get("spans", []))
-            for line in (block.get("lines") or [])
-        ]
-        line_texts = [line for line in line_texts if line.strip()]
-        if not line_texts:
-            continue
-        bbox = block.get("bbox") or (0, 0, 0, 0)
-        size = max(
-            (
-                float(span.get("size") or 0)
-                for line in block.get("lines", [])
-                for span in line.get("spans", [])
-            ),
-            default=0.0,
-        )
-        entries.append((
-            bbox[1], bbox[0], bbox[2], bbox[3],
-            _join_lines(line_texts), size, line_texts,
-        ))
-    gutter = _column_gutter(page, width)
-    if gutter is None:
-        entries.sort(key=lambda entry: (round(entry[0] / 6), entry[1]))
-    else:
-        def key(entry):
-            y0, x0, x1, _y1, _text, _size, _lines = entry
-            if x1 <= gutter * 0.98:
-                column = 1
-            elif x0 >= gutter:
-                column = 2
-            else:
-                column = 0
-            return (column, round(y0 / 6), x0)
-
-        entries.sort(key=key)
-    return entries
 
 
 def extract_book(pdf_bytes: bytes, work: Path) -> BookExtract:
@@ -518,6 +929,7 @@ def extract_book(pdf_bytes: bytes, work: Path) -> BookExtract:
             )
             sizes: list[float] = []
             items: list[tuple[str, object]] = []
+            token_state = {"next": 0}
             for page_number in range(chapter.start_page, chapter.end_page + 1):
                 page = document[page_number - 1]
                 width, height = page.rect.width, page.rect.height
@@ -526,13 +938,81 @@ def extract_book(pdf_bytes: bytes, work: Path) -> BookExtract:
                 except Exception:
                     tables = []
                 table_boxes = [table.bbox for table in tables]
-                text_blocks = [
-                    item
-                    for item in _sorted_text_blocks(page, width)
-                    if not _is_furniture(item[4], item[0], item[3], height)
-                    and not _inside_table((item[1], item[0], item[2], item[3]), table_boxes)
-                ]
-                extras: list[tuple[float, str, object]] = []
+                try:
+                    rows, gutter = _visual_rows(page, height)
+                except Exception:
+                    rows, gutter = [], None
+                page_body = _body_size(
+                    [(row["size"], row["chars"]) for row in rows if row["chars"]]
+                )
+                try:
+                    formulas = _formula_regions(rows, page_body)
+                except Exception:
+                    formulas = []
+                if table_boxes:
+                    formulas = [
+                        region
+                        for region in formulas
+                        if not _inside_table(region, table_boxes)
+                    ]
+
+                def column_of(box: tuple[float, float, float, float]) -> int:
+                    if gutter is None:
+                        return 1
+                    if box[0] < gutter - 5 and box[2] > gutter + 5:
+                        return 0
+                    center = (box[0] + box[2]) / 2
+                    if center < gutter:
+                        return 1
+                    if center > gutter:
+                        return 2
+                    return 0
+
+                figures: list[tuple[float, float, float, float]] = []
+                for image in page.get_image_info(xrefs=True):
+                    bbox = image.get("bbox") or (0, 0, 0, 0)
+                    area = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
+                    # A scanned page is one full-page image whose OCR text must
+                    # stay; only treat figure-sized images as opaque regions.
+                    if 0 < area < width * height * 0.7:
+                        figures.append(bbox)
+                if figures:
+                    formulas = [
+                        region for region in formulas
+                        if not _inside_table(region, figures)
+                    ]
+
+                left_margins: dict[int, float] = {}
+                for row in rows:
+                    if row["col"] in (1, 2):
+                        left_margins[row["col"]] = min(
+                            left_margins.get(row["col"], row["bbox"][0]),
+                            row["bbox"][0],
+                        )
+
+                page_items: list[dict] = []
+                for row in rows:
+                    box = (row["bbox"][0], row["bbox"][1], row["bbox"][2], row["bbox"][3])
+                    if _inside_table(box, table_boxes) or _inside_table(box, formulas) or _inside_table(box, figures):
+                        continue
+                    if chapter.keep_source:
+                        text, inline = row["text"], {}
+                    else:
+                        text, inline = _row_with_inline_images(
+                            row, page, page_body, images, image_dir, token_state,
+                        )
+                    if not text.strip():
+                        continue
+                    page_items.append({
+                        "kind": "text", "col": row["col"],
+                        "x0": row["bbox"][0], "y0": row["bbox"][1],
+                        "x1": row["bbox"][2], "y1": row["bbox"][3],
+                        "size": row["size"], "text": text,
+                        "plain": row["text"], "lines": [row["text"]],
+                        "inline": inline, "page": page_number,
+                        "left_margin": left_margins.get(row["col"], row["bbox"][0]),
+                    })
+
                 for image in page.get_image_info(xrefs=True):
                     bbox = image.get("bbox") or (0, 0, 0, 0)
                     if bbox[2] - bbox[0] < 120 or bbox[3] - bbox[1] < 80:
@@ -544,45 +1024,83 @@ def extract_book(pdf_bytes: bytes, work: Path) -> BookExtract:
                     except Exception:
                         continue
                     if data:
-                        extras.append((bbox[1], "image", data))
+                        page_items.append({
+                            "kind": "image", "col": column_of(bbox),
+                            "x0": bbox[0], "y0": bbox[1],
+                            "x1": bbox[2], "y1": bbox[3], "payload": data,
+                        })
+                for formula_bbox in formulas:
+                    source_text = " ".join(
+                        row["text"] for row in rows
+                        if _inside_table(
+                            (row["bbox"][0], row["bbox"][1], row["bbox"][2], row["bbox"][3]),
+                            [formula_bbox],
+                        )
+                    )
+                    width_em = (formula_bbox[2] - formula_bbox[0]) / max(1.0, page_body)
+                    page_items.append({
+                        "kind": "formula", "col": column_of(formula_bbox),
+                        "x0": formula_bbox[0], "y0": formula_bbox[1],
+                        "x1": formula_bbox[2], "y1": formula_bbox[3],
+                        "payload": (page_number, formula_bbox, source_text, width_em),
+                    })
                 for table in tables:
                     parsed = _table_rows(table)
-                    if parsed is not None:
-                        extras.append((table.bbox[1], "table", parsed))
-                        continue
-                    cropped = _crop_region(document, page_number, table.bbox)
-                    if cropped:
-                        extras.append((table.bbox[1], "image", cropped))
-                extras.sort(key=lambda item: item[0])
-                # Insert figures/tables where they start in the (already ordered)
-                # text flow. Re-sorting by y would undo the column ordering.
-                ordered: list[tuple[str, object]] = []
-                extra_index = 0
-                for block in text_blocks:
-                    while extra_index < len(extras) and extras[extra_index][0] <= block[0]:
-                        _, extra_kind, extra_payload = extras[extra_index]
-                        ordered.append((extra_kind, extra_payload))
-                        extra_index += 1
-                    ordered.append(("text", block))
-                for _, extra_kind, extra_payload in extras[extra_index:]:
-                    ordered.append((extra_kind, extra_payload))
+                    if parsed is None:
+                        cropped = _crop_region(document, page_number, table.bbox)
+                        if not cropped:
+                            continue
+                        kind, payload = "image", cropped
+                    else:
+                        kind, payload = "table", parsed
+                    page_items.append({
+                        "kind": kind, "col": column_of(table.bbox),
+                        "x0": table.bbox[0], "y0": table.bbox[1],
+                        "x1": table.bbox[2], "y1": table.bbox[3],
+                        "payload": payload,
+                    })
 
-                for kind, payload in ordered:
-                    if kind == "image":
-                        data, extension = _shrink_image(payload)
-                        name = _register_image(images, image_dir, data)
-                        items.append(("image", name))
-                        continue
-                    if kind == "table":
-                        items.append(("table", payload))
-                        continue
-                    y0, x0, x1, y1, text, size, lines = payload
-                    sizes.append((size, len(text)))
-                    items.append((
-                        "text",
-                        {"y0": y0, "y1": y1, "page": page_number,
-                         "size": size, "text": text, "lines": lines},
-                    ))
+                column_items = [item for item in page_items if item["col"] in (1, 2)]
+                top = min((item["y0"] for item in column_items), default=0.0)
+                bottom = max((item["y1"] for item in column_items), default=0.0)
+
+                def order_key(item: dict) -> tuple[float, float, float]:
+                    column = item["col"]
+                    if column in (1, 2):
+                        return (float(column), item["y0"], item["x0"])
+                    if item["y0"] <= top + 2:
+                        return (0.0, item["y0"], item["x0"])
+                    if item["y0"] >= bottom - 2:
+                        return (3.0, item["y0"], item["x0"])
+                    return (1.5, item["y0"], item["x0"])
+
+                page_items.sort(key=order_key)
+                for item in page_items:
+                    if item["kind"] == "text":
+                        sizes.append((item["size"], len(item["plain"])))
+                        payload = {
+                            "y0": item["y0"], "y1": item["y1"], "page": page_number,
+                            "size": item["size"], "text": item["text"],
+                            "lines": item["lines"], "inline": item["inline"],
+                            "col": item["col"], "plain": item["plain"],
+                            "x0": item["x0"], "x1": item["x1"],
+                            "left_margin": item.get("left_margin", item["x0"]),
+                        }
+                        items.append(("text", payload))
+                    elif item["kind"] == "formula":
+                        page_no, formula_bbox, source_text, width_em = item["payload"]
+                        cropped = _crop_region(document, page_no, formula_bbox, dpi=240, padding=0)
+                        if cropped:
+                            items.append((
+                                "formula",
+                                (_register_image(images, image_dir, cropped), source_text, width_em),
+                            ))
+                    elif item["kind"] == "table":
+                        items.append(("table", item["payload"]))
+                    else:
+                        data, _extension = _shrink_image(item["payload"])
+                        items.append(("image", _register_image(images, image_dir, data)))
+
 
             body = _body_size(sizes)
             blocks: list[Block] = []
@@ -590,7 +1108,20 @@ def extract_book(pdf_bytes: bytes, work: Path) -> BookExtract:
             code_buffer: list[str] | None = None
             last_bottom = 0.0
             last_page = 0
+            last_col = -1
+            last_x0 = 0.0
+            references_mode = chapter.keep_source
             for kind, payload in items:
+                if kind == "formula":
+                    image_name, source_text, width_em = payload
+                    blocks.append(
+                        Block(
+                            "formula", image_name=image_name,
+                            source_text=source_text, width_em=width_em,
+                        )
+                    )
+                    pending = None
+                    continue
                 if kind == "table":
                     if code_buffer is not None:
                         blocks.append(Block("code", text="\n".join(code_buffer)))
@@ -608,10 +1139,62 @@ def extract_book(pdf_bytes: bytes, work: Path) -> BookExtract:
                     continue
                 data = payload
                 text = data["text"]
+                plain = data.get("plain") or text
+                inline = data.get("inline") or {}
                 size = data["size"]
                 lines = data["lines"]
-                stripped = text.strip()
-                if code_buffer is None and not _is_footnote(text) and _looks_like_formula(text):
+                stripped = plain.strip()
+                x0, y0 = data.get("x0", 0.0), data["y0"]
+                x1, y1 = data.get("x1", 0.0), data["y1"]
+                if re.fullmatch(
+                    r"(?i)\s*(references|bibliography|works cited|参考文献|參考文獻)\s*",
+                    stripped,
+                ):
+                    # A reference section can share its start page with the
+                    # conclusion, so the TOC entry never becomes a chapter.
+                    references_mode = True
+                    blocks.append(Block("h2", text=text, size=size, inline_images=inline))
+                    pending = None
+                    last_bottom = y1
+                    last_page = data["page"]
+                    last_col = data["col"]
+                    continue
+                if references_mode:
+                    joined = False
+                    numbered = bool(
+                        re.match(r"^\s*(?:\[\d+\]|\d{1,3}[.)])\s+", text)
+                    )
+                    margin = data.get("left_margin", x0)
+                    contents = bool(CONTENTS_RE.match(chapter.title.strip()))
+                    starts_entry = numbered or contents or x0 <= margin + 2
+                    if pending is not None and not starts_entry:
+                        previous = blocks[pending]
+                        same_page = data["page"] == last_page
+                        same_column = data["col"] == last_col
+                        hyphenated = previous.text.rstrip().endswith("-") and (
+                            text[:1].islower() or text[:1].isupper()
+                        )
+                        if (same_page and same_column) or not same_page or hyphenated:
+                            previous.text = _merge_text(previous.text, text)
+                            last_bottom = y1
+                            last_page = data["page"]
+                            last_col = data["col"]
+                            last_x0 = x0
+                            joined = True
+                    if not joined:
+                        blocks.append(Block("reference", text=text, size=size))
+                        pending = len(blocks) - 1
+                        last_bottom = y1
+                        last_page = data["page"]
+                        last_col = data["col"]
+                        last_x0 = x0
+                    continue
+                if (
+                    code_buffer is None
+                    and not inline
+                    and not _is_footnote(plain)
+                    and _looks_like_formula(plain)
+                ):
                     try:
                         crop = document[data["page"] - 1].get_pixmap(
                             clip=fitz.Rect(x0 - 2, y0 - 2, x1 + 2, y1 + 2), dpi=200,
@@ -621,13 +1204,16 @@ def extract_book(pdf_bytes: bytes, work: Path) -> BookExtract:
                         if name not in images:
                             images[name] = payload_bytes
                             (image_dir / name).write_bytes(payload_bytes)
-                        blocks.append(Block("formula", image_name=name))
+                        blocks.append(Block(
+                            "formula", image_name=name,
+                            width_em=(x1 - x0) / max(1.0, body),
+                        ))
                         pending = None
                         continue
                     except Exception:
                         pass
                 if code_buffer is not None:
-                    if _code_line(stripped) or _looks_like_code(lines, text):
+                    if _code_line(stripped) or _looks_like_code(lines, plain):
                         code_buffer.extend(line.rstrip() for line in lines)
                         continue
                     blocks.append(Block("code", text="\n".join(code_buffer)))
@@ -637,56 +1223,81 @@ def extract_book(pdf_bytes: bytes, work: Path) -> BookExtract:
                     code_buffer = [line.rstrip() for line in lines]
                     pending = None
                     continue
-                if _looks_like_code(lines, text):
+                if _looks_like_code(lines, plain):
                     blocks.append(Block("code", text="\n".join(line.rstrip() for line in lines)))
                     pending = None
                     continue
-                if _is_footnote(text):
-                    blocks.append(Block("footnote", text=text, size=size))
+                if _is_footnote(plain):
+                    blocks.append(Block("footnote", text=text, size=size, inline_images=inline))
                     continue
-                if len(lines) <= 1 and _is_numbered_heading(text):
-                    blocks.append(Block("h2", text=text.strip(), size=size))
+                if _is_numbered_heading(stripped):
+                    blocks.append(Block("h2", text=text.strip(), size=size, inline_images=inline))
                     pending = None
                     continue
-                if len(lines) > 1 and _is_numbered_heading(lines[0]):
-                    blocks.append(Block("h2", text=lines[0].strip(), size=size))
-                    pending = None
-                    text = _join_lines(lines[1:])
-                    lines = lines[1:]
-                    stripped = text.strip()
-                if _is_section_heading(text):
-                    blocks.append(Block("h2", text=text, size=size))
+                if _is_section_heading(stripped):
+                    blocks.append(Block("h2", text=text, size=size, inline_images=inline))
                     pending = None
                     continue
-                heading = _heading_kind(size, body, text)
+                heading = _heading_kind(size, body, stripped)
                 if heading != "p":
-                    blocks.append(Block(heading, text=text, size=size))
+                    if (
+                        blocks
+                        and blocks[-1].kind == heading
+                        and data["page"] == last_page
+                        and data["col"] == last_col
+                        and y0 - last_bottom < size * 1.5
+                    ):
+                        blocks[-1].text = _merge_text(blocks[-1].text, text)
+                        blocks[-1].size = max(blocks[-1].size, size)
+                        if inline:
+                            if blocks[-1].inline_images is None:
+                                blocks[-1].inline_images = {}
+                            blocks[-1].inline_images.update(inline)
+                        last_bottom = y1
+                        continue
+                    blocks.append(Block(heading, text=text, size=size, inline_images=inline))
                     pending = None
+                    last_bottom = y1
+                    last_page = data["page"]
+                    last_col = data["col"]
                     continue
                 joined = False
                 if pending is not None:
                     previous = blocks[pending]
                     same_page = data["page"] == last_page
-                    gap = data["y0"] - last_bottom
+                    same_column = data["col"] == last_col
+                    gap = y0 - last_bottom
+                    indented = x0 > last_x0 + size * 0.8
                     hyphenated = previous.text.rstrip().endswith("-") and (
                         text[:1].islower() or text[:1].isupper()
                     )
+                    tight = gap < size * 0.8
                     continuous = (
                         same_page
+                        and same_column
                         and gap < max(8.0, size * 1.6)
-                        and not _ends_sentence(previous.text)
+                        and (tight or not _ends_sentence(previous.text))
+                        and not (indented and _ends_sentence(previous.text))
                     )
                     if hyphenated or continuous:
                         previous.text = _merge_text(previous.text, text)
                         previous.size = max(previous.size, size)
-                        last_bottom = data["y1"]
+                        if inline:
+                            if previous.inline_images is None:
+                                previous.inline_images = {}
+                            previous.inline_images.update(inline)
+                        last_bottom = y1
                         last_page = data["page"]
+                        last_col = data["col"]
+                        last_x0 = x0
                         joined = True
                 if not joined:
-                    blocks.append(Block("p", text=text, size=size))
+                    blocks.append(Block("p", text=text, size=size, inline_images=inline))
                     pending = len(blocks) - 1
-                    last_bottom = data["y1"]
+                    last_bottom = y1
                     last_page = data["page"]
+                    last_col = data["col"]
+                    last_x0 = x0
             if code_buffer is not None:
                 blocks.append(Block("code", text="\n".join(code_buffer)))
             for index, block in enumerate(blocks):
@@ -793,19 +1404,34 @@ def _parse_items(reply: str) -> dict[int, str]:
     payload = _extract_json(reply)
     if isinstance(payload, dict):
         payload = payload.get("items") or payload.get("translations")
-    if not isinstance(payload, list):
-        return {}
     result: dict[int, str] = {}
-    for item in payload:
-        if not isinstance(item, dict):
-            continue
+    if isinstance(payload, list):
+        for item in payload:
+            if not isinstance(item, dict):
+                continue
+            try:
+                item_id = int(item.get("id"))
+            except (TypeError, ValueError):
+                continue
+            text = item.get("output") or item.get("translation") or item.get("text")
+            if isinstance(text, str) and text.strip():
+                result[item_id] = text.strip()
+        if result:
+            return result
+    # Salvage item objects from a reply with broken JSON syntax (trailing
+    # commas, unescaped quotes) instead of discarding the whole batch.
+    for match in re.finditer(
+        r'"id"\s*:\s*(\d+)[^{}]*?"(?:output|translation|text)"\s*:\s*'
+        r'"((?:[^"\\]|\\.)*)"',
+        reply,
+        re.S,
+    ):
         try:
-            item_id = int(item.get("id"))
-        except (TypeError, ValueError):
+            text = json.loads(f'"{match.group(2)}"')
+        except ValueError:
             continue
-        text = item.get("output") or item.get("translation") or item.get("text")
-        if isinstance(text, str) and text.strip():
-            result[item_id] = text.strip()
+        if text.strip():
+            result[int(match.group(1))] = text.strip()
     return result
 
 
@@ -832,6 +1458,13 @@ def _translate_batch(
         try:
             parsed = _parse_items(_chat(base_url, api_key, payload))
             if parsed:
+                missing = [item for item in items if item["id"] not in parsed]
+                if missing and depth < 2:
+                    # The model dropped items (usually output truncation);
+                    # translate only the remainder instead of the whole batch.
+                    parsed.update(
+                        _translate_batch(missing, base_url, api_key, model, extra, depth + 1)
+                    )
                 return parsed
             break
         except urllib.error.HTTPError as error:
@@ -849,6 +1482,89 @@ def _translate_batch(
         )
         return result
     return {}
+
+
+def _needs_translation(original: str, translated: str) -> bool:
+    """Detect an item the model skipped, echoed or only half-translated."""
+    if not translated.strip():
+        return True
+    original_latin = len(re.findall(r"[A-Za-z]", original))
+    if original_latin < 8:
+        return False
+    cjk = len(re.findall(r"[\u4e00-\u9fff]", translated))
+    latin = len(re.findall(r"[A-Za-z]", translated))
+    if cjk == 0:
+        return True
+    if latin > cjk * 2 and latin > 80:
+        return True
+    for run in re.findall(r"(?:[A-Za-z][A-Za-z'’-]*[ ,;]+){5,}[A-Za-z][A-Za-z'’-]*", translated):
+        if run.lower() in original.lower():
+            return True
+    return False
+
+
+MARKDOWN_SEPARATOR_RE = re.compile(
+    r"^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$"
+)
+
+
+def _markdown_table(text: str) -> tuple[str, list[list[str]], str] | None:
+    """Extract a Markdown table the translation model emitted as prose."""
+    lines = text.splitlines()
+    separator = None
+    for index, line in enumerate(lines):
+        if MARKDOWN_SEPARATOR_RE.match(line):
+            separator = index
+            break
+    if separator is None or separator == 0 or "|" not in lines[separator - 1]:
+        return None
+
+    def cells(line: str) -> list[str]:
+        return [part.strip() for part in line.strip().strip("|").split("|")]
+
+    start = separator - 1
+    end = separator + 1
+    while end < len(lines) and "|" in lines[end] and lines[end].strip():
+        end += 1
+    rows = [cells(lines[start])]
+    for line in lines[separator + 1:end]:
+        rows.append(cells(line))
+    width = max(len(row) for row in rows)
+    rows = [row + [""] * (width - len(row)) for row in rows]
+    before = "\n".join(lines[:start]).strip()
+    after = "\n".join(lines[end:]).strip()
+    return before, rows, after
+
+
+def _normalize_markdown_tables(extract: BookExtract) -> None:
+    """Turn model-emitted Markdown tables back into real table blocks."""
+    for chapter in extract.chapters:
+        if not chapter.blocks:
+            continue
+        blocks: list[Block] = []
+        for block in chapter.blocks:
+            if block.kind in ("p", "figcaption") and "\n" in block.text and "|" in block.text:
+                parsed = _markdown_table(block.text)
+                if parsed:
+                    before, rows, after = parsed
+                    if before:
+                        blocks.append(Block(
+                            "figcaption" if CAPTION_RE.match(before) else "p",
+                            text=before, size=block.size,
+                            inline_images=block.inline_images,
+                        ))
+                    blocks.append(Block(
+                        "table", rows=rows, header=True,
+                        inline_images=block.inline_images,
+                    ))
+                    if after:
+                        blocks.append(Block(
+                            "p", text=after, size=block.size,
+                            inline_images=block.inline_images,
+                        ))
+                    continue
+            blocks.append(block)
+        chapter.blocks = blocks
 
 
 def translate_book(
@@ -870,7 +1586,7 @@ def translate_book(
         if chapter.keep_source:
             continue
         for block in chapter.blocks:
-            if block.kind in ("image", "code"):
+            if block.kind in ("image", "code", "reference"):
                 continue
             if block.kind == "formula":
                 formulas.append(block)
@@ -904,7 +1620,13 @@ def translate_book(
             base_url, api_key, model, extra,
         )
         for index, chapter in enumerate(titles):
-            chapter.translated_title = result.get(index, chapter.title)
+            translated = result.get(index) or ""
+            if _needs_translation(chapter.title, translated):
+                retry = _translate_batch(
+                    [{"id": 0, "input": chapter.title}], base_url, api_key, model, extra,
+                )
+                translated = retry.get(0) or next(iter(retry.values()), "") or translated
+            chapter.translated_title = translated or chapter.title
         advance(len(titles))
 
     for block in formulas:
@@ -915,7 +1637,8 @@ def translate_book(
         image = extract.images.get(block.image_name)
         if image:
             latex = _vision_latex(image, base_url, api_key, model, extra)
-            block.mathml = _latex_to_mathml(latex)
+            if latex and _latex_plausible(latex, block.source_text):
+                block.mathml = _latex_to_mathml(latex)
         advance(1)
 
     pending = list(text_blocks)
@@ -929,17 +1652,47 @@ def translate_book(
         used = 0
         while pending:
             block = pending[0]
-            if batch and (len(batch) >= 24 or used + len(block.text) > 6000):
+            if batch and (len(batch) >= 12 or used + len(block.text) > 4000):
                 break
             pending.pop(0)
             batch.append(block)
             items.append({"id": len(batch) - 1, "input": block.text})
             used += len(block.text)
         result = _translate_batch(items, base_url, api_key, model, extra)
+        if len(result) < len(batch):
+            print(
+                f"translation: batch returned {len(result)}/{len(batch)} paragraphs",
+                flush=True,
+            )
+        retry: list[tuple[Block, str]] = []
         for identifier, block in enumerate(batch):
-            translated = result.get(identifier)
+            original = block.text
+            translated = result.get(identifier) or ""
+            candidate = _restore_inline_math(translated, block.inline_map) if translated else ""
+            if candidate:
+                block.text = candidate
+            if not candidate or _needs_translation(original, candidate):
+                retry.append((block, original))
+        for block, original in retry:
+            if canceled and canceled():
+                raise BookFailure("canceled")
+            single = _translate_batch(
+                [{"id": 0, "input": original}], base_url, api_key, model, extra,
+            )
+            translated = single.get(0) or next(iter(single.values()), "") or ""
             if translated:
-                block.text = _restore_inline_math(translated, block.inline_map)
+                candidate = _restore_inline_math(translated, block.inline_map)
+                if not _needs_translation(original, candidate):
+                    block.text = candidate
+        if retry:
+            still_english = sum(
+                1 for block, original in retry if _needs_translation(original, block.text)
+            )
+            print(
+                f"translation: retried {len(retry)} skipped paragraphs, "
+                f"{still_english} still untranslated",
+                flush=True,
+            )
         advance(len(batch))
 
     for table in tables:
@@ -966,6 +1719,8 @@ def translate_book(
                 if translated:
                     rows[row_index][column_index] = translated
             advance(len(chunk))
+
+    _normalize_markdown_tables(extract)
 
 
 def build_epub(work: Path, extract: BookExtract, out: Path, job_id: str) -> None:
@@ -1127,10 +1882,37 @@ def _table_xhtml(block) -> str:
         cell_tag = "th" if block.header and row_index == 0 else "td"
         parts.append(
             "<tr>"
-            + "".join(f'<{cell_tag}>{html.escape(cell)}</{cell_tag}>' for cell in row)
+            + "".join(
+                f'<{cell_tag}>{_inline_html(cell, block)}</{cell_tag}>'
+                for cell in row
+            )
             + "</tr>"
         )
     parts.append("</table>")
+    return "".join(parts)
+
+
+INLINE_IMAGE_TOKEN_RE = re.compile(r"⟦I(\d+)⟧")
+
+
+def _inline_html(text: str, block) -> str:
+    """Render ⟦I<n>⟧ inline-formula tokens as cropped images."""
+    mapping = block.inline_images or {}
+    if not mapping or "⟦I" not in text:
+        return html.escape(text)
+    parts = []
+    cursor = 0
+    for match in INLINE_IMAGE_TOKEN_RE.finditer(text):
+        parts.append(html.escape(text[cursor:match.start()]))
+        entry = mapping.get(int(match.group(1)))
+        if entry:
+            name, height, descent = entry
+            parts.append(
+                f'<img class="inl" src="../images/{name}" alt="" '
+                f'style="height:{height:.2f}em;vertical-align:{-descent:.2f}em"/>'
+            )
+        cursor = match.end()
+    parts.append(html.escape(text[cursor:]))
     return "".join(parts)
 
 
@@ -1146,23 +1928,30 @@ def _chapter_xhtml(index: int, chapter) -> str:
             if block.mathml:
                 parts.append(f'<div class="math">{block.mathml}</div>')
             else:
+                style = (
+                    f' style="width:{block.width_em * 1.15:.2f}em"'
+                    if block.width_em > 0 else ""
+                )
                 parts.append(
-                    f'<figure class="formula"><img src="../images/{block.image_name}" alt=""/></figure>'
+                    f'<figure class="formula"><img src="../images/{block.image_name}"'
+                    f'{style} alt=""/></figure>'
                 )
         elif block.kind == "table":
             parts.append(_table_xhtml(block))
+        elif block.kind == "reference":
+            parts.append(f'<p class="reference">{_inline_html(block.text, block)}</p>')
         elif block.kind == "h1":
-            parts.append(f"<h2>{html.escape(block.text)}</h2>")
+            parts.append(f"<h2>{_inline_html(block.text, block)}</h2>")
         elif block.kind == "h2":
-            parts.append(f"<h3>{html.escape(block.text)}</h3>")
+            parts.append(f"<h3>{_inline_html(block.text, block)}</h3>")
         elif block.kind == "figcaption":
-            parts.append(f'<p class="caption">{html.escape(block.text)}</p>')
+            parts.append(f'<p class="caption">{_inline_html(block.text, block)}</p>')
         elif block.kind == "code":
             parts.append(f'<pre class="code">{html.escape(block.text)}</pre>')
         elif block.kind == "footnote":
-            parts.append(f'<p class="footnote">{html.escape(block.text)}</p>')
+            parts.append(f'<p class="footnote">{_inline_html(block.text, block)}</p>')
         else:
-            parts.append(f"<p>{html.escape(block.text)}</p>")
+            parts.append(f"<p>{_inline_html(block.text, block)}</p>")
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         "<!DOCTYPE html>\n"
@@ -1182,13 +1971,17 @@ _STYLE = (
     "p{text-indent:2em;margin:.5em 0;}"
     ".caption{font-size:.9em;text-align:center;text-indent:0;color:#444;}"
     ".footnote{font-size:.8em;color:#555;text-indent:0;}"
+    ".reference{text-indent:-1.4em;padding-left:1.4em;margin:.2em 0;"
+    "line-height:1.45;word-break:break-word;}"
     "pre.code{white-space:pre-wrap;font-family:monospace;font-size:.82em;"
     "line-height:1.45;background:#f6f6f6;padding:.6em;border-radius:.3em;}"
     ".figure{text-align:center;margin:1em 0;}"
     ".formula{text-align:center;margin:1em 0;}"
     "img{max-width:90%;max-height:50vh;height:auto;object-fit:contain;}"
-    ".formula img{max-height:none;}"
-    ".math{margin:1em 0;text-align:center;overflow-x:auto;}"
+    ".formula img{max-height:none;max-width:100%;}"
+    "img.inl{max-width:none;max-height:none;height:auto;margin:0 .06em;"
+    "vertical-align:middle;}"
+    ".math{margin:1em 0;text-align:center;overflow-x:auto;font-size:1.1em;}"
     "table.data{border-collapse:collapse;width:100%;font-size:.9em;margin:1em 0;}"
     "table.data th,table.data td{border:1px solid #bbb;padding:.35em .5em;"
     "text-align:left;vertical-align:top;}"

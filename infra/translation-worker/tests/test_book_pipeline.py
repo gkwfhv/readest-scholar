@@ -81,6 +81,94 @@ class ExtractTests(unittest.TestCase):
         self.assertIn("x_i", restored)
         self.assertIn("ℓ_2", restored)
 
+    def test_inline_math_runs_group_subscripts_into_one_image(self):
+        def span(text, x0, x1, y0, y1, math):
+            return {
+                "text": text, "bbox": (x0, y0, x1, y1), "size": 10.0,
+                "origin": (x0, y1 - 2.0), "font": "CMMI10" if math else "Body",
+                "math": math,
+            }
+
+        spans = [
+            span("memory ", 0, 50, 100, 110, False),
+            span("M", 50, 58, 100, 110, True),
+            span("1:", 58, 63, 103, 111, True),
+            span("T", 63, 68, 103, 111, True),
+            span(" here", 68, 90, 100, 110, False),
+        ]
+        runs = bp._inline_runs(spans)
+        self.assertEqual(len(runs), 1)
+        self.assertEqual("".join(item["text"] for item in runs[0]), "M1:T")
+
+    def test_latex_validation_rejects_truncated_transcription(self):
+        source = "theta_j(x') = alpha, j = 0 (null task) m"
+        self.assertTrue(bp._latex_plausible(r"\theta_j(x')=\alpha,\ j=0\ (\text{null task})", source))
+        self.assertFalse(bp._latex_plausible(r"\theta_j(x')", source))
+
+    def test_missing_or_echoed_translations_are_detected(self):
+        original = "Robots are increasingly deployed across indoor environments and warehouses."
+        self.assertTrue(bp._needs_translation(original, ""))
+        self.assertTrue(bp._needs_translation(original, original))
+        self.assertFalse(bp._needs_translation(original, "机器人正越来越多地部署在室内环境和仓库中。"))
+        half = "机器人部署在仓库中。" + original
+        self.assertTrue(bp._needs_translation(original, half))
+
+    def test_inline_tokens_render_as_images(self):
+        block = bp.Block(
+            "p", text="能量 ⟦I1⟧ 与 ⟦I2⟧ 的关系",
+            inline_images={1: ("a.png", 1.0, 0.2), 2: ("b.png", 0.8, 0.1)},
+        )
+        rendered = bp._inline_html(block.text, block)
+        self.assertIn('<img class="inl" src="../images/a.png"', rendered)
+        self.assertIn("height:1.00em;vertical-align:-0.20em", rendered)
+        self.assertIn("能量", rendered)
+
+    def test_markdown_table_from_model_becomes_a_real_table(self):
+        text = (
+            "Table I: comparison.\n\n"
+            "| Task | Method | SR |\n"
+            "| :--- | :--- | :--- |\n"
+            "| Spat. | OpenGraph | 0.68 |\n"
+            "|  | STaR | 0.89 |\n\n"
+            "Trailing prose."
+        )
+        parsed = bp._markdown_table(text)
+        self.assertIsNotNone(parsed)
+        before, rows, after = parsed
+        self.assertEqual(before, "Table I: comparison.")
+        self.assertEqual(rows[0], ["Task", "Method", "SR"])
+        self.assertEqual(len(rows), 3)
+        self.assertEqual(after, "Trailing prose.")
+
+        from book_pipeline import Block, BookExtract, Chapter
+
+        extract = BookExtract(
+            title="T", author="", images={},
+            chapters=[Chapter("Chapter", 1, 1, blocks=[Block("p", text=text)])],
+        )
+        bp._normalize_markdown_tables(extract)
+        kinds = [block.kind for block in extract.chapters[0].blocks]
+        self.assertEqual(kinds, ["p", "table", "p"])
+        self.assertEqual(extract.chapters[0].blocks[1].rows[1][0], "Spat.")
+
+    def test_references_are_split_one_entry_per_paragraph(self):
+        document = fitz.open()
+        first = document.new_page(width=595, height=842)
+        first.insert_text((72, 100), "Introduction body text.", fontsize=10)
+        page = document.new_page(width=595, height=842)
+        page.insert_text((72, 100), "REFERENCES", fontsize=12)
+        page.insert_text((72, 140), "[1] Alpha reference starts here", fontsize=10)
+        page.insert_text((86, 155), "and continues on this line.", fontsize=10)
+        page.insert_text((72, 175), "[2] Beta reference.", fontsize=10)
+        document.set_toc([[1, "Introduction", 1], [1, "References", 2]])
+        with tempfile.TemporaryDirectory() as folder:
+            extract = bp.extract_book(document.tobytes(), Path(folder))
+        chapter = [item for item in extract.chapters if item.title == "References"][0]
+        references = [block for block in chapter.blocks if block.kind == "reference"]
+        self.assertEqual(len(references), 2)
+        self.assertIn("continues on this line", references[0].text)
+        self.assertTrue(references[1].text.startswith("[2]"))
+
     def test_ruled_table_becomes_a_table_block(self):
         document = fitz.open()
         page = document.new_page(width=595, height=842)
@@ -301,6 +389,14 @@ class EpubTests(unittest.TestCase):
         metadata = bp.inspect_epub(out, 1)
         self.assertEqual(metadata["pageCount"], 1)
         self.assertEqual(len(metadata["sha256"]), 64)
+
+    def test_formula_image_keeps_natural_text_scale(self):
+        from book_pipeline import Block, Chapter
+
+        chapter = Chapter("C", 1, 1)
+        chapter.blocks = [Block("formula", image_name="f.png", width_em=20.0)]
+        xhtml = bp._chapter_xhtml(1, chapter)
+        self.assertIn('style="width:23.00em"', xhtml)
 
     def test_epub_must_start_with_stored_mimetype(self):
         buffer = io.BytesIO()
