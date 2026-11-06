@@ -15,7 +15,7 @@ import {
   getPdfTranslationModel,
   type PdfTranslationModelRequest,
 } from '@/services/ai/translationModel';
-import { getDir, getRemoteBookFilename } from '@/utils/book';
+import { getDir, getLocalBookFilename, getRemoteBookFilename } from '@/utils/book';
 import { md5 } from '@/utils/md5';
 import { fetchWithAuth } from '@/utils/fetch';
 import { toProgressPercent, type ProgressHandler } from '@/utils/transfer';
@@ -436,7 +436,14 @@ export async function importTranslatedBook(
   const hash = derivedTranslationHash(source);
   const title = `${source.title}（中文）`;
   const file = new File([bytes], `${hash}.epub`, { type: 'application/epub+zip' });
-  const imported = await appService.importBook(file, useLibraryStore.getState().library, {
+  const library = useLibraryStore.getState().library;
+  const previous = library.find((book) => book.hash === hash);
+  if (previous) {
+    // Some native write paths do not truncate an existing file; a smaller
+    // re-translation would leave the old tail behind and corrupt the ZIP.
+    await appService.deleteFile(getLocalBookFilename(previous), 'Books').catch(() => {});
+  }
+  const imported = await appService.importBook(file, library, {
     overwrite: true,
     saveBook: true,
     saveCover: true,

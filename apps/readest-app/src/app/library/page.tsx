@@ -236,21 +236,13 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
   } = useLibraryStore();
   // Derived Chinese EPUBs live in the store so the reader can open them by
   // hash, but they never render as their own shelf item.
-  const visibleLibraryBooks = libraryBooks.filter((book) => !book.hidden);
-  // One-time repair for EPUBs imported before the hidden flag existed.
-  useEffect(() => {
-    const derived = new Set<string>();
-    for (const book of libraryBooks) {
-      if (book.translatedBookHash) derived.add(book.translatedBookHash);
-    }
-    const stale = libraryBooks.filter((book) => derived.has(book.hash) && !book.hidden);
-    if (stale.length > 0) {
-      void updateBooks(
-        envConfig,
-        stale.map((book) => ({ ...book, hidden: true })),
-      );
-    }
-  }, [libraryBooks, envConfig, updateBooks]);
+  // Memoized so the shelf tree sees a stable array between unrelated renders;
+  // a fresh array each render re-ran child effects and exceeded React's update
+  // depth. Derived EPUBs stay in the store (openable by hash) but not the shelf.
+  const visibleLibraryBooks = React.useMemo(
+    () => libraryBooks.filter((book) => !book.hidden),
+    [libraryBooks],
+  );
   const _ = useTranslation();
   const { selectFiles } = useFileSelector(appService, _);
   const { safeAreaInsets: insets, isRoundedWindow } = useThemeStore();

@@ -11,7 +11,7 @@ RUN sed -i 's#http://deb.debian.org#https://mirrors.aliyun.com#g' /etc/apt/sourc
 RUN --mount=type=cache,target=/root/.cache/uv uv pip install --system \
     --index-url https://pypi.tuna.tsinghua.edu.cn/simple \
     'pdf2zh-next==2.9.0' 'bitstring==4.3.1' 'psycopg[binary]==3.3.6' \
-    'boto3>=1.35,<2' 'pypdf==6.21.2' \
+    'boto3>=1.35,<2' 'pypdf==6.21.2' 'latex2mathml==3.77.0' \
     && pdf2zh_next --version
 ENV HOME=/tmp XDG_CACHE_HOME=/tmp XDG_CONFIG_HOME=/tmp
 COPY infra/translation-worker/worker.py /app/worker.py

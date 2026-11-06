@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   exists: vi.fn(async () => false),
   accountId: 'acct' as string | null,
   importBook: vi.fn(),
+  library: [] as Array<{ hash: string; title: string }>,
 }));
 
 vi.mock('@/utils/fetch', () => ({ fetchWithAuth: mocks.fetchWithAuth }));
@@ -24,13 +25,14 @@ vi.mock('@/services/constants', () => ({ CLOUD_BOOKS_SUBDIR: 'Books' }));
 vi.mock('@/utils/book', () => ({
   getDir: () => 'hash1',
   getRemoteBookFilename: () => 'paper.pdf',
+  getLocalBookFilename: (book: { hash: string }) => `${book.hash}/book.epub`,
 }));
 vi.mock('@/store/libraryStore', () => ({
   useLibraryStore: {
     getState: () => ({
       updateBook: mocks.updateBook,
       getBookByHash: () => undefined,
-      library: [],
+      library: mocks.library,
     }),
   },
 }));
@@ -172,6 +174,7 @@ describe('finalizeJob for book mode', () => {
     );
     const source = book({ hash: 'sourcehash', title: 'A Book' });
     const derivedHash = derivedTranslationHash(source);
+    mocks.library = [{ hash: derivedHash, title: 'Old（中文）' }];
     mocks.importBook.mockResolvedValue({
       hash: derivedHash,
       title: 'A Book（中文）',
@@ -194,6 +197,7 @@ describe('finalizeJob for book mode', () => {
     });
 
     expect(result.ok).toBe(true);
+    expect(mocks.deleteFile).toHaveBeenCalledWith(`${derivedHash}/book.epub`, 'Books');
     expect(mocks.importBook).toHaveBeenCalledTimes(1);
     const [file, , options] = mocks.importBook.mock.calls[0]! as [
       File,

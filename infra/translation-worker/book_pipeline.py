@@ -8,6 +8,7 @@ It only uses the standard library plus PyMuPDF.
 """
 from __future__ import annotations
 
+import base64
 import hashlib
 import html
 import json
@@ -33,7 +34,8 @@ BOOK_SYSTEM_PROMPT = (
 JSON_CONTRACT = (
     "Return only a JSON object of the form "
     '{"items":[{"id":<number>,"output":"<translated text>"}]} '
-    "covering every id. Do not return prose, Markdown or code fences."
+    "covering every id. Keep placeholder tokens like ⟦M1⟧ exactly as written. "
+    "Do not return prose, Markdown or code fences."
 )
 CAPTION_RE = re.compile(r"^\s*(figure|fig\.|table|图|表)\s*[\d.:]", re.IGNORECASE)
 KEEP_SOURCE_RE = re.compile(
@@ -62,10 +64,14 @@ class BookFailure(Exception):
 
 @dataclass
 class Block:
-    kind: str  # p | h1 | h2 | figcaption | image
+    kind: str  # p | h1 | h2 | figcaption | image | formula | code | footnote | table
     text: str = ""
     image_name: str = ""
     size: float = 0.0
+    mathml: str = ""
+    rows: list[list[str]] | None = None
+    header: bool = False
+    inline_map: list[str] | None = None
 
 
 @dataclass
@@ -289,6 +295,137 @@ def _code_line(text: str) -> bool:
     ))
 
 
+def _register_image(images: dict[str, bytes], image_dir: Path, data: bytes) -> str:
+    extension = "png" if not data.startswith(b"\xff\xd8\xff") else "jpg"
+    name = f"img-{hashlib.sha1(data).hexdigest()[:16]}.{extension}"
+    if name not in images:
+        images[name] = data
+        (image_dir / name).write_bytes(data)
+    return name
+
+
+def _crop_region(document, page_number: int, bbox, dpi: int = 200) -> bytes | None:
+    try:
+        page = document[page_number - 1]
+        pixmap = page.get_pixmap(
+            clip=(bbox[0] - 2, bbox[1] - 2, bbox[2] + 2, bbox[3] + 2), dpi=dpi,
+        )
+        return pixmap.tobytes("png")
+    except Exception:
+        return None
+
+
+def _table_rows(table):
+    try:
+        data = table.extract()
+    except Exception:
+        return None
+    rows = [
+        [(cell or "").strip().replace("\n", " ") for cell in row]
+        for row in (data or [])
+    ]
+    rows = [row for row in rows if any(row)]
+    if len(rows) < 2:
+        return None
+    width = max(len(row) for row in rows)
+    if width < 2:
+        return None
+    rows = [row + [""] * (width - len(row)) for row in rows]
+    header_names = getattr(getattr(table, "header", None), "names", None)
+    return rows, bool(header_names)
+
+
+def _inside_table(bbox, table_boxes) -> bool:
+    if not table_boxes:
+        return False
+    area = max(1.0, (bbox[2] - bbox[0]) * (bbox[3] - bbox[1]))
+    for box in table_boxes:
+        overlap_w = max(0.0, min(bbox[2], box[2]) - max(bbox[0], box[0]))
+        overlap_h = max(0.0, min(bbox[3], box[3]) - max(bbox[1], box[1]))
+        if overlap_w * overlap_h / area > 0.5:
+            return True
+    return False
+
+
+INLINE_MATH_RE = re.compile(
+    r"("
+    r"[A-Za-z]\s*[_^]\s*\{?[A-Za-z0-9]+\}?"
+    r"|[\u0370-\u03ff\u2200-\u22ff\u2070-\u209fℓℏ][A-Za-z0-9_^{}]*"
+    r"|\d+\s*[\u00d7\u00b7]\s*10\s*\^?\s*[-+]?\d+"
+    r")"
+)
+
+
+def _protect_inline_math(text: str) -> tuple[str, list[str]]:
+    """Replace inline math with tokens the model must keep verbatim."""
+    mapping: list[str] = []
+
+    def replace(match):
+        mapping.append(match.group(0))
+        return f"⟦M{len(mapping)}⟧"
+
+    return INLINE_MATH_RE.sub(replace, text), mapping
+
+
+def _restore_inline_math(text: str, mapping: list[str] | None) -> str:
+    if not mapping:
+        return text
+
+    def replace(match):
+        index = int(match.group(1)) - 1
+        return mapping[index] if 0 <= index < len(mapping) else match.group(0)
+
+    return re.sub(r"⟦M(\d+)⟧", replace, text)
+
+
+def _latex_to_mathml(latex: str) -> str:
+    if not latex:
+        return ""
+    try:
+        from latex2mathml.converter import convert
+
+        return convert(latex)
+    except Exception:
+        return ""
+
+
+def _vision_latex(
+    image: bytes, base_url: str, api_key: str, model: str, extra: dict,
+) -> str:
+    encoded = base64.b64encode(image).decode("ascii")
+    payload = {
+        "model": model,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You transcribe mathematical equations from images. "
+                    "Return ONLY the LaTeX source, without $ delimiters or fences."
+                ),
+            },
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Transcribe this equation to LaTeX."},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/png;base64,{encoded}"},
+                    },
+                ],
+            },
+        ],
+        "max_tokens": 2048,
+        "temperature": 0,
+        **extra,
+    }
+    try:
+        reply = _chat(base_url, api_key, payload, timeout=90).strip()
+    except Exception:
+        return ""
+    reply = re.sub(r"^```[A-Za-z0-9_-]*\s*|\s*```$", "", reply).strip()
+    return reply.strip("$").strip()
+
+
 def _sorted_text_blocks(
     page, width: float,
 ) -> list[tuple[float, float, float, float, str, float, list[str]]]:
@@ -384,12 +521,18 @@ def extract_book(pdf_bytes: bytes, work: Path) -> BookExtract:
             for page_number in range(chapter.start_page, chapter.end_page + 1):
                 page = document[page_number - 1]
                 width, height = page.rect.width, page.rect.height
+                try:
+                    tables = list(page.find_tables().tables)
+                except Exception:
+                    tables = []
+                table_boxes = [table.bbox for table in tables]
                 text_blocks = [
                     item
                     for item in _sorted_text_blocks(page, width)
                     if not _is_furniture(item[4], item[0], item[3], height)
+                    and not _inside_table((item[1], item[0], item[2], item[3]), table_boxes)
                 ]
-                pictures = []
+                extras: list[tuple[float, str, object]] = []
                 for image in page.get_image_info(xrefs=True):
                     bbox = image.get("bbox") or (0, 0, 0, 0)
                     if bbox[2] - bbox[0] < 120 or bbox[3] - bbox[1] < 80:
@@ -401,39 +544,45 @@ def extract_book(pdf_bytes: bytes, work: Path) -> BookExtract:
                     except Exception:
                         continue
                     if data:
-                        pictures.append((bbox[1], data))
-                pictures.sort(key=lambda item: item[0])
-                # Insert figures where they start in the (already ordered) text
-                # flow. Re-sorting by y would undo the column ordering.
+                        extras.append((bbox[1], "image", data))
+                for table in tables:
+                    parsed = _table_rows(table)
+                    if parsed is not None:
+                        extras.append((table.bbox[1], "table", parsed))
+                        continue
+                    cropped = _crop_region(document, page_number, table.bbox)
+                    if cropped:
+                        extras.append((table.bbox[1], "image", cropped))
+                extras.sort(key=lambda item: item[0])
+                # Insert figures/tables where they start in the (already ordered)
+                # text flow. Re-sorting by y would undo the column ordering.
                 ordered: list[tuple[str, object]] = []
-                picture_index = 0
+                extra_index = 0
                 for block in text_blocks:
-                    while (
-                        picture_index < len(pictures)
-                        and pictures[picture_index][0] <= block[0]
-                    ):
-                        ordered.append(("image", pictures[picture_index][1]))
-                        picture_index += 1
+                    while extra_index < len(extras) and extras[extra_index][0] <= block[0]:
+                        _, extra_kind, extra_payload = extras[extra_index]
+                        ordered.append((extra_kind, extra_payload))
+                        extra_index += 1
                     ordered.append(("text", block))
-                for _, data in pictures[picture_index:]:
-                    ordered.append(("image", data))
+                for _, extra_kind, extra_payload in extras[extra_index:]:
+                    ordered.append((extra_kind, extra_payload))
 
                 for kind, payload in ordered:
                     if kind == "image":
                         data, extension = _shrink_image(payload)
-                        name = f"img-{hashlib.sha1(data).hexdigest()[:16]}.{extension}"
-                        if name not in images:
-                            images[name] = data
-                            (image_dir / name).write_bytes(data)
+                        name = _register_image(images, image_dir, data)
                         items.append(("image", name))
-                    else:
-                        y0, x0, x1, y1, text, size, lines = payload
-                        sizes.append((size, len(text)))
-                        items.append((
-                            "text",
-                            {"y0": y0, "y1": y1, "page": page_number,
-                             "size": size, "text": text, "lines": lines},
-                        ))
+                        continue
+                    if kind == "table":
+                        items.append(("table", payload))
+                        continue
+                    y0, x0, x1, y1, text, size, lines = payload
+                    sizes.append((size, len(text)))
+                    items.append((
+                        "text",
+                        {"y0": y0, "y1": y1, "page": page_number,
+                         "size": size, "text": text, "lines": lines},
+                    ))
 
             body = _body_size(sizes)
             blocks: list[Block] = []
@@ -442,6 +591,14 @@ def extract_book(pdf_bytes: bytes, work: Path) -> BookExtract:
             last_bottom = 0.0
             last_page = 0
             for kind, payload in items:
+                if kind == "table":
+                    if code_buffer is not None:
+                        blocks.append(Block("code", text="\n".join(code_buffer)))
+                        code_buffer = None
+                    rows, header = payload
+                    blocks.append(Block("table", rows=rows, header=header))
+                    pending = None
+                    continue
                 if kind == "image":
                     if code_buffer is not None:
                         blocks.append(Block("code", text="\n".join(code_buffer)))
@@ -706,17 +863,41 @@ def translate_book(
 ) -> None:
     extra = _thinking_payload(base_url, api_key, model)
     titles = [chapter for chapter in extract.chapters if not chapter.keep_source]
-    pieces: list[Block] = [
-        block
-        for chapter in extract.chapters
-        if not chapter.keep_source
-        for block in chapter.blocks
-        if block.kind not in ("image", "code") and block.text.strip()
-    ]
-    total = len(pieces) + len(titles)
+    text_blocks: list[Block] = []
+    formulas: list[Block] = []
+    tables: list[Block] = []
+    for chapter in extract.chapters:
+        if chapter.keep_source:
+            continue
+        for block in chapter.blocks:
+            if block.kind in ("image", "code"):
+                continue
+            if block.kind == "formula":
+                formulas.append(block)
+            elif block.kind == "table":
+                tables.append(block)
+            elif block.text.strip():
+                block.text, block.inline_map = _protect_inline_math(block.text)
+                text_blocks.append(block)
+
+    table_cells = sum(
+        1
+        for table in tables
+        for row in (table.rows or [])
+        for cell in row
+        if re.search(r"[A-Za-z]", cell)
+    )
+    total = len(titles) + len(text_blocks) + len(formulas) + table_cells
     if total == 0:
         return
     done = 0
+
+    def advance(count: int) -> None:
+        nonlocal done
+        done += count
+        if renew:
+            renew(min(1.0, done / total))
+
     if titles:
         result = _translate_batch(
             [{"id": index, "input": chapter.title} for index, chapter in enumerate(titles)],
@@ -724,11 +905,20 @@ def translate_book(
         )
         for index, chapter in enumerate(titles):
             chapter.translated_title = result.get(index, chapter.title)
-        done += len(titles)
-        if renew:
-            renew(done / total)
+        advance(len(titles))
 
-    pending = list(pieces)
+    for block in formulas:
+        if canceled and canceled():
+            raise BookFailure("canceled")
+        if deadline is not None and time.monotonic() > deadline:
+            raise BookFailure("engine_timeout")
+        image = extract.images.get(block.image_name)
+        if image:
+            latex = _vision_latex(image, base_url, api_key, model, extra)
+            block.mathml = _latex_to_mathml(latex)
+        advance(1)
+
+    pending = list(text_blocks)
     while pending:
         if canceled and canceled():
             raise BookFailure("canceled")
@@ -749,10 +939,33 @@ def translate_book(
         for identifier, block in enumerate(batch):
             translated = result.get(identifier)
             if translated:
-                block.text = translated
-        done += len(batch)
-        if renew:
-            renew(min(1.0, done / total))
+                block.text = _restore_inline_math(translated, block.inline_map)
+        advance(len(batch))
+
+    for table in tables:
+        if canceled and canceled():
+            raise BookFailure("canceled")
+        if deadline is not None and time.monotonic() > deadline:
+            raise BookFailure("engine_timeout")
+        rows = table.rows or []
+        cells = [
+            (row_index, column_index, cell)
+            for row_index, row in enumerate(rows)
+            for column_index, cell in enumerate(row)
+            if re.search(r"[A-Za-z]", cell)
+        ]
+        for start in range(0, len(cells), 24):
+            chunk = cells[start : start + 24]
+            items = [
+                {"id": index, "input": cell}
+                for index, (_, _, cell) in enumerate(chunk)
+            ]
+            result = _translate_batch(items, base_url, api_key, model, extra)
+            for index, (row_index, column_index, _) in enumerate(chunk):
+                translated = result.get(index)
+                if translated:
+                    rows[row_index][column_index] = translated
+            advance(len(chunk))
 
 
 def build_epub(work: Path, extract: BookExtract, out: Path, job_id: str) -> None:
@@ -907,6 +1120,20 @@ def _toc_ncx(book_uuid, chapters) -> str:
     )
 
 
+def _table_xhtml(block) -> str:
+    rows = block.rows or []
+    parts = ['<table class="data">']
+    for row_index, row in enumerate(rows):
+        cell_tag = "th" if block.header and row_index == 0 else "td"
+        parts.append(
+            "<tr>"
+            + "".join(f'<{cell_tag}>{html.escape(cell)}</{cell_tag}>' for cell in row)
+            + "</tr>"
+        )
+    parts.append("</table>")
+    return "".join(parts)
+
+
 def _chapter_xhtml(index: int, chapter) -> str:
     parts = []
     heading = chapter.translated_title or chapter.title
@@ -916,7 +1143,14 @@ def _chapter_xhtml(index: int, chapter) -> str:
         if block.kind == "image":
             parts.append(f'<div class="figure"><img src="../images/{block.image_name}" alt=""/></div>')
         elif block.kind == "formula":
-            parts.append(f'<figure class="formula"><img src="../images/{block.image_name}" alt=""/></figure>')
+            if block.mathml:
+                parts.append(f'<div class="math">{block.mathml}</div>')
+            else:
+                parts.append(
+                    f'<figure class="formula"><img src="../images/{block.image_name}" alt=""/></figure>'
+                )
+        elif block.kind == "table":
+            parts.append(_table_xhtml(block))
         elif block.kind == "h1":
             parts.append(f"<h2>{html.escape(block.text)}</h2>")
         elif block.kind == "h2":
@@ -954,4 +1188,8 @@ _STYLE = (
     ".formula{text-align:center;margin:1em 0;}"
     "img{max-width:90%;max-height:50vh;height:auto;object-fit:contain;}"
     ".formula img{max-height:none;}"
+    ".math{margin:1em 0;text-align:center;overflow-x:auto;}"
+    "table.data{border-collapse:collapse;width:100%;font-size:.9em;margin:1em 0;}"
+    "table.data th,table.data td{border:1px solid #bbb;padding:.35em .5em;"
+    "text-align:left;vertical-align:top;}"
 )

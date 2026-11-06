@@ -73,6 +73,38 @@ class ExtractTests(unittest.TestCase):
         self.assertTrue(references[0].keep_source)
         self.assertTrue(any(block.text for chapter in extract.chapters for block in chapter.blocks))
 
+    def test_inline_math_placeholders_survive_translation(self):
+        masked, mapping = bp._protect_inline_math("We optimize x_i and ℓ_2 here.")
+        self.assertIn("⟦M1⟧", masked)
+        self.assertIn("⟦M2⟧", masked)
+        restored = bp._restore_inline_math(masked.replace("⟦M1⟧", "x_i"), mapping)
+        self.assertIn("x_i", restored)
+        self.assertIn("ℓ_2", restored)
+
+    def test_ruled_table_becomes_a_table_block(self):
+        document = fitz.open()
+        page = document.new_page(width=595, height=842)
+        for x in (72, 240, 408):
+            page.draw_line(fitz.Point(x, 100), fitz.Point(x, 180))
+        for y in (100, 130, 160, 180):
+            page.draw_line(fitz.Point(72, y), fitz.Point(408, y))
+        page.insert_text((80, 120), "Method", fontsize=10)
+        page.insert_text((248, 120), "Score", fontsize=10)
+        page.insert_text((80, 150), "Ours", fontsize=10)
+        page.insert_text((248, 150), "62.5", fontsize=10)
+        document.set_toc([[1, "Chapter", 1]])
+        with tempfile.TemporaryDirectory() as folder:
+            extract = bp.extract_book(document.tobytes(), Path(folder))
+        tables = [
+            block
+            for chapter in extract.chapters
+            for block in chapter.blocks
+            if block.kind == "table"
+        ]
+        self.assertEqual(len(tables), 1)
+        self.assertGreaterEqual(len(tables[0].rows or []), 2)
+        self.assertIn("Method", tables[0].rows[0])
+
     def test_display_equations_are_kept_as_images(self):
         document = fitz.open()
         page = document.new_page(width=595, height=842)
@@ -173,6 +205,40 @@ class TranslationTests(unittest.TestCase):
             if block.text
         ]
         self.assertTrue(any(text == "单条译文" for text in texts))
+
+    def test_inline_math_and_table_cells_are_translated(self):
+        from book_pipeline import Block, BookExtract, Chapter
+
+        extract = BookExtract(
+            title="T", author="", images={},
+            chapters=[Chapter("Chapter", 1, 1)],
+        )
+        extract.chapters[0].blocks = [
+            Block("p", text="We optimize x_i and ℓ_2 here."),
+            Block("table", rows=[["Method", "Score"], ["Ours", "62.5"]], header=True),
+        ]
+        seen: list[str] = []
+
+        def fake_chat(base_url, api_key, payload, timeout=120):
+            items = json.loads(payload["messages"][1]["content"].split("Items:\n", 1)[1])
+            seen.extend(item["input"] for item in items)
+            return json.dumps(
+                {"items": [{"id": item["id"], "output": "译:" + item["input"]} for item in items]}
+            )
+
+        with patch.object(bp, "_chat", side_effect=fake_chat), patch.object(
+            bp, "_thinking_payload", return_value={}
+        ):
+            bp.translate_book(
+                extract, base_url="https://model.test/v1", api_key="k", model="m",
+                renew=lambda fraction: None,
+            )
+        paragraph = extract.chapters[0].blocks[0]
+        self.assertIn("x_i", paragraph.text)
+        self.assertIn("ℓ_2", paragraph.text)
+        self.assertTrue(any("⟦M1⟧" in item for item in seen))
+        rows = extract.chapters[0].blocks[1].rows
+        self.assertEqual(rows[0][0], "译:Method")
 
     def test_cancel_and_deadline_raise_failures(self):
         extract = self._extract()
