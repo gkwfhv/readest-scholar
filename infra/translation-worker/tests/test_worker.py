@@ -10,10 +10,16 @@ from unittest.mock import patch
 from io import BytesIO
 from pathlib import Path
 
-from worker import ACADEMIC_TRANSLATION_PROMPT, JobFailure, _validate_model_profile, academic_translation_prompt, inspect_output, build_cli_command, map_engine_percent, merge_page_outputs, parse_page_selection, child_environment, engine_progress, find_output, invalid_model_response_count, model_response_is_stalled, output_key, prepare_asset_links, process_job, run_engine, verify_glossary_text, verify_source_bytes
+from worker import ACADEMIC_TRANSLATION_PROMPT, JobFailure, _validate_model_profile, academic_translation_prompt, inspect_output, build_cli_command, map_engine_percent, merge_page_outputs, parse_page_selection, child_environment, engine_progress, find_output, invalid_model_response_count, model_response_is_stalled, output_key, prepare_asset_links, process_job, resolve_pipeline, run_engine, verify_glossary_text, verify_source_bytes
 
 
 class WorkerContractTests(unittest.TestCase):
+    def test_auto_book_with_pdf_output_stays_on_the_pdf_pipeline(self):
+        self.assertEqual(resolve_pipeline("dual", lambda: "book"), "paper")
+        self.assertEqual(resolve_pipeline("both", lambda: "book"), "paper")
+        self.assertEqual(resolve_pipeline("mono", lambda: "book"), "book")
+        self.assertEqual(resolve_pipeline("dual", lambda: "paper"), "paper")
+
     def test_academic_prompt_requires_natural_chinese_and_preserves_source_fidelity(self):
         prompt = academic_translation_prompt("provider/academic-model")
         self.assertEqual(prompt, ACADEMIC_TRANSLATION_PROMPT)

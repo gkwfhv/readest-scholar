@@ -104,6 +104,19 @@ class ExtractTests(unittest.TestCase):
         source = "theta_j(x') = alpha, j = 0 (null task) m"
         self.assertTrue(bp._latex_plausible(r"\theta_j(x')=\alpha,\ j=0\ (\text{null task})", source))
         self.assertFalse(bp._latex_plausible(r"\theta_j(x')", source))
+        self.assertFalse(
+            bp._latex_plausible(r"R^* = *\arg\min_R |R|,", "R∗ = argmin|R|, (2)")
+        )
+
+    def test_formula_filter_box_includes_the_equation_number(self):
+        region = (138.0, 715.0, 214.0, 739.0)
+        rows = [
+            {"bbox": (140.0, 716.0, 298.0, 729.0)},  # equation + (2)
+            {"bbox": (313.0, 720.0, 558.0, 730.0)},  # unrelated other column
+        ]
+        boxes = bp._formula_filter_boxes(rows, [region])
+        self.assertEqual(boxes[0][2], 298.0)
+        self.assertEqual(boxes[0][0], 140.0)
 
     def test_missing_or_echoed_translations_are_detected(self):
         original = "Robots are increasingly deployed across indoor environments and warehouses."

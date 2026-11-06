@@ -724,10 +724,16 @@ def _formula_regions(rows: list[dict], body_size: float) -> list[tuple[float, fl
             group = sequence[start:end + 1]
             boxes = [_row_math_bounds(item) for item in group]
             top = min(box[1] for box in boxes) - 0.8
-            bottom = max(box[3] for box in boxes) + 3.0
+            # Do not clamp to the next line: subscript glyphs often descend
+            # below their reported span box. Allow only 2pt past the next
+            # line's top, which is blank ascender space in normal text.
+            max_bottom = max(box[3] for box in boxes)
+            bottom = max_bottom + 3.0
             if end + 1 < len(sequence):
-                # Keep a subscript's descender but never pull in the next line.
-                bottom = min(bottom, sequence[end + 1]["bbox"][1] - 0.8)
+                bottom = max(
+                    max_bottom,
+                    min(bottom, sequence[end + 1]["bbox"][1] + 2.0),
+                )
             regions.append((
                 min(box[0] for box in boxes) - 1.5,
                 top,
@@ -749,6 +755,36 @@ def _formula_regions(rows: list[dict], body_size: float) -> list[tuple[float, fl
         if not overlap:
             unique.append(region)
     return unique
+
+
+def _formula_filter_boxes(rows: list[dict], regions) -> list[tuple[float, float, float, float]]:
+    """Full row boxes covered by each equation crop.
+
+    Crops use the math-only bounds so trailing prose is not baked into the
+    image, but text filtering needs the whole row (including an equation
+    number at the far right) or the row survives as duplicated prose.
+    """
+    boxes = []
+    for region in regions:
+        x0, y0, x1, y1 = region
+        members = []
+        for row in rows:
+            box = row["bbox"]
+            height = max(1.0, box[3] - box[1])
+            vertical = min(box[3], y1) - max(box[1], y0)
+            horizontal = min(box[2], x1) - max(box[0], x0)
+            if vertical > 0.5 * height and horizontal > 0:
+                members.append(box)
+        if members:
+            boxes.append((
+                min(box[0] for box in members),
+                min(box[1] for box in members),
+                max(box[2] for box in members),
+                max(box[3] for box in members),
+            ))
+        else:
+            boxes.append(region)
+    return boxes
 
 
 def _table_rows(table):
@@ -824,6 +860,12 @@ def _latex_plausible(latex: str, source: str) -> bool:
         return False
     plain = re.sub(r"\\[A-Za-z]+", " ", latex)
     plain = re.sub(r"[{}_^&$\\]", " ", plain).lower()
+    source_marks = source.count("*") + source.count("∗") + source.count("⋆")
+    latex_marks = latex.count("*") + len(re.findall(r"\\ast\b|\\star\b", latex))
+    if latex_marks > source_marks:
+        # The model often turns a single R* into "R^* = *" and the result
+        # renders as a bogus standalone asterisk; keep the crop instead.
+        return False
     tokens = re.findall(r"[A-Za-z]{2,}|\d+(?:\.\d+)?", source)
     if not tokens:
         return True
@@ -981,6 +1023,7 @@ def extract_book(pdf_bytes: bytes, work: Path) -> BookExtract:
                         region for region in formulas
                         if not _inside_table(region, figures)
                     ]
+                formula_boxes = _formula_filter_boxes(rows, formulas)
 
                 left_margins: dict[int, float] = {}
                 for row in rows:
@@ -993,7 +1036,7 @@ def extract_book(pdf_bytes: bytes, work: Path) -> BookExtract:
                 page_items: list[dict] = []
                 for row in rows:
                     box = (row["bbox"][0], row["bbox"][1], row["bbox"][2], row["bbox"][3])
-                    if _inside_table(box, table_boxes) or _inside_table(box, formulas) or _inside_table(box, figures):
+                    if _inside_table(box, table_boxes) or _inside_table(box, formula_boxes) or _inside_table(box, figures):
                         continue
                     if chapter.keep_source:
                         text, inline = row["text"], {}

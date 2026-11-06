@@ -284,6 +284,19 @@ MAX_PDF_PAGES = 1200
 MAX_TIMEOUT_SECONDS = 10800
 
 
+def resolve_pipeline(mode: str, classify) -> str:
+    """Pick the auto pipeline without breaking an explicit PDF output choice.
+
+    Auto-detected books normally become EPUBs, but EPUB only exists in mono
+    mode; dual/both output must stay on the in-place PDF pipeline instead of
+    failing with invalid_mode_for_book.
+    """
+    detected = classify()
+    if detected == "book" and mode != "mono":
+        return "paper"
+    return detected
+
+
 def pdf_page_count(content: bytes, *, limit: int) -> int:
     from io import BytesIO
     from pypdf import PdfReader
@@ -830,11 +843,15 @@ def process_job(job, db: Database, s3, *, bucket: str, base_url: str,
             raise JobFailure("lease_lost")
 
         # Old clients omit documentType entirely; keep them on the PDF path.
-        pipeline = (job.get("request_options") or {}).get("documentType", "paper")
-        if pipeline == "auto":
+        requested = (job.get("request_options") or {}).get("documentType", "paper")
+        if requested == "auto":
             import book_pipeline
 
-            pipeline = book_pipeline.classify_pdf(content)
+            pipeline = resolve_pipeline(
+                job["mode"], lambda: book_pipeline.classify_pdf(content),
+            )
+        else:
+            pipeline = requested
         if pipeline == "book":
             if job["mode"] != "mono":
                 raise JobFailure("invalid_mode_for_book")
