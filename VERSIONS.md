@@ -1,11 +1,11 @@
 # 版本锁定
 
-审计日期：2026-11-03。Scholar 版本更新日期：2026-11-04；本次未重新核对 Readest 与 pdf2zh 上游基点。应用版本号和 Git 标签不是同一个对象。
+审计日期：2026-11-03。Scholar 版本更新日期：2026-11-07；本次未重新核对 Readest 与 pdf2zh 上游基点。应用版本号和 Git 标签不是同一个对象。
 
 | 名称 | 值 | 证据 |
 |---|---|---|
-| `scholar_version` | `0.12.27` | `apps/readest-app/src-tauri/scholar.release.json` 的 Scholar 候选版本 |
-| `scholar_app_version` | `0.12.27` | `apps/readest-app/package.json` 的 Scholar 前端版本 |
+| `scholar_version` | `0.12.28` | `apps/readest-app/src-tauri/scholar.release.json` 的 Scholar 候选版本 |
+| `scholar_app_version` | `0.12.28` | `apps/readest-app/package.json` 的 Scholar 前端版本 |
 | `readest_ref` | `main` | GitHub `repos/readest/readest/commits/main` |
 | `readest_sha` | `2d37bbfc2e94725e1343ab2a825573545aa59f5f` | 同上，提交时间 `2026-10-18T18:31:33Z` |
 | `readest_app_version` | `0.12.16` | `apps/readest-app/package.json` 的 `version` |
