@@ -63,6 +63,16 @@ class ClassifyTests(unittest.TestCase):
 
 
 class ExtractTests(unittest.TestCase):
+    def test_extraction_checkpoint_runs_after_each_page(self):
+        checkpoints = []
+        with tempfile.TemporaryDirectory() as folder:
+            bp.extract_book(
+                make_book_pdf(pages=4, sections=3),
+                Path(folder),
+                checkpoint=lambda _fraction: checkpoints.append(True),
+            )
+        self.assertEqual(len(checkpoints), 4)
+
     def test_chapters_follow_bookmarks_and_references_keep_source(self):
         with tempfile.TemporaryDirectory() as folder:
             extract = bp.extract_book(make_book_pdf(), Path(folder))

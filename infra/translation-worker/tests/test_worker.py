@@ -10,7 +10,58 @@ from unittest.mock import patch
 from io import BytesIO
 from pathlib import Path
 
-from worker import ACADEMIC_TRANSLATION_PROMPT, JobFailure, _validate_model_profile, academic_translation_prompt, inspect_output, build_cli_command, map_engine_percent, merge_page_outputs, parse_page_selection, child_environment, engine_progress, find_output, invalid_model_response_count, model_response_is_stalled, output_key, prepare_asset_links, process_job, resolve_pipeline, run_engine, verify_glossary_text, verify_source_bytes
+from worker import ACADEMIC_TRANSLATION_PROMPT, JobFailure, LeaseHeartbeat, _validate_model_profile, academic_translation_prompt, inspect_output, build_cli_command, map_engine_percent, merge_page_outputs, parse_page_selection, child_environment, engine_progress, find_output, invalid_model_response_count, model_response_is_stalled, output_key, prepare_asset_links, process_job, resolve_pipeline, run_engine, verify_glossary_text, verify_source_bytes
+
+
+class LeaseHeartbeatTests(unittest.TestCase):
+    def test_renews_on_a_separate_connection_during_long_work(self):
+        class HeartbeatDB:
+            def __init__(self):
+                self.calls = []
+                self.closed = False
+
+            def renew(self, job, progress):
+                self.calls.append((job, progress))
+                return True
+
+            def close(self):
+                self.closed = True
+
+        class MainDB:
+            def __init__(self):
+                self.heartbeat_db = HeartbeatDB()
+
+            def fork(self):
+                return self.heartbeat_db
+
+        db = MainDB()
+        job = {"id": "job-id", "lease_token": "token"}
+        with LeaseHeartbeat(db, job, interval_seconds=0.005) as heartbeat:
+            heartbeat.update_progress(13)
+            time.sleep(0.025)
+        self.assertGreaterEqual(len(db.heartbeat_db.calls), 2)
+        self.assertTrue(all(progress == 13 for _, progress in db.heartbeat_db.calls))
+        self.assertTrue(db.heartbeat_db.closed)
+
+    def test_stops_processing_when_lease_is_lost(self):
+        class HeartbeatDB:
+            def renew(self, job, progress):
+                return False
+
+            def close(self):
+                pass
+
+        class MainDB:
+            def fork(self):
+                return HeartbeatDB()
+
+        with LeaseHeartbeat(
+            MainDB(), {"id": "job-id", "lease_token": "token"},
+            interval_seconds=0.001,
+        ) as heartbeat:
+            time.sleep(0.005)
+            with self.assertRaisesRegex(JobFailure, "lease_lost"):
+                heartbeat.check()
 
 
 class WorkerContractTests(unittest.TestCase):
