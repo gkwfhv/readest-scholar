@@ -925,7 +925,7 @@ def _vision_latex(
     return reply.strip("$").strip()
 
 
-def extract_book(pdf_bytes: bytes, work: Path) -> BookExtract:
+def extract_book(pdf_bytes: bytes, work: Path, *, checkpoint=None) -> BookExtract:
     import fitz
 
     work.mkdir(parents=True, exist_ok=True)
@@ -964,6 +964,7 @@ def extract_book(pdf_bytes: bytes, work: Path) -> BookExtract:
         else:
             chapters.append(Chapter(title or "Document", 1, total))
 
+        processed_pages = 0
         for chapter in chapters:
             stripped_title = chapter.title.strip()
             chapter.keep_source = bool(
@@ -1144,6 +1145,9 @@ def extract_book(pdf_bytes: bytes, work: Path) -> BookExtract:
                         data, _extension = _shrink_image(item["payload"])
                         items.append(("image", _register_image(images, image_dir, data)))
 
+                processed_pages += 1
+                if checkpoint:
+                    checkpoint(processed_pages / max(1, total))
 
             body = _body_size(sizes)
             blocks: list[Block] = []

@@ -7,6 +7,7 @@ import json
 import os
 import re
 import sys
+import threading
 from pathlib import Path
 
 UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
@@ -554,7 +555,15 @@ class Database:
         import psycopg
         from psycopg.rows import dict_row
 
+        self.dsn = dsn
         self.connection = psycopg.connect(dsn, autocommit=True, row_factory=dict_row)
+
+    def fork(self):
+        """Create a separate connection for lease renewal during long CPU work."""
+        return Database(self.dsn)
+
+    def close(self):
+        self.connection.close()
 
     def one(self, sql: str, params: tuple = ()):
         with self.connection.cursor() as cursor:
@@ -617,6 +626,70 @@ class Database:
             (job["id"],),
         )
         return bool(row and row["state"] == "succeeded")
+
+
+class LeaseHeartbeat:
+    """Keep a claimed job leased while synchronous work blocks the main thread."""
+
+    def __init__(self, db: Database, job, *, interval_seconds: float = 20):
+        self.db = db
+        self.job = job
+        self.interval_seconds = interval_seconds
+        self.stop_event = threading.Event()
+        self.lost_event = threading.Event()
+        self.progress_lock = threading.Lock()
+        self.progress = 10
+        self.thread: threading.Thread | None = None
+
+    def __enter__(self):
+        self.thread = threading.Thread(
+            target=self._run,
+            name="translation-lease-heartbeat",
+            daemon=True,
+        )
+        self.thread.start()
+        return self
+
+    def _run(self) -> None:
+        heartbeat_db = None
+        try:
+            heartbeat_db = self.db.fork()
+            while not self.stop_event.wait(self.interval_seconds):
+                with self.progress_lock:
+                    progress = self.progress
+                if not heartbeat_db.renew(self.job, progress):
+                    self.lost_event.set()
+                    return
+        except Exception as exc:
+            # Exception strings may include connection details, so log only the type.
+            print(
+                "[worker] lease heartbeat failed: " + type(exc).__name__,
+                flush=True,
+            )
+            self.lost_event.set()
+        finally:
+            if heartbeat_db is not None:
+                heartbeat_db.close()
+
+    def update_progress(self, progress: int) -> None:
+        with self.progress_lock:
+            self.progress = max(self.progress, min(99, max(0, progress)))
+
+    def renew(self, progress: int) -> None:
+        self.update_progress(progress)
+        self.check()
+        if not self.db.renew(self.job, progress):
+            self.lost_event.set()
+            self.check()
+
+    def check(self) -> None:
+        if self.lost_event.is_set():
+            raise JobFailure("lease_lost")
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        self.stop_event.set()
+        if self.thread is not None:
+            self.thread.join(timeout=5)
 
 
 def run_engine(
@@ -728,17 +801,22 @@ def process_book_job(job, db: Database, s3, *, content: bytes, pages: int, bucke
     publication_uncertain = False
     deadline = time.monotonic() + timeout_seconds
     try:
-        with _WorkDir(cache_dir) as folder:
+        with LeaseHeartbeat(db, job) as lease, _WorkDir(cache_dir) as folder:
             work = Path(folder)
-            extract = book_pipeline.extract_book(content, work)
+            def on_extraction_progress(fraction: float) -> None:
+                lease.update_progress(10 + round(5 * fraction))
+                lease.check()
+
+            extract = book_pipeline.extract_book(
+                content, work, checkpoint=on_extraction_progress,
+            )
+            lease.check()
             if not any(chapter.blocks for chapter in extract.chapters):
                 raise JobFailure("empty_document")
-            if not db.renew(job, 15):
-                raise JobFailure("lease_lost")
+            lease.renew(15)
 
             def on_progress(fraction: float) -> None:
-                if not db.renew(job, 15 + round(75 * fraction)):
-                    raise JobFailure("lease_lost")
+                lease.renew(15 + round(75 * fraction))
 
             book_pipeline.translate_book(
                 extract,
@@ -749,13 +827,12 @@ def process_book_job(job, db: Database, s3, *, content: bytes, pages: int, bucke
                 canceled=lambda: db.canceled(job),
                 deadline=deadline,
             )
-            if not db.renew(job, 92):
-                raise JobFailure("lease_lost")
+            lease.renew(92)
             output = work / "book.epub"
             book_pipeline.build_epub(work, extract, output, str(job["id"]))
+            lease.check()
             metadata = book_pipeline.inspect_epub(output, pages)
-            if not db.renew(job, 97):
-                raise JobFailure("lease_lost")
+            lease.renew(97)
             key = output_key(str(job["user_id"]), str(job["id"]), "epub")
             data = output.read_bytes()
             s3.put_object(
