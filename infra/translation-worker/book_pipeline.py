@@ -281,6 +281,14 @@ def _is_section_heading(text: str) -> bool:
     return bool(SECTION_HEADING_RE.match(text)) and len(text.strip()) <= 60
 
 
+def _symbol_ratio(text: str) -> float:
+    """Share of visible characters that are not letters or digits."""
+    visible = [char for char in text.strip() if not char.isspace()]
+    if not visible:
+        return 0.0
+    return sum(1 for char in visible if not char.isalnum()) / len(visible)
+
+
 def _looks_like_formula(text: str) -> bool:
     """Display equations are common in books but carry no LaTeX in the PDF.
 
@@ -292,11 +300,7 @@ def _looks_like_formula(text: str) -> bool:
         return False
     if _ends_sentence(stripped):
         return False
-    visible = [char for char in stripped if not char.isspace()]
-    if not visible:
-        return False
-    symbol_ratio = sum(1 for char in visible if not char.isalnum()) / len(visible)
-    return symbol_ratio >= 0.14
+    return _symbol_ratio(stripped) >= 0.14
 
 
 def _is_footnote(text: str) -> bool:
@@ -372,9 +376,14 @@ def _crop_region(document, page_number: int, bbox, dpi: int = 200, padding: floa
         return None
 
 
+# Genuine math faces. Computer Modern Roman (cmr) and STIX text are the body
+# fonts of many LaTeX books, so a span in them is not math by itself; those
+# faces only supply a formula's digits, operators and punctuation.
 MATH_FONT_RE = re.compile(
-    r"(cmmi|cmsy|cmex|cmr|msam|msbm|eufm|rsfs|stix|math|symbol)", re.IGNORECASE
+    r"(cmmi|cmsy|cmex|msam|msbm|eufm|rsfs|math|symbol)", re.IGNORECASE
 )
+MATH_ROMAN_FONT_RE = re.compile(r"^(cmr|stix)", re.IGNORECASE)
+LETTER_RE = re.compile(r"[A-Za-z]")
 
 
 def _ordered_spans(spans: list[dict]) -> list[dict]:
@@ -395,6 +404,53 @@ def _row_plain_text(spans: list[dict]) -> str:
         out += text
         previous = span
     return re.sub(r"[ \t]+", " ", out).strip()
+
+
+def _promote_math_glue(spans: list[dict]) -> None:
+    """Mark roman-font digits and operators that belong to a formula as math.
+
+    TeX sets a formula's letters in math italic (cmmi) but its digits,
+    operators and punctuation in the body roman font (cmr), so without this
+    a display equation only scores for its letters. Prose spans contain
+    letters and are never promoted; glue must also touch a math glyph.
+    """
+    ordered = _ordered_spans(spans)
+    promoted = True
+    while promoted:
+        promoted = False
+        for position, span in enumerate(ordered):
+            if span["math"] or LETTER_RE.search(span["text"]):
+                continue
+            if not MATH_ROMAN_FONT_RE.search(span["font"]):
+                continue
+            neighbours = ordered[max(0, position - 1):position]
+            neighbours += ordered[position + 1:position + 2]
+            for neighbour in neighbours:
+                if not neighbour["math"]:
+                    continue
+                gap = max(span["bbox"][0], neighbour["bbox"][0]) - min(
+                    span["bbox"][2], neighbour["bbox"][2]
+                )
+                allowed = max(2.5, 0.9 * max(span["size"], neighbour["size"], 1.0))
+                if gap <= allowed:
+                    span["math"] = True
+                    promoted = True
+                    break
+
+
+def _same_baseline_band(spans: list[dict], span: dict) -> bool:
+    """Whether a span sits on the same printed line as a row's members.
+
+    Adjacent lines overlap vertically when one carries tall math glyphs, and
+    climbing from a small superscript into the next line interleaved the two
+    lines' words. Sub/superscripts still share a baseline band with their base.
+    """
+    baseline = float(span["origin"][1])
+    for member in spans:
+        distance = abs(float(member["origin"][1]) - baseline)
+        if distance <= max(2.0, 0.6 * max(span["size"], member["size"], 1.0)):
+            return True
+    return False
 
 
 def _visual_rows(page, height: float) -> tuple[list[dict], float | None]:
@@ -487,9 +543,12 @@ def _visual_rows(page, height: float) -> tuple[list[dict], float | None]:
                 other = row["bbox"]
                 overlap = min(other[3], box[3]) - max(other[1], box[1])
                 smaller = min(other[3] - other[1], span_height)
-                if smaller > 0 and overlap > 0.55 * smaller:
-                    target = row
-                    break
+                if smaller <= 0 or overlap <= 0.55 * smaller:
+                    continue
+                if not _same_baseline_band(row["spans"], span):
+                    continue
+                target = row
+                break
             if target is None:
                 made.append({"col": column, "bbox": list(box), "spans": [span]})
             else:
@@ -502,6 +561,7 @@ def _visual_rows(page, height: float) -> tuple[list[dict], float | None]:
         rows.extend(made)
 
     for row in rows:
+        _promote_math_glue(row["spans"])
         chars = math = body = 0
         size = 0.0
         for span in row["spans"]:
@@ -702,6 +762,14 @@ def _formula_regions(rows: list[dict], body_size: float) -> list[tuple[float, fl
     if any(re.match(r"^\s*(algorithm|算法)\s*\d+", row["text"], re.IGNORECASE) for row in rows):
         # Algorithm listings use the same LaTeX fonts; keep them as code text.
         return []
+    filled = [row for row in rows if row["chars"]]
+    candidates = [row for row in filled if _is_core_equation_row(row)]
+    if len(candidates) >= 6 and len(candidates) >= 0.8 * len(filled):
+        ratios = sorted(_symbol_ratio(row["text"]) for row in candidates)
+        if ratios[len(ratios) // 2] < 0.12:
+            # A roman body font misread as math flags every prose line on the
+            # page; that is body text, not a page of equations.
+            return []
     regions: list[tuple[float, float, float, float]] = []
     for column in (0, 1, 2):
         sequence = [row for row in rows if row["col"] == column]

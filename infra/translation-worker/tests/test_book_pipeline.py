@@ -48,6 +48,40 @@ def make_image_pdf() -> bytes:
     return document.tobytes()
 
 
+def _span_line(items: list[tuple[str, float, float, str]], baseline: float, size: float = 10.0):
+    spans = [
+        {
+            "text": text,
+            "bbox": (x0, baseline - size, x1, baseline + 0.25 * size),
+            "size": size,
+            "origin": (x0, baseline),
+            "font": font,
+        }
+        for text, x0, x1, font in items
+    ]
+    return {
+        "dir": (1.0, 0.0),
+        "bbox": (
+            min(span["bbox"][0] for span in spans),
+            min(span["bbox"][1] for span in spans),
+            max(span["bbox"][2] for span in spans),
+            max(span["bbox"][3] for span in spans),
+        ),
+        "spans": spans,
+    }
+
+
+class _SyntheticPage:
+    """Minimal page stand-in for _page_spans/_visual_rows."""
+
+    def __init__(self, lines):
+        self.rect = fitz.Rect(0, 0, 595, 842)
+        self._lines = lines
+
+    def get_text(self, mode):
+        return {"blocks": [{"type": 0, "lines": self._lines}]}
+
+
 class ClassifyTests(unittest.TestCase):
     def test_bookmarks_make_a_book(self):
         self.assertEqual(bp.classify_pdf(make_many_bookmarks_pdf(120)), "book")
@@ -205,6 +239,84 @@ class ExtractTests(unittest.TestCase):
         self.assertEqual(len(tables), 1)
         self.assertGreaterEqual(len(tables[0].rows or []), 2)
         self.assertIn("Method", tables[0].rows[0])
+
+    def test_math_font_detection_excludes_roman_text_faces(self):
+        self.assertFalse(bp.MATH_FONT_RE.search("CMR10"))
+        self.assertFalse(bp.MATH_FONT_RE.search("STIXTwoText-Regular"))
+        self.assertTrue(bp.MATH_FONT_RE.search("CMMI10"))
+        self.assertTrue(bp.MATH_FONT_RE.search("CMSY10"))
+        self.assertTrue(bp.MATH_FONT_RE.search("STIXTwoMath-Regular"))
+
+    def test_cmr_body_text_is_not_treated_as_math(self):
+        page = _SyntheticPage([
+            _span_line([
+                ("The controller ", 72, 175, "CMR10"),
+                ("x", 175, 181, "CMMI10"),
+                (" is estimated from ", 181, 285, "CMR10"),
+                ("range", 285, 320, "CMR10"),
+                (" measurements.", 320, 400, "CMR10"),
+            ], 120),
+            _span_line([
+                ("In 2020 the robot moved 12 meters through the hall.", 72, 400, "CMR10"),
+            ], 140),
+        ])
+        rows, gutter = bp._visual_rows(page, 842)
+        self.assertIsNone(gutter)
+        self.assertTrue(all(row["m"] < 0.2 for row in rows))
+        self.assertEqual(bp._formula_regions(rows, 10.0), [])
+
+    def test_cmr_operands_stay_with_a_math_formula(self):
+        page = _SyntheticPage([
+            _span_line([
+                ("f", 100, 106, "CMMI10"),
+                ("(", 106, 110, "CMR10"),
+                ("x", 110, 116, "CMMI10"),
+                (")", 116, 120, "CMR10"),
+                (" = ", 120, 132, "CMR10"),
+                ("2", 132, 138, "CMR10"),
+                ("x", 138, 144, "CMMI10"),
+                (" + ", 144, 154, "CMR10"),
+                ("1", 154, 160, "CMR10"),
+            ], 120),
+        ])
+        rows, _gutter = bp._visual_rows(page, 842)
+        self.assertEqual(rows[0]["m"], 1.0)
+        self.assertEqual(len(bp._formula_regions(rows, 10.0)), 1)
+
+    def test_neighbouring_lines_with_tall_math_do_not_merge(self):
+        top = _span_line([
+            ("where ", 72, 110, "CMR10"),
+            ("A", 110, 118, "CMMI10"),
+            (" is", 118, 140, "CMR10"),
+        ], 120)
+        top["spans"][1]["bbox"] = (110, 110, 118, 131)  # tall math glyph
+        bottom = _span_line([("function", 72, 120, "CMR10")], 133)
+        rows, _gutter = bp._visual_rows(_SyntheticPage([top, bottom]), 842)
+        self.assertEqual([row["text"] for row in rows], ["where A is", "function"])
+
+    def test_formula_regions_rejects_a_prose_page_tagged_as_math(self):
+        rows = []
+        for index in range(8):
+            text = "The controller estimates the robot pose from range measurements."
+            rows.append({
+                "col": 1,
+                "bbox": (72.0, 100.0 + 16 * index, 520.0, 112.0 + 16 * index),
+                "spans": [], "chars": len(text), "m": 1.0, "b": 0.0,
+                "size": 10.0, "text": text, "inline": {},
+            })
+        self.assertEqual(bp._formula_regions(rows, 10.0), [])
+
+    def test_formula_regions_keeps_an_equation_page(self):
+        rows = []
+        for index in range(8):
+            text = f"x_{index} = a + b / c"
+            rows.append({
+                "col": 1,
+                "bbox": (180.0, 100.0 + 40 * index, 420.0, 112.0 + 40 * index),
+                "spans": [], "chars": len(text), "m": 1.0, "b": 0.0,
+                "size": 10.0, "text": text, "inline": {},
+            })
+        self.assertEqual(len(bp._formula_regions(rows, 10.0)), 8)
 
     def test_display_equations_are_kept_as_images(self):
         document = fitz.open()
