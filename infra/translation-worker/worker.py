@@ -9,6 +9,8 @@ import re
 import sys
 from pathlib import Path
 
+from translation_style import NATURAL_CHINESE_RULES
+
 UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
@@ -18,12 +20,9 @@ ACADEMIC_TRANSLATION_PROMPT = (
     "following English word order. Preserve meaning, certainty, numbers, units, citations, "
     "equation and figure/table references, symbols, URLs, code, and LaTeX exactly. Preserve "
     "the original structure; translate headings, table text, and figure captions, but never "
-    "alter formulas. Use concise Chinese sentences, natural Chinese syntax, and active voice; "
-    "split long sentences when needed. Keep terminology consistent: at the first meaningful "
-    "occurrence, use Chinese (English), then use the Chinese term when unambiguous. Do not add, "
-    "omit, summarize, explain, or editorialize. Avoid literal translationese such as 使得, "
-    "值得注意的是, 具体来说, 通过……来……, 由……组成, 让……成为可能, 被……所……, and "
-    "chains of modifiers."
+    "alter formulas. Keep terminology consistent: at the first meaningful occurrence, use "
+    "Chinese (English), then use the Chinese term when unambiguous. Do not add, omit, "
+    "summarize, explain, or editorialize. " + NATURAL_CHINESE_RULES
 )
 
 

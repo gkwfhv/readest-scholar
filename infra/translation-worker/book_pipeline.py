@@ -23,13 +23,14 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from translation_style import NATURAL_CHINESE_RULES
+
 BOOK_SYSTEM_PROMPT = (
     "Translate English book text into natural, publication-quality Simplified Chinese. "
     "Rewrite each complete paragraph in idiomatic Chinese instead of following English "
     "word order. Preserve meaning, certainty, numbers, units, citations, symbols and "
     "proper nouns; keep terminology consistent, using Chinese (English) at the first "
-    "meaningful occurrence. Do not add, omit, summarize or explain. Avoid translationese "
-    "such as 使得, 值得注意的是, 具体来说, 通过……来……, 由……组成, 让……成为可能, 被……所……."
+    "meaningful occurrence. Do not add, omit, summarize or explain. " + NATURAL_CHINESE_RULES
 )
 JSON_CONTRACT = (
     "Return only a JSON object of the form "

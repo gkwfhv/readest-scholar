@@ -26,7 +26,8 @@ class WorkerContractTests(unittest.TestCase):
         for required in (
             "idiomatic Chinese", "English word order", "numbers, units, citations",
             "LaTeX exactly", "terminology consistent", "Do not add, omit",
-            "使得", "值得注意的是", "通过……来……",
+            "使得", "值得注意的是", "通过……来……", "80 个汉字", "X 地，",
+            "对……进行……", "我们注意到", "参考文献不逐条翻译",
         ):
             self.assertIn(required, prompt)
         self.assertNotIn("Return only the translation", prompt)

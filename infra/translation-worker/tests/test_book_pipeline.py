@@ -97,6 +97,10 @@ class ClassifyTests(unittest.TestCase):
 
 
 class ExtractTests(unittest.TestCase):
+    def test_book_prompt_carries_natural_chinese_rules(self):
+        for required in ("80 个汉字", "X 地，", "对……进行……", "我们注意到"):
+            self.assertIn(required, bp.BOOK_SYSTEM_PROMPT)
+
     def test_chapters_follow_bookmarks_and_references_keep_source(self):
         with tempfile.TemporaryDirectory() as folder:
             extract = bp.extract_book(make_book_pdf(), Path(folder))
